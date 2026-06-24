@@ -1,3 +1,14 @@
+@import "tailwindcss";
+
+/* ----------------------------------------------------------------------------
+ * Design tokens
+ *
+ * Light theme + automatic dark theme via `prefers-color-scheme`, matching the
+ * Vite+ template. These are mapped into the Tailwind theme with `@theme inline`
+ * below (shadcn-style) so utilities like `bg-bg`, `text-text-h`,
+ * `border-border`, and `font-mono` resolve to these vars and follow the active
+ * color scheme automatically.
+ * ------------------------------------------------------------------------- */
 :root {
   --text: #6b6375;
   --text-h: #08060d;
@@ -42,61 +53,105 @@
     --social-bg: rgba(47, 48, 58, 0.5);
     --shadow: rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
   }
+}
 
-  #social .button-icon {
-    filter: invert(1) brightness(2);
+/* Expose the tokens to Tailwind. `inline` keeps the utilities referencing the
+ * raw `var(--*)`, so light/dark swapping from the media query above just works. */
+@theme inline {
+  --color-text: var(--text);
+  --color-text-h: var(--text-h);
+  --color-bg: var(--bg);
+  --color-border: var(--border);
+  --color-code-bg: var(--code-bg);
+  --color-accent: var(--accent);
+  --color-accent-bg: var(--accent-bg);
+  --color-accent-border: var(--accent-border);
+  --color-social-bg: var(--social-bg);
+
+  --font-sans: var(--sans);
+  --font-heading: var(--heading);
+  --font-mono: var(--mono);
+
+  --shadow-card: var(--shadow);
+}
+
+/* ----------------------------------------------------------------------------
+ * Base layer — global document defaults from the template.
+ * ------------------------------------------------------------------------- */
+@layer base {
+  body {
+    margin: 0;
+  }
+
+  h1,
+  h2 {
+    font-family: var(--heading);
+    font-weight: 500;
+    color: var(--text-h);
+  }
+
+  h1 {
+    font-size: 56px;
+    letter-spacing: -1.68px;
+    margin: 32px 0;
+
+    @media (max-width: 1024px) {
+      font-size: 36px;
+      margin: 20px 0;
+    }
+  }
+
+  h2 {
+    font-size: 24px;
+    line-height: 118%;
+    letter-spacing: -0.24px;
+    margin: 0 0 8px;
+
+    @media (max-width: 1024px) {
+      font-size: 20px;
+    }
+  }
+
+  p {
+    margin: 0;
+  }
+
+  code {
+    font-family: var(--mono);
+    display: inline-flex;
+    border-radius: 4px;
+    color: var(--text-h);
+    font-size: 15px;
+    line-height: 135%;
+    padding: 4px 8px;
+    background: var(--code-bg);
   }
 }
 
-body {
-  margin: 0;
-}
+/* ----------------------------------------------------------------------------
+ * Reusable design primitives (`@utility`)
+ *
+ * The signature, multi-property pieces of the template's design system, exposed
+ * as composable utility classes for the spec site. Simple one-off layout and
+ * spacing styles are intended to live inline in the markup instead.
+ * ------------------------------------------------------------------------- */
 
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
-}
-
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
-p {
-  margin: 0;
-}
-
-code,
-.counter {
+/* Inline-code / keyboard-style pill (the standalone, non-`<code>` variant). */
+@utility chip {
   font-family: var(--mono);
   display: inline-flex;
   border-radius: 4px;
   color: var(--text-h);
-}
-
-code {
   font-size: 15px;
   line-height: 135%;
   padding: 4px 8px;
   background: var(--code-bg);
 }
 
-.counter {
+/* Accent "pill" button (the template's counter button). */
+@utility counter {
+  font-family: var(--mono);
+  display: inline-flex;
   font-size: 16px;
   padding: 5px 10px;
   border-radius: 5px;
@@ -104,7 +159,6 @@ code {
   background: var(--accent-bg);
   border: 2px solid transparent;
   transition: border-color 0.3s;
-  margin-bottom: 24px;
 
   &:hover {
     border-color: var(--accent-border);
@@ -115,6 +169,55 @@ code {
   }
 }
 
+/* The little corner ticks that mark the grid-line intersections. */
+@utility ticks {
+  position: relative;
+  width: 100%;
+
+  &::before,
+  &::after {
+    content: "";
+    position: absolute;
+    top: -4.5px;
+    border: 5px solid transparent;
+  }
+
+  &::before {
+    left: 0;
+    border-left-color: var(--border);
+  }
+  &::after {
+    right: 0;
+    border-right-color: var(--border);
+  }
+}
+
+/* Soft-filled link/button used in the footer card rows. */
+@utility card-link {
+  color: var(--text-h);
+  font-size: 16px;
+  border-radius: 6px;
+  background: var(--social-bg);
+  display: flex;
+  padding: 6px 12px;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  transition: box-shadow 0.3s;
+
+  &:hover {
+    box-shadow: var(--shadow);
+  }
+}
+
+/* ----------------------------------------------------------------------------
+ * Vite+ template demo page layout.
+ *
+ * TEMPORARY: kept so the current `main.ts` template still renders identically
+ * while the Tailwind foundation is reviewed. These page-specific structural
+ * rules will be removed and re-expressed as inline utilities when the spec
+ * homepage is scaffolded in `main.ts`.
+ * ------------------------------------------------------------------------- */
 .hero {
   position: relative;
 
@@ -269,24 +372,8 @@ code {
   }
 }
 
-.ticks {
-  position: relative;
-  width: 100%;
-
-  &::before,
-  &::after {
-    content: "";
-    position: absolute;
-    top: -4.5px;
-    border: 5px solid transparent;
-  }
-
-  &::before {
-    left: 0;
-    border-left-color: var(--border);
-  }
-  &::after {
-    right: 0;
-    border-right-color: var(--border);
+@media (prefers-color-scheme: dark) {
+  #social .button-icon {
+    filter: invert(1) brightness(2);
   }
 }
