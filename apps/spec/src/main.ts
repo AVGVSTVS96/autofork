@@ -8,43 +8,45 @@ const REPO = "https://github.com/AVGVSTVS96/patch_md-spec";
  * Kept as plain strings (arrays joined with newlines where the content holds
  * backticks or `${...}`) so nothing is interpreted as a template expression.
  * ------------------------------------------------------------------------- */
-const structureSample = `---
-id: <patch-id>
-summary: <short summary of the patch's intent>
-version: <semver>
-lastUpdated: <yyyy-mm-dd>
----
-
-# <Patch Title>
-
-## Intent
-
-<What the patch does and why, in plain prose. This is what an agent reads
-to re-anchor an edit when the target file changes.>
-
-## Patch Edits
-
-### <target/path>
-
-<one or more edits>
-
-### <target/path-2, split by target, path, type, or section>
-
-<one or more edits>`;
+const structureSample = [
+  "---",
+  "id: <patch-id>",
+  "summary: <short summary of the patch's intent>",
+  "version: <semver>",
+  "lastUpdated: <yyyy-mm-dd>",
+  "---",
+  "",
+  "# <Patch Title>",
+  "",
+  "## Intent",
+  "",
+  "<What the patch does and why, in plain prose. This is what an agent reads",
+  "to re-anchor an edit when the target file changes.>",
+  "",
+  "```diff file=<target/path>",
+  "@@ optional hint @@",
+  " context",
+  "+added line",
+  "```",
+].join("\n");
 
 const searchReplaceSample = [
+  "```patch file=dist/package-manager-cli.js",
   "<<<<<<< SEARCH",
   "    console.log(chalk.green(`Updated ${APP_NAME}`));",
   "=======",
   "    console.log(chalk.green(`Updated ${APP_NAME}`));",
   '    try { (await import("node:child_process")).spawnSync("pi-patcher", ["reconcile"], { stdio: "inherit" }); } catch {}',
   ">>>>>>> REPLACE",
+  "```",
 ].join("\n");
 
 const hunkSample = [
+  "```diff file=dist/package-manager-cli.js",
   "@@ pi self_update success branch @@",
-  "                    console.log(chalk.green(`Updated ${APP_NAME}`));",
-  '+                    try { (await import("node:child_process")).spawnSync("pi-patcher", ["reconcile"], { stdio: "inherit" }); } catch {}',
+  "    console.log(chalk.green(`Updated ${APP_NAME}`));",
+  '+    try { (await import("node:child_process")).spawnSync("pi-patcher", ["reconcile"], { stdio: "inherit" }); } catch {}',
+  "```",
 ].join("\n");
 
 const treeSample = `bootstrap-hook/
@@ -79,13 +81,9 @@ const exampleSample = [
   "self-update path. It must stay valid in pi's compiled ESM output, and it must not",
   "change update behavior if `pi-patcher` is missing or fails to start.",
   "",
-  "## Patch Edits",
-  "",
-  "### dist/package-manager-cli.js",
-  "",
   "> note: end of the self-update branch, right after `Updated ${APP_NAME}`",
   "",
-  "```diff",
+  "```diff file=dist/package-manager-cli.js",
   "@@ pi self update success branch @@",
   "    console.log(chalk.green(`Updated ${APP_NAME}`));",
   '+    try { (await import("node:child_process")).spawnSync("pi-patcher", ["reconcile"], { stdio: "inherit" }); } catch {}',
@@ -208,8 +206,9 @@ app.innerHTML = `
     <section class="mt-14">
       ${specHeading("structure", "Structure")}
       <p class="mt-4">
-        A patch can list several targets, each under its own target heading, and each
-        target can hold more than one edit.
+        The only conventional heading is <code>## Intent</code>. After that, edits can
+        appear directly as fenced code blocks. Each mechanical edit declares its target
+        file on the fence with <code>file=&lt;target/path&gt;</code>.
       </p>
       ${block(structureSample)}
     </section>
@@ -228,6 +227,10 @@ app.innerHTML = `
       ${block(hunkSample)}
       <ul class="mt-5 list-disc space-y-2 pl-5">
         <li><code>-</code> marks a removed line and <code>+</code> marks an added line.</li>
+        <li>
+          The fence info string must include <code>file=&lt;target/path&gt;</code>, bare or
+          quoted, so tools can apply the edit without interpreting prose.
+        </li>
         <li>
           Optional, for extra context or agent hints: an <code>@@ … @@</code> header,
           or a <code>&gt; note:</code> line directly before an edit.
