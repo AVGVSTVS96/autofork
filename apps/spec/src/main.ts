@@ -23,7 +23,7 @@ const structureSample = [
   "<What the patch does and why, in plain prose. This is what an agent reads",
   "to re-anchor an edit when the target file changes.>",
   "",
-  "```diff file=<target/path>",
+  "```diff file=<path>",
   "@@ optional hint @@",
   " context",
   "+added line",
@@ -65,23 +65,21 @@ parent: bootstrap-hook`;
 const exampleSample = [
   "---",
   "id: bootstrap-hook",
-  "summary: Re-run `pi-patcher reconcile` after pi finishes updating itself.",
+  "summary: Run `pi-patcher reconcile` after `pi update` finishes updating itself.",
   "---",
   "",
   "# Bootstrap hook",
   "",
   "## Intent",
   "",
-  "Patches Pi to run `pi-patcher reconcile` after pi finishes updating itself.",
+  "Patches Pi to run `pi-patcher reconcile` after `pi update`.",
   "",
-  "After pi's `pi update` finishes updating pi, run `pi-patcher reconcile` so every",
+  "After `pi update` finishes updating, run `pi-patcher reconcile` so every",
   "installed patch is re-applied to the freshly updated install.",
   "",
   "The hook goes right after the existing `Updated ${APP_NAME}` success log in pi's",
   "self-update path. It must stay valid in pi's compiled ESM output, and it must not",
   "change update behavior if `pi-patcher` is missing or fails to start.",
-  "",
-  "> note: end of the self-update branch, right after `Updated ${APP_NAME}`",
   "",
   "```diff file=dist/package-manager-cli.js",
   "@@ pi self update success branch @@",
@@ -147,16 +145,22 @@ app.innerHTML = `
   </nav>
 </header>
 
-<section id="top" class="flex flex-col items-center gap-6 px-6 py-20 text-center md:py-28">
-  <img src="/favicon.svg" width="60" height="58" alt="PATCH.md logo" />
-  <span class="chip">early draft · v0.1.0</span>
-  <h1>PATCH<span class="text-accent">.md</span></h1>
+<section id="top" class="flex flex-col items-center px-6 py-16 text-center md:py-24">
+  <div class="flex flex-col items-center gap-4">
+    <img src="/favicon.svg" width="60" height="58" alt="PATCH.md logo" />
+    <span class="chip">early draft · v0.0.1</span>
+  </div>
+  <h1 class="my-9">PATCH<span class="text-accent">.md</span></h1>
   <p class="max-w-2xl text-lg">
-    A file format for defining source patches that AI agents can self-heal and reapply.
-    Plain-prose <strong class="text-text-h">intent</strong> plus
-    content-anchored <strong class="text-text-h">edits</strong>.
+    A proposal for defining source patches in markdown, which AI agents can use to
+    automatically maintain and reapply source patches.
   </p>
-  <div class="flex flex-wrap justify-center gap-2">
+  <p class="max-w-2xl text-lg">
+    Define the <strong class="text-text-h">intent</strong> and
+    <strong class="text-text-h">patch</strong> once, your agent automatically
+    rewrites and reapplies it when the source changes.
+  </p>
+  <div class="flex flex-wrap justify-center mt-8 gap-2">
     <a class="card-link" href="#spec">${arrowDown}Read the spec</a>
     <a class="card-link" href="${REPO}" target="_blank" rel="noreferrer">${githubIcon}GitHub</a>
   </div>
@@ -166,17 +170,12 @@ app.innerHTML = `
 <section class="border-t border-border px-6 py-14 md:px-8">
   <div class="mx-auto max-w-3xl space-y-5">
     <p>
-      <span class="text-text-h">PATCH.md</span> is a file format for defining a source
-      patch that agents can apply and self-update over time. A patch file holds two
-      things: its <strong class="text-text-h">intent</strong>, written in plain prose,
-      and its <strong class="text-text-h">edits</strong>, a diff or patch hunk that 
+      <span class="text-text-h">PATCH.md</span> is a spec proposal for defining source
+      patches in markdown, which agents can automatically self-heal and update when the
+      source changes. A patch file holds two things: its
+      <strong class="text-text-h">intent</strong>, written in plain prose, and its
+      <strong class="text-text-h">patch</strong>, a diff or search/replace hunk that 
       defines the current state of the patch's code.
-    </p>
-    <p>
-      Anchoring to content is what lets a patch survive changes to the file it targets.
-      When an edit stops matching, an agent can read the intent and the old edit, find
-      the equivalent place in the updated file, and rewrite the edit to fit. The format
-      describes the patch; the tools built around it do the applying and the repairing.
     </p>
   </div>
 </section>
@@ -184,31 +183,37 @@ app.innerHTML = `
 <div class="ticks"></div>
 <!-- <section class="grid border-t border-border md:grid-cols-3"> -->
 <!--   ${card(iconIntent, "Intent in prose", "Every patch explains what it does and why in plain language, the description an agent reads to re-anchor an edit when the target file moves.")} -->
-<!--   ${card(iconAnchor, "Content-anchored edits", "Edits match on the code around them, as search/replace blocks or diff hunks, never on line numbers, so they survive upstream changes.")} -->
+<!--   ${card(iconAnchor, "Content-anchored edits", "Edits match on the code around them, as search/replace blocks or diff hunks, so they survive upstream changes.")} -->
 <!--   ${card(iconHeal, "Agent-driven healing", "When an edit drifts, an agent reads the intent and the old edit, finds the new location, and rewrites the patch to fit the updated file.")} -->
 <!-- </section> -->
 
 <div class="ticks"></div>
 <section id="spec" class="border-t border-border px-6 py-16 md:px-8 md:py-20">
   <div class="mx-auto max-w-3xl">
-    <p class="font-mono text-sm text-accent">Specification · v0.1.0</p>
-    <h1 class="mt-2">The format</h1>
+    <p class="font-mono text-sm text-accent">v0.0.1</p>
+    <h1 class="mt-4">The format</h1>
 
     <section class="mt-14">
       ${specHeading("file", "File")}
       <p class="mt-4">
-        One patch is one <code>PATCH.md</code> file, kept by convention at
+        A <code>PATCH.md</code> file which should be kept at
         <code>&lt;patch-id&gt;/PATCH.md</code>. The <code>&lt;patch-id&gt;</code> can be
-        a custom or generated name, id, etc.
+        a custom or generated name, id, etc. This draft also proposes a convention for
+        splitting a patch into multiple files, see
+        <a 
+          class="text-text-h underline decoration-border underline-offset-4 hover:decoration-accent" 
+          href="#splitting">splitting a patch
+        </a>.
       </p>
     </section>
 
     <section class="mt-14">
       ${specHeading("structure", "Structure")}
       <p class="mt-4">
-        The only conventional heading is <code>## Intent</code>. After that, edits can
-        appear directly as fenced code blocks. Each mechanical edit declares its target
-        file on the fence with <code>file=&lt;target/path&gt;</code>.
+        The only required heading is <code>## Intent</code>. After that, edits should be defined
+        inside fenced code blocks using one of the proposed
+        <a class="text-text-h underline decoration-border underline-offset-4 hover:decoration-accent" href="#edit-forms">edit forms</a>.
+        Each mechanical edit declares its target file on the code fence with <code>file=&lt;path&gt;</code>.
       </p>
       ${block(structureSample)}
     </section>
@@ -216,33 +221,54 @@ app.innerHTML = `
     <section class="mt-14">
       ${specHeading("edit-forms", "Edit forms")}
       <p class="mt-4">
-        An edit is a fenced code block that defines the patch's current code. Two
-        formats are recommended to start. Use whichever you prefer.
+        This draft proposes two formats for defining patch edits.
       </p>
+      <ul class="mt-5 list-disc space-y-1 pl-6">
+        <li>
+          The fence info string should include <code>file=&lt;path&gt;</code>.
+        </li>
+        <li>
+          Line numbers aren't part of the proposal as of now, patches are anchored by content.
+        </li>
+      </ul>
       <p class="mt-6 font-medium text-text-h">Search/replace block</p>
       <p class="mt-2">Shows the full before and after, anchored on the whole replaced region.</p>
       ${block(searchReplaceSample)}
-      <p class="mt-6 font-medium text-text-h">Hunk</p>
+      <ul class="mt-5 list-disc space-y-1 pl-6">
+        <li>Code fence should defined as <code>\`\`\`patch</code> followed by the file path <code>file=&lt;path&gt;</code>.</li>
+        <li><code>&lt;&lt;&lt;&lt;&lt;&lt;&lt; SEARCH</code> marks the before region,
+          <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt; REPLACE</code> marks the after region,
+          and <code>=======</code>separates the two.</li>
+      </ul>
+      <p class="mt-6 font-medium text-text-h">Diff block</p>
       <p class="mt-2">Diff style, marks only the changed lines.</p>
       ${block(hunkSample)}
-      <ul class="mt-5 list-disc space-y-2 pl-5">
+      <ul class="mt-5 list-disc space-y-1 pl-6">
+        <li>Code fence should defined as <code>\`\`\`diff</code> followed by the file path <code>file=&lt;path&gt;</code>.</li>
+        <li>
+          Optionally add context in a <code>@@ … @@</code> header.
+        </li>
         <li><code>-</code> marks a removed line and <code>+</code> marks an added line.</li>
-        <li>
-          The fence info string must include <code>file=&lt;target/path&gt;</code>, bare or
-          quoted, so tools can apply the edit without interpreting prose.
-        </li>
-        <li>
-          Optional, for extra context or agent hints: an <code>@@ … @@</code> header,
-          or a <code>&gt; note:</code> line directly before an edit.
-        </li>
       </ul>
+    </section>
+
+    <section class="mt-14">
+      ${specHeading("splitting", "Splitting a patch")}
+      <p class="mt-4">
+        A patch can touch several files, but when one grows large or bundles unrelated
+        changes, split it into smaller sub-patches. Smaller patches are easier to
+        maintain, and easier for an agent to heal. Sub-patches nest inside their
+        parent's directory, and the relationships are declared in frontmatter.
+      </p>
+      ${block(treeSample)}
+      ${block(frontmatterSample)}
     </section>
 
     <section class="mt-14">
       ${specHeading("applying", "Applying edits")}
       <p class="mt-4">
-        Every edit has a before and an after. The before must appear exactly once in
-        the target file, so there is never any doubt about where the edit goes. Applying
+        Every edit has a before and an after. The before should appear exactly once in
+        the target file, so there's no ambiguity about where the edit goes. Applying
         replaces the before with the after. Because the match is unique, applying the
         same patch twice is safe, and a tool can read each edit's state directly:
       </p>
@@ -252,33 +278,17 @@ app.innerHTML = `
         <li class="flex items-baseline gap-3"><span class="chip text-rose-600 dark:text-rose-400">drift</span><span>neither is present</span></li>
       </ul>
       <p class="mt-5">
-        All edits in a patch apply together or not at all. If any edit fails, a tool
-        restores the file to how it started.
+        All edits in a patch should apply together or not at all. If any edit fails, the patch has drifted.
       </p>
-    </section>
-
-    <section class="mt-14">
-      ${specHeading("splitting", "Splitting a patch")}
-      <p class="mt-4">
-        A patch can touch several files, but when one grows large or bundles unrelated
-        changes, split it into smaller sub-patches. Smaller patches are easier to
-        maintain, and easier for an agent to heal. Sub-patches nest inside their
-        parent's directory, and the
-        relationships are declared in frontmatter.
-      </p>
-      ${block(treeSample)}
-      ${block(frontmatterSample)}
     </section>
 
     <section class="mt-14">
       ${specHeading("healing", "Agent-driven healing")}
       <p class="mt-4">
-        When an edit no longer matches its target, the patch has drifted. From the
-        <code>PATCH.md</code>, an agent can automatically fix and update the patch when
-        the target changes. Snapshot the target before editing and restore it if
-        anything fails. A tool can also let the agent decline, for example when the
-        feature a patch depended on has been removed, instead of forcing a change that
-        no longer fits.
+        When an edit no longer matches its target, the patch has drifted. The tool calls
+        an agent to read the <code>PATCH.md</code> and rewrite the edit to fit. The tool
+        handles the safety around it: snapshotting first, restoring on failure, and
+        letting the agent decline when a fix no longer makes sense.
       </p>
       <p class="mt-4">
         Tool developers and patch authors decide how complex a change their agent is
@@ -291,7 +301,7 @@ app.innerHTML = `
       <p class="mt-4">
         The <code>bootstrap-hook</code> patch from
         <a class="text-text-h underline decoration-border underline-offset-4 hover:decoration-accent" href="${REPO}" target="_blank" rel="noreferrer">pi-patcher</a>,
-        written as a single <code>PATCH.md</code>:
+        defined as a single <code>PATCH.md</code>:
       </p>
       ${block(exampleSample)}
     </section>
@@ -300,7 +310,7 @@ app.innerHTML = `
 
 <div class="ticks"></div>
 <footer class="flex flex-col items-center justify-between gap-3 border-t border-border px-6 py-8 text-sm md:px-8 sm:flex-row">
-  <p>PATCH.md · v0.1.0 · early draft. Refinements and proposals welcome.</p>
+  <p>PATCH.md · v0.0.1 · early draft. Refinements and proposals welcome.</p>
   <a class="card-link" href="${REPO}" target="_blank" rel="noreferrer">${githubIcon}GitHub</a>
 </footer>
 
