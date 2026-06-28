@@ -8,8 +8,16 @@
     "build": "tsc && vp build",
     "preview": "vp preview"
   },
+  "dependencies": {
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  },
   "devDependencies": {
+    "@mdx-js/rollup": "catalog:",
     "@tailwindcss/vite": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
     "tailwindcss": "catalog:",
     "typescript": "~6.0.2",
     "vite": "catalog:",

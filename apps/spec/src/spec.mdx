@@ -1,0 +1,134 @@
+# The spec
+
+## File
+
+A `PATCH.md` file which should be kept at `<patch-id>/PATCH.md`. The `<patch-id>` can be a custom or generated name, id, etc. This draft also proposes a convention for splitting a patch into multiple files, see [splitting a patch](#splitting-a-patch).
+
+## Structure
+
+The only required heading is `## Intent`. After that, edits are defined inside fenced code blocks, in any of the [edit forms](#edit-forms). Each edit identifies the file it targets, either from the patch's own header or with `file=<path>` on the fence.
+
+````md
+---
+id: <patch-id>
+summary: <short summary of the patch's intent>
+version: <semver>
+lastUpdated: <yyyy-mm-dd>
+---
+
+# <Patch Title>
+
+## Intent
+
+<What the patch does and why, in plain prose. This is what an agent reads
+to re-anchor an edit when the target file changes.>
+
+```diff file=<path>
+@@ optional hint @@
+ context
++added line
+```
+````
+
+## Patch format
+
+An edit is a fenced code block that defines the patch's current code. Use any diff or patch format you like. The same search/replace and diff formats AI agents already produce work here, and so do conventional patches you can hand to `git apply`, `patch`, or a library like Google's diff-match-patch. Some examples:
+
+A search/replace block, showing the full before and after:
+
+```patch file=dist/package-manager-cli.js
+<<<<<<< SEARCH
+    console.log(chalk.green(`Updated ${APP_NAME}`));
+=======
+    console.log(chalk.green(`Updated ${APP_NAME}`));
+    try { (await import("node:child_process")).spawnSync("pi-patcher", ["reconcile"], { stdio: "inherit" }); } catch {}
+>>>>>>> REPLACE
+```
+
+A diff hunk, marking only the changed lines:
+
+```diff file=dist/package-manager-cli.js
+@@ pi self update success branch @@
+    console.log(chalk.green(`Updated ${APP_NAME}`));
++    try { (await import("node:child_process")).spawnSync("pi-patcher", ["reconcile"], { stdio: "inherit" }); } catch {}
+```
+
+A standard git patch, applicable as-is with existing tools:
+
+```diff
+diff --git a/dist/package-manager-cli.js b/dist/package-manager-cli.js
+--- a/dist/package-manager-cli.js
++++ b/dist/package-manager-cli.js
+@@ -842,6 +842,7 @@
+    console.log(chalk.green(`Updated ${APP_NAME}`));
++    try { (await import("node:child_process")).spawnSync("pi-patcher", ["reconcile"], { stdio: "inherit" }); } catch {}
+```
+
+> Each edit needs to identify the file it targets. A git or unified diff already carries the path in its header; for formats that don't, add `file=<path>` to the fence so tools can find the target without interpreting prose.
+
+## Splitting a patch
+
+A patch can touch several files, but when one grows large or bundles unrelated changes, split it into smaller sub-patches. Smaller patches are easier to maintain, and easier for an agent to heal. Sub-patches nest inside their parent's directory, and the relationships are declared in frontmatter.
+
+```txt
+bootstrap-hook/
+├── PATCH.md
+├── hook-insert/
+│   └── PATCH.md
+└── hook-config/
+    └── PATCH.md
+```
+
+```yaml
+# parent patch frontmatter
+parts: [hook-insert, hook-config]
+
+# sub-patch frontmatter
+parent: bootstrap-hook
+```
+
+## Applying edits
+
+Every edit has a before and an after. The before should appear exactly once in the target file, so there's no ambiguity about where the edit goes. Applying replaces the before with the after. Because the match is unique, applying the same patch twice is safe, and a tool can read each edit's state directly:
+
+- **applied** — the after is present
+- **pending** — the before is present
+- **drift** — neither is present
+
+All edits in a patch should apply together or not at all. If any edit fails, the patch has drifted.
+
+## Agent-driven healing
+
+When an edit no longer matches its target, the patch has drifted. The tool calls an agent to read the `PATCH.md` and rewrite the edit to fit. The tool handles the safety around it: snapshotting first, restoring on failure, and letting the agent decline when a fix no longer makes sense.
+
+Tool developers and patch authors decide how complex a change their agent is allowed to heal automatically.
+
+## Example
+
+The `bootstrap-hook` patch from [pi-patcher](https://github.com/AVGVSTVS96/pi-patcher), defined as a single `PATCH.md`:
+
+````md
+---
+id: bootstrap-hook
+summary: Run `pi-patcher reconcile` after `pi update` finishes updating itself.
+---
+
+# Bootstrap hook
+
+## Intent
+
+Patches Pi to run `pi-patcher reconcile` after `pi update`.
+
+After `pi update` finishes updating, run `pi-patcher reconcile` so every
+installed patch is re-applied to the freshly updated install.
+
+The hook goes right after the existing `Updated ${APP_NAME}` success log in pi's
+self-update path. It must stay valid in pi's compiled ESM output, and it must not
+change update behavior if `pi-patcher` is missing or fails to start.
+
+```diff file=dist/package-manager-cli.js
+@@ pi self update success branch @@
+    console.log(chalk.green(`Updated ${APP_NAME}`));
++    try { (await import("node:child_process")).spawnSync("pi-patcher", ["reconcile"], { stdio: "inherit" }); } catch {}
+```
+````

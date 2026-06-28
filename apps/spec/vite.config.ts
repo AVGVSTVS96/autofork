@@ -1,6 +1,8 @@
-import { defineConfig } from "vite-plus";
+import mdx from "@mdx-js/rollup";
 import tailwindcss from "@tailwindcss/vite";
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite-plus";
 
 export default defineConfig({
-  plugins: [tailwindcss()],
+  plugins: [mdx(), react(), tailwindcss()],
 });
