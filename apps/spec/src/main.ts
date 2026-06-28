@@ -49,6 +49,17 @@ const hunkSample = [
   "```",
 ].join("\n");
 
+const gitPatchSample = [
+  "```diff",
+  "diff --git a/dist/package-manager-cli.js b/dist/package-manager-cli.js",
+  "--- a/dist/package-manager-cli.js",
+  "+++ b/dist/package-manager-cli.js",
+  "@@ -842,6 +842,7 @@",
+  "    console.log(chalk.green(`Updated ${APP_NAME}`));",
+  '+    try { (await import("node:child_process")).spawnSync("pi-patcher", ["reconcile"], { stdio: "inherit" }); } catch {}',
+  "```",
+].join("\n");
+
 const treeSample = `bootstrap-hook/
 ├── PATCH.md
 ├── hook-insert/
@@ -127,6 +138,9 @@ const card = (icon: string, title: string, body: string): string => `
     <h2 class="mt-4">${title}</h2>
     <p class="mt-2">${body}</p>
   </div>`;
+
+const callout = (body: string): string => `
+  <div class="callout mt-6"><p>${body}</p></div>`;
 
 const specHeading = (id: string, title: string): string => `<h2 id="${id}">${title}</h2>`;
 
@@ -210,10 +224,11 @@ app.innerHTML = `
     <section class="mt-14">
       ${specHeading("structure", "Structure")}
       <p class="mt-4">
-        The only required heading is <code>## Intent</code>. After that, edits should be defined
-        inside fenced code blocks using one of the proposed
+        The only required heading is <code>## Intent</code>. After that, edits are defined
+        inside fenced code blocks, in any of the
         <a class="text-text-h underline decoration-border underline-offset-4 hover:decoration-accent" href="#edit-forms">edit forms</a>.
-        Each mechanical edit declares its target file on the code fence with <code>file=&lt;path&gt;</code>.
+        Each edit identifies the file it targets, either from the patch's own header or
+        with <code>file=&lt;path&gt;</code> on the fence.
       </p>
       ${block(structureSample)}
     </section>
@@ -221,35 +236,24 @@ app.innerHTML = `
     <section class="mt-14">
       ${specHeading("edit-forms", "Edit forms")}
       <p class="mt-4">
-        This draft proposes two formats for defining patch edits.
+        An edit is a fenced code block that defines the patch's current code. Use any diff
+        or patch format you like. The same search/replace and diff formats AI agents
+        already produce work here, and so do conventional patches you can hand to
+        <code>git apply</code>, <code>patch</code>, or a library like Google's
+        diff-match-patch. Some examples:
       </p>
-      <ul class="mt-5 list-disc space-y-1 pl-6">
-        <li>
-          The fence info string should include <code>file=&lt;path&gt;</code>.
-        </li>
-        <li>
-          Line numbers aren't part of the proposal as of now, patches are anchored by content.
-        </li>
-      </ul>
-      <p class="mt-6 font-medium text-text-h">Search/replace block</p>
-      <p class="mt-2">Shows the full before and after, anchored on the whole replaced region.</p>
+      <p class="mt-6">A search/replace block, showing the full before and after:</p>
       ${block(searchReplaceSample)}
-      <ul class="mt-5 list-disc space-y-1 pl-6">
-        <li>Code fence should defined as <code>\`\`\`patch</code> followed by the file path <code>file=&lt;path&gt;</code>.</li>
-        <li><code>&lt;&lt;&lt;&lt;&lt;&lt;&lt; SEARCH</code> marks the before region,
-          <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt; REPLACE</code> marks the after region,
-          and <code>=======</code>separates the two.</li>
-      </ul>
-      <p class="mt-6 font-medium text-text-h">Diff block</p>
-      <p class="mt-2">Diff style, marks only the changed lines.</p>
+      <p class="mt-6">A diff hunk, marking only the changed lines:</p>
       ${block(hunkSample)}
-      <ul class="mt-5 list-disc space-y-1 pl-6">
-        <li>Code fence should defined as <code>\`\`\`diff</code> followed by the file path <code>file=&lt;path&gt;</code>.</li>
-        <li>
-          Optionally add context in a <code>@@ … @@</code> header.
-        </li>
-        <li><code>-</code> marks a removed line and <code>+</code> marks an added line.</li>
-      </ul>
+      <p class="mt-6">A standard git patch, applyable as-is with existing tools:</p>
+      ${block(gitPatchSample)}
+      ${callout(`
+        Each edit needs to identify the file it targets. A git or unified diff already
+        carries the path in its header; for formats that don't, add
+        <code>file=&lt;path&gt;</code> to the fence so tools can find the target without
+        interpreting prose.
+      `)}
     </section>
 
     <section class="mt-14">

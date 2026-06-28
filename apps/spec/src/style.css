@@ -120,13 +120,13 @@
 
   code {
     font-family: var(--mono);
-    display: inline-flex;
-    border-radius: 4px;
-    color: var(--text-h);
-    font-size: 15px;
+    border-radius: 5px;
+    color: var(--accent);
+    font-size: 14px;
     line-height: 135%;
-    padding: 4px 8px;
+    padding: 1.5px 6px;
     background: var(--code-bg);
+    white-space: nowrap;
   }
 
   pre {
@@ -145,11 +145,13 @@
   pre code {
     display: block;
     padding: 0;
+    border: none;
     border-radius: 0;
     background: none;
     color: inherit;
     font-size: inherit;
     line-height: inherit;
+    white-space: pre;
   }
 }
 
@@ -215,6 +217,14 @@
     right: 0;
     border-right-color: var(--border);
   }
+}
+
+/* Note box for spec asides and clarifications. */
+@utility callout {
+  border-left: 4px solid var(--accent);
+  padding: 2px 0 2px 18px;
+  font-size: 16px;
+  line-height: 155%;
 }
 
 /* Soft-filled link/button used in the footer card rows. */
