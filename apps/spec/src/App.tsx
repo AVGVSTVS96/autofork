@@ -56,15 +56,21 @@ function Hero() {
 function Intro() {
   return (
     <section className="border-t border-border px-6 py-14 md:px-8">
-      <div className="mx-auto max-w-2xl space-y-5">
+      <div className="mx-auto max-w-2xl *:first:mb-5 *:not-first:mb-3">
         <p>
-          <span className="text-text-h">PATCH.md</span> is a spec proposal for defining source
-          patches in markdown, which agents can automatically self-heal and update when the source
-          changes. A patch file holds two things: its{" "}
-          <strong className="text-text-h">intent</strong>, written in plain prose, and its{" "}
-          <strong className="text-text-h">patch</strong>, a diff or search/replace hunk that defines
-          the current state of the patch&apos;s code.
+          <span className="text-text-h font-semibold">PATCH.md</span> is a proposed new spec for
+          defining agent-healable source patches in markdown. With a single markdown file, agents
+          can self-heal, updating patch definitions when the source changes and re-applying patches.
         </p>
+        <p>The file holds two things:</p>
+        <ul className="list-['–__'] marker:text-accent pl-5 space-y-1 [&_b]:text-text-h [&_b]:mr-1 [&_b]:font-semibold">
+          <li>
+            <b>intent</b> written in plain prose
+          </li>
+          <li>
+            <b>patch edits</b> any format diff, patch, edit, or search/replace hunk
+          </li>
+        </ul>
       </div>
     </section>
   );
@@ -73,7 +79,7 @@ function Intro() {
 function Footer() {
   return (
     <footer className="flex flex-col items-center justify-between gap-3 border-t border-border px-6 py-8 text-sm sm:flex-row md:px-8">
-      <p>PATCH.md · v0.0.1 . contributions and proposals welcome.</p>
+      <p>PATCH.md · v0.0.1 · contributions and proposals welcome.</p>
       <a className="card-link" href={REPO} target="_blank" rel="noreferrer">
         <GitHubIcon />
         GitHub

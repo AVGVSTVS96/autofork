@@ -1,12 +1,10 @@
 # The spec
 
-## File
-
-A `PATCH.md` file which should be kept at `<patch-id>/PATCH.md`. The `<patch-id>` can be a custom or generated name, id, etc. This draft also proposes a convention for splitting a patch into multiple files, see [splitting a patch](#splitting-a-patch).
+A `PATCH.md` file kept at `<patch-id>/PATCH.md`. The `<patch-id>` can be a custom or generated name, id, etc. This draft also proposes a convention for splitting a patch into multiple files, see [splitting a patch](#splitting-a-patch).
 
 ## Structure
 
-The only required heading is `## Intent`. After that, edits are defined inside fenced code blocks, in any of the [edit forms](#edit-forms). Each edit identifies the file it targets, either from the patch's own header or with `file=<path>` on the fence.
+The only required heading is `## Intent`. After that, edits are defined inside fenced code blocks, in any of the [patch formats](#patch-format). Each edit identifies the file it targets, either from the patch's own header or with `file=<path>` on the fence.
 
 ````md
 ---
@@ -91,9 +89,9 @@ parent: bootstrap-hook
 
 Every edit has a before and an after. The before should appear exactly once in the target file, so there's no ambiguity about where the edit goes. Applying replaces the before with the after. Because the match is unique, applying the same patch twice is safe, and a tool can read each edit's state directly:
 
-- **applied** — the after is present
-- **pending** — the before is present
-- **drift** — neither is present
+- **applied**: the after is present
+- **pending**: the before is present
+- **drift**: neither is present
 
 All edits in a patch should apply together or not at all. If any edit fails, the patch has drifted.
 

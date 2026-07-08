@@ -78,7 +78,7 @@
 }
 
 /* ----------------------------------------------------------------------------
- * Base layer — global document defaults from the template.
+ * Base layer: global document defaults from the template.
  * ------------------------------------------------------------------------- */
 @layer base {
   body {
