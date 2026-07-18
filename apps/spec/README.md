@@ -11,6 +11,8 @@ The file holds two things:
 - **intent**: written in plain prose
 - **patch edits**: any format diff, patch, edit, or search/replace hunk
 
+That pair is enough to maintain a [self-healing fork](#example-a-self-healing-fork) of an upstream repo from CI alone: a script applies the edits, and when one drifts, an agent reads the file and heals it.
+
 <!-- spec:start -->
 
 <!-- Generated from apps/website/src/spec.mdx. Edit that file instead, then run: vp run gen-readme -->
@@ -27,10 +29,12 @@ Frontmatter isn't required as of this early draft but it's recommended:
 ---
 id: <patch-id>
 summary: <short summary of the patch's intent>
-version: <semver>
+baseline: <upstream version or commit the edits were last verified against>
 lastUpdated: <yyyy-mm-dd>
 ---
 ```
+
+The `baseline` pins the edits to the source they were written against. When a patch drifts, a healing agent can diff the baseline against the current source to see exactly what changed.
 
 The only required heading is `## Intent`. After that, edits are defined inside fenced code blocks, in any [format](#patch-format).
 
@@ -123,9 +127,33 @@ Every edit has a before and an after. The before should appear exactly once in t
 
 All edits in a patch should apply together or not at all. If any edit fails, the patch has drifted.
 
-### Implementation agent-driven healing
+### Agent-driven healing
 
-You can use existing tools to apply patches when they apply cleanly, and call an agent when they need to be healed. You can also have agents handle the full process of applying and healing patches, which can be as simple as `SKILL.md` or `AGENTS.md` instructions. You can even set up a GitHub workflow that maintains a project fork, integrating new upstream commits on a set schedule.
+A `PATCH.md` is executable two ways: as data, and as a prompt. You can use existing tools to apply patches when they apply cleanly, and call an agent when they need to be healed. The agent gets the whole file: the intent is its prompt, and the stale edits show what applied last looked like. Healing rewrites the edit blocks against the new source and applies them, so the healed `PATCH.md` lands alongside the change it made. Verify a healed patch with the project's tests or checks before accepting it.
+
+You can also have agents handle the full process of applying and healing patches, which can be as simple as `SKILL.md` or `AGENTS.md` instructions. You can even set up a GitHub workflow that maintains a project fork, integrating new upstream commits on a set schedule.
+
+### Example: a self-healing fork
+
+A patched fork of an upstream repo, maintained with no bespoke tooling. The fork's entire divergence from upstream is the `patches/` tree, and the fork branch is rebuilt from it on every sync, so each `PATCH.md` stays the single source of truth:
+
+```txt
+my-fork/
+├── patches/
+│   ├── disable-telemetry/PATCH.md
+│   └── custom-auth/PATCH.md
+└── .github/workflows/sync-upstream.yml
+```
+
+On a schedule or on upstream release, the workflow:
+
+1. resets the fork branch to upstream
+2. applies each patch with `git apply` or a small script
+3. calls an agent to heal any patch that fails; the agent rewrites the edit blocks, applies them, and updates the `baseline`
+4. runs the project's tests to verify each patch still does what its intent says
+5. pushes when everything is clean, or opens a PR for review when a patch was healed
+
+When every patch applies cleanly, no model is called. When one drifts, its `PATCH.md` becomes the prompt.
 
 ### Tools built on PATCH.md
 
