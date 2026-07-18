@@ -4,45 +4,62 @@
 
 `v0.0.1` · [patchmd.vercel.app](https://patchmd.vercel.app)
 
-PATCH.md is a spec proposal for defining source patches in markdown, which agents can automatically self-heal and update when the source changes. A patch file holds two things: its **intent**, written in plain prose, and its **patch**, a diff or search/replace hunk that defines the current state of the patch's code.
+PATCH.md is a proposed new spec for defining agent-healable source patches in markdown. With a single markdown file, agents can self-heal, updating patch definitions when the source changes and re-applying patches.
+
+The file holds two things:
+
+- **intent**: written in plain prose
+- **patch edits**: any format diff, patch, edit, or search/replace hunk
+
+<!-- spec:start -->
+
+<!-- Generated from apps/website/src/spec.mdx. Edit that file instead, then run: vp run gen-readme -->
 
 ## The spec
 
-### File
-
-A `PATCH.md` file which should be kept at `<patch-id>/PATCH.md`. The `<patch-id>` can be a custom or generated name, id, etc. This draft also proposes a convention for splitting a patch into multiple files, see [splitting a patch](#splitting-a-patch).
+A `PATCH.md` file kept at `<patch-id>/PATCH.md`. The `<patch-id>` can be a custom or generated name, id, etc. This draft also proposes a convention for splitting a patch into multiple files, see [splitting a patch](#splitting-a-patch).
 
 ### Structure
 
-The only required heading is `## Intent`. After that, edits are defined inside fenced code blocks, in any of the [patch formats](#patch-format). Each edit identifies the file it targets, either from the patch's own header or with `file=<path>` on the fence.
+Frontmatter isn't required as of this early draft but it's recommended:
 
-````md
+```yaml
 ---
 id: <patch-id>
 summary: <short summary of the patch's intent>
 version: <semver>
 lastUpdated: <yyyy-mm-dd>
 ---
+```
 
-# <Patch Title>
+The only required heading is `## Intent`. After that, edits are defined inside fenced code blocks, in any [format](#patch-format).
+
+Each edit identifies the file it targets, either from the patch's own header or with `file=<path>` on the fence.
+
+````md
+# Patch Title
 
 ## Intent
 
-<What the patch does and why, in plain prose. This is what an agent reads
-to re-anchor an edit when the target file changes.>
+> What the patch does and why, in plain prose. Helps the agent understand
+> the original intent so it can easily heal or redesign the patch.
+
+## Patch edits
+
+> Any format, one or more per file, each defined inside a fenced code block.
 
 ```diff file=<path>
-@@ optional hint @@
  context
+-removed line
 +added line
 ```
 ````
 
 ### Patch format
 
-An edit is a fenced code block that defines the patch's current code. Use any diff or patch format you like. The same search/replace and diff formats AI agents already produce work here, and so do conventional patches you can hand to `git apply`, `patch`, or a library like Google's diff-match-patch. Some examples:
+A patch edit is a fenced code block that defines the patch's current code. Use any diff or patch format you like. The same `search/replace` and `diff` formats agents already produce work here, as do conventional patches supported by `git apply`, `patch`, or a library like Google's `diff-match-patch`. Some examples:
 
-A search/replace block, showing the full before and after:
+A `search/replace` block, showing the full before and after:
 
 ```patch file=dist/package-manager-cli.js
 <<<<<<< SEARCH
@@ -53,7 +70,7 @@ A search/replace block, showing the full before and after:
 >>>>>>> REPLACE
 ```
 
-A diff hunk, marking only the changed lines:
+A `diff` hunk, marking only the changed lines:
 
 ```diff file=dist/package-manager-cli.js
 @@ pi self update success branch @@
@@ -61,7 +78,7 @@ A diff hunk, marking only the changed lines:
 +    try { (await import("node:child_process")).spawnSync("pi-patcher", ["reconcile"], { stdio: "inherit" }); } catch {}
 ```
 
-A standard git patch, applicable as-is with existing tools:
+A standard `git patch`, applicable as-is with existing tools:
 
 ```diff
 diff --git a/dist/package-manager-cli.js b/dist/package-manager-cli.js
@@ -106,11 +123,13 @@ Every edit has a before and an after. The before should appear exactly once in t
 
 All edits in a patch should apply together or not at all. If any edit fails, the patch has drifted.
 
-### Agent-driven healing
+### Implementation agent-driven healing
 
-When an edit no longer matches its target, the patch has drifted. The tool calls an agent to read the `PATCH.md` and rewrite the edit to fit. The tool handles the safety around it: snapshotting first, restoring on failure, and letting the agent decline when a fix no longer makes sense.
+You can use existing tools to apply patches when they apply cleanly, and call an agent when they need to be healed. You can also have agents handle the full process of applying and healing patches, which can be as simple as `SKILL.md` or `AGENTS.md` instructions. You can even set up a GitHub workflow that maintains a project fork, integrating new upstream commits on a set schedule.
 
-Tool developers and patch authors decide how complex a change their agent is allowed to heal automatically.
+### Tools built on PATCH.md
+
+- [pi-patcher](https://github.com/AVGVSTVS96/pi-patcher)
 
 ### Example
 
@@ -141,6 +160,8 @@ change update behavior if `pi-patcher` is missing or fails to start.
 +    try { (await import("node:child_process")).spawnSync("pi-patcher", ["reconcile"], { stdio: "inherit" }); } catch {}
 ```
 ````
+
+<!-- spec:end -->
 
 ---
 

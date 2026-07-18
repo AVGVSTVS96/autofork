@@ -4,7 +4,7 @@ A `PATCH.md` file kept at `<patch-id>/PATCH.md`. The `<patch-id>` can be a custo
 
 ## Structure
 
-Frontmatter isn't required as of this early draft but its recommended:
+Frontmatter isn't required as of this early draft but it's recommended:
 
 ```yaml
 ---
@@ -24,7 +24,7 @@ Each edit identifies the file it targets, either from the patch's own header or 
 
 ## Intent
 
-> What the patch does and why, in plain prose. Helps the agent unsderstand
+> What the patch does and why, in plain prose. Helps the agent understand
 > the original intent so it can easily heal or redesign the patch.
 
 ## Patch edits
@@ -107,7 +107,7 @@ All edits in a patch should apply together or not at all. If any edit fails, the
 
 ## Implementation agent-driven healing
 
-You can use existing tools to apply patches when they apply cleanly, and call an agent when they need to be healed. You can also have agents handle the full process of applying and healing patches; can be a `SKILL.md` or `AGENTS.md` instructions. You can even setup a github workflow that that maintains a project fork, integrating new upstream commits on a set schedule.
+You can use existing tools to apply patches when they apply cleanly, and call an agent when they need to be healed. You can also have agents handle the full process of applying and healing patches, which can be as simple as `SKILL.md` or `AGENTS.md` instructions. You can even set up a GitHub workflow that maintains a project fork, integrating new upstream commits on a set schedule.
 
 ## Tools built on PATCH.md
 
