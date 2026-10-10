@@ -1,0 +1,35 @@
+name: autopatch
+description: Rebuild your fork from upstream plus your patches. An agent re-implements the ones that stop applying.
+author: AVGVSTVS96
+branding:
+  icon: git-merge
+  color: green
+inputs:
+  token:
+    description: Token that pushes the signed sync commit
+    default: ${{ github.token }}
+outputs:
+  result:
+    description: synced, current, skipped, or failed
+    value: ${{ steps.sync.outputs.result }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache/restore@v6
+      with:
+        path: ${{ runner.temp }}/autopatch-failed
+        key: autopatch-failed-${{ github.run_id }}
+        restore-keys: autopatch-failed-
+    - id: sync
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: '"$GITHUB_ACTION_PATH/action.sh"'
+    - if: failure() && steps.sync.outputs.key != ''
+      shell: bash
+      run: echo '${{ steps.sync.outputs.key }}' > "$RUNNER_TEMP/autopatch-failed"
+    - if: failure() && steps.sync.outputs.key != ''
+      uses: actions/cache/save@v6
+      with:
+        path: ${{ runner.temp }}/autopatch-failed
+        key: autopatch-failed-${{ steps.sync.outputs.key }}

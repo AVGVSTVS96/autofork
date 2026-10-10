@@ -1,0 +1,19 @@
+{
+  "name": "autopatch",
+  "version": "0.1.0",
+  "description": "Keep your changes on top of someone else's repo. An agent heals the patches that drift.",
+  "type": "module",
+  "license": "MIT",
+  "bin": { "autopatch": "dist/autopatch.js" },
+  "files": ["dist"],
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "bun build src/autopatch.ts --target node --outfile dist/autopatch.js",
+    "test": "bun run build && bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}
