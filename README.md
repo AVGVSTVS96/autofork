@@ -10,6 +10,8 @@ your fork  ─────●──────────●──────
 
 Every change you make to a fork is a patch: a `PATCH.md` that says what it does and why, plus the diff. Every night a GitHub Action rebuilds your fork from upstream and applies each patch with git. Patches that still apply never touch a model. When one doesn't, its `PATCH.md` becomes the prompt: an agent rebuilds it on the new code, your tests prove it, and the fresh diff is saved so tomorrow git can apply it alone.
 
+A real one: [my T3 Code fork](https://github.com/AVGVSTVS96/t3code) was 383 upstream commits behind, and upstream had rewritten the code around its patch. [This run](https://github.com/AVGVSTVS96/t3code/actions/runs/38093414658) had Claude re-implement it from its `PATCH.md`, typechecked it, and pushed a signed commit, in under two minutes.
+
 ## Start
 
 In your fork's checkout:

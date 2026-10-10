@@ -18,7 +18,7 @@ if [ "$(git rev-parse HEAD)" != "$head" ]; then
   for parent in $(git log -1 --format=%P); do parents+=(-f "parents[]=$parent"); done
   remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
   scratch="refs/heads/autopatch-objects-${GITHUB_RUN_ID}"
-  git push --quiet "$remote" "HEAD:$scratch"
+  git push --quiet "$remote" "HEAD:$scratch" 2>&1 | { grep -v '^remote:' || true; } >&2
   trap 'git push --quiet "$remote" --delete "$scratch" || true' EXIT
   signed="$(gh api "repos/$GITHUB_REPOSITORY/git/commits" \
     -f message="$(git log -1 --format=%B)" -f tree="$(git rev-parse 'HEAD^{tree}')" "${parents[@]}" --jq .sha)"
