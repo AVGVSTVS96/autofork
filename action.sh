@@ -3,6 +3,7 @@ set -euo pipefail
 
 failed="$RUNNER_TEMP/autopatch-failed"
 skip="$(cat "$failed" 2>/dev/null || true)"
+[ "${GITHUB_EVENT_NAME:-}" = schedule ] || skip=""
 head="$(git rev-parse HEAD)"
 
 git config user.name "github-actions[bot]"

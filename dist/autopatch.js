@@ -69,6 +69,8 @@ function writeConfig(dir, config) {
   mkdirSync(join(dir, DIR), { recursive: true });
   writeFileSync(configFile(dir), `${JSON.stringify(config, null, 2)}
 `);
+  writeFileSync(join(dir, DIR, ".gitignore"), `!*.patch
+`);
 }
 function githubRepo(upstream) {
   return upstream.match(/^(?:https:\/\/github\.com\/)?([\w.-]+\/[\w.-]+?)(?:\.git)?$/)?.[1];
@@ -86,7 +88,7 @@ function baseline(root) {
     throw new Failure("this branch shares no history with upstream");
   return base.out.toString().trim();
 }
-async function newestGreen(root, config, tip) {
+async function newestGreen(root, config, base, tip) {
   const repo = githubRepo(config.upstream);
   if (config.green === false || !repo)
     return tip;
@@ -94,8 +96,8 @@ async function newestGreen(root, config, tip) {
   const headers = { accept: "application/vnd.github+json" };
   if (token)
     headers.authorization = `Bearer ${token}`;
-  for (const sha of git(root, "rev-list", "--first-parent", "--max-count=30", tip).split(`
-`)) {
+  for (const sha of git(root, "rev-list", "--first-parent", "--max-count=30", `${base}..${tip}`).split(`
+`).filter(Boolean)) {
     const response = await fetch(`https://api.github.com/repos/${repo}/commits/${sha}/check-runs?per_page=100`, { headers });
     if (!response.ok) {
       say(`can't read upstream checks (${response.status}), using upstream's tip`);
@@ -108,7 +110,9 @@ async function newestGreen(root, config, tip) {
       say(`upstream's tip isn't green yet, using ${short(sha)}`);
     return sha;
   }
-  throw new Failure(`none of upstream's last 30 commits passed its checks. Set "green": false to sync anyway`);
+  if (base !== tip)
+    say(`no newer upstream commit has passed its checks yet, staying on ${short(base)}`);
+  return base;
 }
 function intent(root, id) {
   const doc = existsSync(patchDoc(root, id)) ? readFileSync(patchDoc(root, id), "utf8") : "";
@@ -251,7 +255,7 @@ function build(root, config, base, options) {
 }
 function refresh(target, config, build, base) {
   config.patches.forEach((id, index) => {
-    const diff = gitBytes(build.dir, "diff", "--binary", "--full-index", build.steps[index], build.steps[index + 1], "--", ...SOURCE);
+    const diff = gitBytes(build.dir, "diff-tree", "-p", "--binary", "--full-index", build.steps[index], build.steps[index + 1], "--", ...SOURCE);
     writeFileSync(patchFile(target, id), diff);
     if (existsSync(patchDoc(target, id))) {
       const doc = readFileSync(patchDoc(target, id), "utf8");
@@ -280,7 +284,7 @@ function check(root, config, against) {
   const base = baseline(root);
   const rebuilt = build(root, config, base, { heal: false });
   try {
-    const drift = git(root, "diff", "--name-only", rebuilt.steps.at(-1), against, "--", ...SOURCE);
+    const drift = git(root, "diff-tree", "-r", "--name-only", rebuilt.steps.at(-1), against, "--", ...SOURCE);
     return { base, rebuilt: rebuilt.steps.at(-1), drift: drift.split(`
 `).filter(Boolean) };
   } finally {
@@ -300,11 +304,11 @@ async function sync(root, args) {
   `)}
 Capture them first: autopatch add <id>`);
   }
-  const source = await newestGreen(root, config, tip);
-  const key = `${short(source)}-${short(git(root, "rev-parse", `HEAD:${DIR}`))}`;
+  const source = await newestGreen(root, config, base, tip);
+  const key = `${short(source)}-${short(git(root, "rev-parse", "HEAD"))}`;
   output({ key });
   if (flag(args, "--skip") === key) {
-    say(`already failed on upstream ${short(source)} with these patches, skipping until either changes`);
+    say(`already failed on upstream ${short(source)} with this fork, skipping until either changes`);
     return output({ result: "skipped" });
   }
   const moved = base === source ? short(source) : `${short(base)} → ${short(source)}`;
@@ -351,7 +355,7 @@ async function add(root, args) {
   const { base, rebuilt, drift } = check(root, config, files);
   if (!drift.length)
     throw new Failure("nothing to capture: your files match what the patches already build");
-  const captured = gitBytes(root, "diff", "--binary", "--full-index", rebuilt, files, "--", ...SOURCE);
+  const captured = gitBytes(root, "diff-tree", "-p", "--binary", "--full-index", rebuilt, files, "--", ...SOURCE);
   if (!config.patches.includes(id)) {
     mkdirSync(join(root, DIR, id), { recursive: true });
     writeFileSync(patchFile(root, id), captured);

@@ -7,7 +7,7 @@ import { join } from "node:path";
 const cli = join(import.meta.dir, "../dist/autopatch.js");
 const home = mkdtempSync(join(tmpdir(), "autopatch-test-"));
 const gitconfig = join(home, "gitconfig");
-writeFileSync(gitconfig, "[user]\n\tname = test\n\temail = test@example.com\n[commit]\n\tgpgsign = false\n[init]\n\tdefaultBranch = main\n");
+writeFileSync(gitconfig, "[user]\n\tname = test\n\temail = test@example.com\n[commit]\n\tgpgsign = false\n[init]\n\tdefaultBranch = main\n[diff]\n\tnoprefix = true\n");
 const env = { ...process.env, GIT_CONFIG_GLOBAL: gitconfig, GIT_CONFIG_NOSYSTEM: "1", RUNNER_TEMP: home };
 
 function sh(cwd: string, command: string) {
@@ -44,6 +44,7 @@ test("init tracks upstream", () => {
   sh(upstream, "git init -q");
   write(upstream, "app.js", 'export function greet(name) {\n  return "hello " + name;\n}\n');
   write(upstream, "notes.txt", "one\n");
+  write(upstream, ".gitignore", "*.patch\n");
   sh(upstream, "git add -A && git commit -qm init");
   sh(home, `git clone -q ${upstream} fork`);
   const { ok, log } = autopatch(fork, "init", upstream, "--verify", "node -e \"import('./app.js').then(m => process.exit(m.greet('x') === 'x' ? 1 : 0))\"");
@@ -62,6 +63,7 @@ test("add captures uncommitted changes as a patch", () => {
   const doc = file(fork, ".autopatch/shout/PATCH.md").replace(/TODO.*/, "greet() shouts the name in upper case.");
   write(fork, ".autopatch/shout/PATCH.md", doc);
   sh(fork, "git add -A && git commit -qm 'shout'");
+  expect(sh(fork, "git ls-files .autopatch/shout")).toContain("shout.patch");
 });
 
 test("sync with nothing new is a no-op", () => {
