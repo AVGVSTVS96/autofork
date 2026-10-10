@@ -96,6 +96,8 @@ diff --git a/dist/package-manager-cli.js b/dist/package-manager-cli.js
 > [!NOTE]
 > Each edit needs to identify the file it targets. A git or unified diff already carries the path in its header; for formats that don't, add `file=<path>` to the fence so tools can find the target without interpreting prose.
 
+Edits can also live next to the file. A `PATCH.md` with only the intent can sit beside a `<patch-id>.patch` git diff, which `git apply` takes as is. Tools then apply the diff directly and hand the agent the `PATCH.md` only when the diff stops applying.
+
 ### Splitting a patch
 
 A patch can touch several files, but when one grows large or bundles unrelated changes, split it into smaller sub-patches. Smaller patches are easier to maintain, and easier for an agent to heal. Sub-patches nest inside their parent's directory, and the relationships are declared in frontmatter.
@@ -155,9 +157,12 @@ On a schedule or on upstream release, the workflow:
 
 When every patch applies cleanly, no model is called. When one drifts, its `PATCH.md` becomes the prompt.
 
+[autopatch](https://github.com/AVGVSTVS96/autopatch) packages this workflow as one GitHub Action and CLI.
+
 ### Tools built on PATCH.md
 
 - [pi-patcher](https://github.com/AVGVSTVS96/pi-patcher)
+- [autopatch](https://github.com/AVGVSTVS96/autopatch)
 
 ### Example
 
