@@ -62,7 +62,7 @@ Upstream's light palette stays byte for byte, so its theme changes keep landing.
 
 1. **Refuses to drop your work.** If `main` has changes no patch holds, a rebuild would erase them, so it stops and lists the files. `autopatch add` captures them.
 2. **Picks a green upstream.** It syncs to the newest upstream commit whose GitHub checks passed, so a red `main` upstream never lands in your fork. Set `"green": false` to take the tip.
-3. **Rebuilds.** Upstream at that commit, your own `.github/` in place of upstream's (upstream workflows never run with your secrets), then each patch in order with `git apply --3way`. Patches stack, so a later one can change the same file as an earlier one.
+3. **Rebuilds.** Upstream at that commit with your fork's own `.github/` in place of upstream's, so upstream's new workflows never get copied in to run with your secrets. Then each patch in order with `git apply --3way`. Patches stack, so a later one can change the same file as an earlier one.
 4. **Heals what drifted, one patch at a time.** The agent gets that patch's `PATCH.md`, its stale diff, and the upstream changes under it. A clean exit isn't proof: it must change source files, or write `OBSOLETE` explaining that upstream now does it, in which case the patch is dropped with that reason in the commit.
 5. **Verifies** with your `verify` command.
 6. **Commits** the rebuilt tree with upstream as its second parent, and rewrites each patch's diff and `baseline`. In the action, GitHub creates that commit through its API, so it's signed.

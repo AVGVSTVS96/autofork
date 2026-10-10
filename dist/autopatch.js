@@ -267,10 +267,10 @@ function cleanup(root, build) {
     run("git", ["worktree", "remove", "--force", build.dir], root);
 }
 function workingTree(root) {
-  const index = join(git(root, "rev-parse", "--path-format=absolute", "--git-dir"), "autopatch-index");
+  const gitDir = git(root, "rev-parse", "--path-format=absolute", "--git-dir");
+  const index = join(gitDir, "autopatch-index");
   const env = { ...process.env, GIT_INDEX_FILE: index };
-  rmSync(index, { force: true });
-  gitWith(root, env, "read-tree", "HEAD");
+  cpSync(join(gitDir, "index"), index);
   gitWith(root, env, "add", "-A");
   const tree = gitWith(root, env, "write-tree");
   rmSync(index, { force: true });
@@ -418,7 +418,11 @@ async function init(root, args) {
     writeFileSync(workflow, WORKFLOW);
   fetchUpstream(root, config);
   const { drift } = check(root, config, workingTree(root));
+  const inherited = git(root, "ls-files", ".github/workflows").split(`
+`).filter((file) => file && !file.endsWith("/autopatch.yml"));
   say(`autopatch tracks ${upstream} (${branch}).`);
+  if (inherited.length)
+    say(`Your fork has ${inherited.length} workflow${inherited.length === 1 ? "" : "s"} copied from upstream, and they run here too. Delete the ones you don't want; upstream's new ones never get copied in.`);
   if (drift.length)
     say(`Your branch already changes ${drift.length} file${drift.length === 1 ? "" : "s"}. Capture them: autopatch add <id>`);
   say("Add a CLAUDE_CODE_OAUTH_TOKEN secret (claude setup-token), commit, and push.");
