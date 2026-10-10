@@ -314,7 +314,8 @@ async function sync(root: string, args: string[]) {
     say(`already failed on upstream ${short(source)} with these patches, skipping until either changes`);
     return output({ result: "skipped" });
   }
-  say(`upstream ${short(base)} → ${short(source)}, ${config.patches.length} patch${config.patches.length === 1 ? "" : "es"}`);
+  const moved = base === source ? short(source) : `${short(base)} → ${short(source)}`;
+  say(`upstream ${moved}, ${config.patches.length} patch${config.patches.length === 1 ? "" : "es"}`);
   let result: Build | undefined;
   try {
     result = build(root, config, source, { heal: true });
