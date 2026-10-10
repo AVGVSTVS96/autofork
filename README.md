@@ -1,4 +1,7 @@
-# autopatch
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/header-dark.png">
+  <img alt="autopatch: Fork anything. Keep your changes." src="assets/header-light.png">
+</picture>
 
 Fork anything and keep your changes. When upstream moves, an agent re-implements the ones that stop applying.
 
