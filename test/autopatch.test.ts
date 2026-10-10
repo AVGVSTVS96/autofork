@@ -114,3 +114,14 @@ test("a patch upstream absorbed is dropped with the agent's reason", () => {
   expect(JSON.parse(file(fork, ".autopatch/config.json")).patches).toEqual([]);
   expect(sh(fork, "ls .autopatch")).toBe("config.json");
 });
+
+test("files verify leaves behind stay out of the fork", () => {
+  const config = JSON.parse(file(fork, ".autopatch/config.json"));
+  write(fork, ".autopatch/config.json", `${JSON.stringify({ ...config, verify: "touch verify-output.log" }, null, 2)}\n`);
+  sh(fork, "git commit -qam 'noisy verify'");
+  write(upstream, "notes.txt", "three\n");
+  sh(upstream, "git commit -qam notes");
+  const { ok } = autopatch(fork, "sync");
+  expect(ok).toBe(true);
+  expect(sh(fork, "git ls-files verify-output.log")).toBe("");
+});

@@ -167,7 +167,7 @@ This checkout is upstream at ${source}${before.length ? `, with ${before.join(",
 3. Implement the intent on the current source: the smallest change that fully delivers it and keeps its invariants. Follow upstream's current code and conventions, and leave everything else alone.${config.verify ? `
 4. Run \`${config.verify}\` and fix what your change breaks. Patches after this one aren't applied yet.` : ""}
 
-Don't edit anything in ${DIR}/ or .github/, and don't commit.
+Don't edit anything in ${DIR}/ or .github/, and don't commit. Leave only your source change: remove anything your checks generated that git would pick up.
 If upstream now does what the intent asks on its own, change nothing and write one line saying how to ${DIR}/${id}/OBSOLETE.`;
 }
 
@@ -319,6 +319,8 @@ async function sync(root: string, args: string[]) {
   try {
     result = build(root, config, source, { heal: true });
     if (config.verify && !shell(config.verify, result.dir)) throw new Failure(`verify failed: ${config.verify}`);
+    git(result.dir, "reset", "--hard", "--quiet");
+    git(result.dir, "clean", "-fdq");
     refresh(result.dir, config, result, source);
     const tree = git(result.dir, "rev-parse", `${commit(result.dir, "refresh")}^{tree}`);
     if (tree === git(root, "rev-parse", "HEAD^{tree}")) {
