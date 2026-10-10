@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+@font-face { font-family: "Commit Mono"; src: url("fonts/commit-mono-400.woff2") format("woff2"); font-weight: 400; }
+@font-face { font-family: "Commit Mono"; src: url("fonts/commit-mono-700.woff2") format("woff2"); font-weight: 700; }
+@font-face { font-family: "Instrument Sans"; src: url("fonts/instrument-sans-var.woff2") format("woff2"); font-weight: 400 700; }
+:root { --bg: #fbfbfa; --bg-2: #f2f3f1; --ink: #101312; --ink-2: #4a514e; --ink-3: #646b68; --hair: rgb(16 19 18 / 0.13); --add: #16753f; --add-sign: #1c9a50; --add-bg: #e1f5e7; --del-sign: #d7402c; --hunk: #1d64a8; --hunk-bg: #e5f0fa; }
+html, body { margin: 0; }
+body { width: 1600px; height: 900px; background: var(--bg); color: var(--ink); font-family: "Commit Mono", monospace; font-variant-ligatures: none; box-sizing: border-box; padding: 44px 56px 52px; display: grid; grid-template-rows: auto 1fr; gap: 30px; }
+header { display: flex; justify-content: space-between; align-items: center; }
+header img { height: 40px; }
+header span { font-size: 22px; color: var(--ink-3); }
+main { display: grid; grid-template-columns: 0.92fr 1.08fr; gap: 28px; min-height: 0; }
+.panel { border: 2px solid var(--ink); display: flex; flex-direction: column; min-height: 0; background: var(--bg); }
+.head { display: flex; justify-content: space-between; font-size: 20px; color: var(--ink-3); padding: 16px 22px; border-bottom: 1px solid var(--hair); }
+.head b { color: var(--ink); font-weight: 700; }
+.md { padding: 22px 26px; font-size: 22px; line-height: 1.5; }
+.fm { color: var(--ink-3); white-space: pre; font-size: 20px; line-height: 1.55; }
+.md h3 { font-size: 23px; margin: 22px 0 10px; }
+.md h3 span { color: var(--ink-3); font-weight: 400; }
+.md p { font-family: "Instrument Sans", sans-serif; font-size: 27px; line-height: 1.42; margin: 0; color: var(--ink); letter-spacing: -0.005em; }
+.md code { font-family: "Commit Mono", monospace; font-size: 0.85em; background: var(--bg-2); padding: 0 0.25em; }
+pre { margin: 0; font: inherit; }
+.term { padding: 18px 22px; font-size: 21px; line-height: 1.55; border-bottom: 1px solid var(--hair); background: var(--bg-2); }
+.term .p { color: var(--add-sign); }
+.term .d { color: var(--ink-2); }
+.term .g { color: var(--add); font-weight: 700; }
+.diff { padding: 12px 0; font-size: 19px; line-height: 1.5; }
+.ln { display: grid; grid-template-columns: 2.2ch minmax(0, 1fr); white-space: pre; padding-right: 16px; }
+.ln > i { font-style: normal; overflow: hidden; text-overflow: ellipsis; }
+.ln::before { content: " "; text-align: center; }
+.hunk { background: var(--hunk-bg); color: var(--hunk); }
+.add { background: var(--add-bg); } .add::before { content: "+"; color: var(--add-sign); }
+.ctx { color: var(--ink-2); }
+.new { color: var(--ink); } .new::before { content: "›"; color: var(--hunk); }
+</style>
+</head>
+<body>
+<header>
+  <img src="logo/autopatch.svg" alt="autopatch">
+  <span>AVGVSTVS96/t3code · 382 upstream commits later</span>
+</header>
+<main>
+  <section class="panel">
+    <div class="head"><b>.autopatch/window-title/PATCH.md</b><span>written once</span></div>
+    <div class="md">
+<pre class="fm">---
+summary: The window title shows the active thread
+baseline: 9503155da67add4fbd7fbc51c99ec19a0c8c4a2c
+---</pre>
+      <h3><span>## </span>Intent</h3>
+      <p>The window (and browser tab) title shows the thread you're looking at, as <code>&lt;thread title&gt; · &lt;project name&gt;</code>, or just the thread title when there's no project. With several T3 Code windows open, the dock, window switcher and tab bar can tell them apart instead of all reading "T3 Code".</p>
+    </div>
+  </section>
+  <section class="panel">
+    <div class="head"><b>autopatch sync</b><span data-where>healed by Claude Code</span></div>
+<pre class="term" data-term><span class="d">upstream's tip isn't green yet, using 62da1cd48bb4</span>
+<span class="d">upstream 9503155da67a → 62da1cd48bb4, 1 patch</span>
+healing window-title</pre>
+<pre class="diff" data-diff><span class="ln hunk"><i>@@ -89,6 +89,15 @@ export const ChatHeader = memo(function ChatHeader({</i></span>
+<span class="ln ctx"><i>  const activeProjectCwd = activeProject?.workspaceRoot ?? null;</i></span>
+<span class="ln add"><i>  useEffect(() => {</i></span>
+<span class="ln add"><i>    const appTitle = document.title;</i></span>
+<span class="ln add"><i>    document.title = activeProjectName</i></span>
+<span class="ln add"><i>      ? `${activeThreadTitle} · ${activeProjectName}`</i></span>
+<span class="ln add"><i>      : activeThreadTitle;</i></span>
+<span class="ln add"><i>    return () => {</i></span>
+<span class="ln add"><i>      document.title = appTitle;</i></span>
+<span class="ln add"><i>    };</i></span>
+<span class="ln add"><i>  }, [activeProjectName, activeThreadTitle]);</i></span>
+<span class="ln ctx new"><i>  const interfaceFont = useClientSettings((settings) => settings.fontFamilySans);</i></span>
+<span class="ln ctx new"><i>  const breadcrumbContainerRef = useRef&lt;HTMLDivElement&gt;(null);</i></span></pre>
+  </section>
+</main>
+</body>
+</html>

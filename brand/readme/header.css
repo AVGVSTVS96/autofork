@@ -1,0 +1,12 @@
+@font-face { font-family: "Commit Mono"; src: url("../fonts/commit-mono-400.woff2") format("woff2"); font-weight: 400; }
+@font-face { font-family: "Commit Mono"; src: url("../fonts/commit-mono-700.woff2") format("woff2"); font-weight: 700; }
+:root { --bg: #ffffff; --ink: #101312; --sign-del: #d7402c; --sign-add: #1c9a50; --add-bg: #e1f5e7; --hunk: #1d64a8; --hunk-bg: #e5f0fa; }
+.dark { --bg: #0d1117; --ink: #e9ecea; --sign-add: #2db566; --add-bg: #10301d; --hunk: #6cb4f0; --hunk-bg: #0f1d2a; }
+html, body { margin: 0; }
+body { width: 100vw; height: 100vh; background: var(--bg); align-items: flex-start; color: var(--ink); font-family: "Commit Mono", monospace; font-variant-ligatures: none; overflow: hidden; display: flex; flex-direction: column; justify-content: center; }
+.wm { height: 28px; margin: 0 0 26px 40px; display: block; }
+.ln { align-self: stretch; display: grid; grid-template-columns: 26px 1fr; column-gap: 14px; padding: 0 40px; white-space: nowrap; }
+.hunk { background: var(--hunk-bg); color: var(--hunk); font-size: 14px; line-height: 34px; grid-template-columns: 1fr; }
+.big { font-size: 46px; font-weight: 700; letter-spacing: -0.045em; line-height: 70px; }
+.big::before { font-weight: 400; text-align: center; content: " "; }
+.add { background: var(--add-bg); } .add::before { content: "+"; color: var(--sign-add); }
