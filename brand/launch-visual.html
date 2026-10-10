@@ -21,26 +21,27 @@ main { display: grid; grid-template-columns: 0.92fr 1.08fr; gap: 28px; min-heigh
 .md h3 { font-size: 23px; margin: 22px 0 10px; }
 .md h3 span { color: var(--ink-3); font-weight: 400; }
 .md p { font-family: "Instrument Sans", sans-serif; font-size: 27px; line-height: 1.42; margin: 0; color: var(--ink); letter-spacing: -0.005em; }
+.md p.p2 { margin-top: 16px; color: var(--ink-2); }
 .md code { font-family: "Commit Mono", monospace; font-size: 0.85em; background: var(--bg-2); padding: 0 0.25em; }
 pre { margin: 0; font: inherit; }
-.term { padding: 18px 22px; font-size: 21px; line-height: 1.55; border-bottom: 1px solid var(--hair); background: var(--bg-2); }
+.term { padding: 16px 22px; font-size: 20px; line-height: 1.5; border-bottom: 1px solid var(--hair); background: var(--bg-2); }
 .term .p { color: var(--add-sign); }
 .term .d { color: var(--ink-2); }
 .term .g { color: var(--add); font-weight: 700; }
-.diff { padding: 12px 0; font-size: 19px; line-height: 1.5; }
+.diff { padding: 12px 0; font-size: 20px; line-height: 1.5; white-space: normal; }
 .ln { display: grid; grid-template-columns: 2.2ch minmax(0, 1fr); white-space: pre; padding-right: 16px; }
 .ln > i { font-style: normal; overflow: hidden; text-overflow: ellipsis; }
 .ln::before { content: " "; text-align: center; }
 .hunk { background: var(--hunk-bg); color: var(--hunk); }
 .add { background: var(--add-bg); } .add::before { content: "+"; color: var(--add-sign); }
 .ctx { color: var(--ink-2); }
-.new { color: var(--ink); } .new::before { content: "›"; color: var(--hunk); }
+
 </style>
 </head>
 <body>
 <header>
   <img src="logo/autopatch.svg" alt="autopatch">
-  <span>AVGVSTVS96/t3code · 382 upstream commits later</span>
+  <span>AVGVSTVS96/t3code · 383 upstream commits later</span>
 </header>
 <main>
   <section class="panel">
@@ -52,13 +53,18 @@ baseline: 9503155da67add4fbd7fbc51c99ec19a0c8c4a2c
 ---</pre>
       <h3><span>## </span>Intent</h3>
       <p>The window (and browser tab) title shows the thread you're looking at, as <code>&lt;thread title&gt; · &lt;project name&gt;</code>, or just the thread title when there's no project. With several T3 Code windows open, the dock, window switcher and tab bar can tell them apart instead of all reading "T3 Code".</p>
+      <p class="p2">Leaving a thread puts the app's own title back, so views without a thread (settings, the new thread screen) look the way upstream made them.</p>
     </div>
   </section>
   <section class="panel">
-    <div class="head"><b>autopatch sync</b><span data-where>healed by Claude Code</span></div>
-<pre class="term" data-term><span class="d">upstream's tip isn't green yet, using 62da1cd48bb4</span>
-<span class="d">upstream 9503155da67a → 62da1cd48bb4, 1 patch</span>
-healing window-title</pre>
+    <div class="head"><b>autopatch sync</b><span data-where>GitHub Actions, 1m55s</span></div>
+<pre class="term" data-term><span class="d">upstream 9503155da67a → 9afde1c6dbe0, 1 patch</span>
+healing window-title
+<span class="d">$ tsc --noEmit</span>
+<span class="g">autopatch: sync pingdotgg/t3code to 9afde1c6dbe0</span>
+
+<span class="g">healed window-title</span>
+pushed 85b3a1c414c9 to main, signed by GitHub</pre>
 <pre class="diff" data-diff><span class="ln hunk"><i>@@ -89,6 +89,15 @@ export const ChatHeader = memo(function ChatHeader({</i></span>
 <span class="ln ctx"><i>  const activeProjectCwd = activeProject?.workspaceRoot ?? null;</i></span>
 <span class="ln add"><i>  useEffect(() => {</i></span>
@@ -71,7 +77,8 @@ healing window-title</pre>
 <span class="ln add"><i>    };</i></span>
 <span class="ln add"><i>  }, [activeProjectName, activeThreadTitle]);</i></span>
 <span class="ln ctx new"><i>  const interfaceFont = useClientSettings((settings) => settings.fontFamilySans);</i></span>
-<span class="ln ctx new"><i>  const breadcrumbContainerRef = useRef&lt;HTMLDivElement&gt;(null);</i></span></pre>
+<span class="ln ctx"><i>  const breadcrumbContainerRef = useRef&lt;HTMLDivElement&gt;(null);</i></span>
+</pre>
   </section>
 </main>
 </body>
