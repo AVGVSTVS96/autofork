@@ -2,26 +2,26 @@
 
 The source of truth for how we talk about autopatch. The site, README, OG image and launch post draw from here. Numbers come from `copy/facts.json` (run `node copy/facts.mjs`), never typed by hand. When this file and an asset disagree, fix it here first, then `rg` every asset for the old wording.
 
-Every claim below was checked against `~/Developer/autopatch/src/autopatch.ts` on Oct 10 2026. The GitHub Action's own file (`action.yml`) didn't exist yet when this was written, so nothing here describes how it commits or pushes. Check it before adding a line about that.
+Every claim below was checked against `~/Developer/autopatch` (`src/autopatch.ts`, `action.yml`, `action.sh`, `README.md`) on Oct 10 2026. The README's first line and this hero say the same thing; keep them in step.
 
 ## The idea in one sentence
 
-autopatch keeps your changes on top of someone else's repo: your patches replay on upstream every day, and when one stops applying, an agent rewrites it from the intent you wrote down.
+autopatch keeps your changes on top of someone else's repo: every night your fork is rebuilt from upstream plus your patches, and when one stops applying, an agent re-implements it from the intent you wrote down.
 
 Bassim's own words, for the README and the launch, verbatim: "i can fork and customize anything, the agents will autonomously track upstream and re-implement my changes."
 
 ## Hero
 
 - **Headline:** Fork anything. Keep your changes.
-- **Sub line:** Your patches replay on upstream every day, and an agent heals the ones that drift. *(15 words)*
+- **Sub line:** Your patches replay on upstream every night, and an agent re-implements the ones that stop applying. *(16 words)*
 - **Command under it:** `npx github:AVGVSTVS96/autopatch init owner/repo`
 
 Runners-up for the headline, in order:
 
-1. **Your fork, current every morning.** Plain, but says less about why you'd fork.
+1. **Your fork, rebuilt every night.** Plain, but says less about why you'd fork.
 2. **Customize anything. Keep up with upstream.** Two jobs in one line; reads like a list.
 
-"heal" and "drift" are the tool's own words (its usage text says "an agent heals what drifts"), so they're fine in the hero. Explain them once in the sections, never in the hero.
+"re-implement" is Bassim's word ("re-implement my changes") and the README's. "heal" and "drift" are the CLI's ("an agent heals what drifts"): fine in sections and the post, kept out of the hero so it reads cold.
 
 ## Sections
 
@@ -45,9 +45,10 @@ healing pane-border-ids
 autopatch: sync herdrdev/herdr to 8b0e44d9a7c2
 
 healed pane-border-ids
+pushed 8b0e44d9a7c2 to main, signed by GitHub
 ```
 
-Three of four patches applied without a line of output. That silence is the point; let it show.
+The last line is what the Action prints after it lands the commit through GitHub's API. Three of four patches applied without a line of output. That silence is the point; let it show.
 
 ### 3. Healed from intent, proven by your tests
 
@@ -98,32 +99,30 @@ That second sentence is required. autopatch itself is new today; the forks prove
 **Visual:** a terminal with the real commands and their real replies:
 
 ```
-$ npx github:AVGVSTVS96/autopatch init owner/repo
+$ npx github:AVGVSTVS96/autopatch init owner/repo --verify "bun install && bun test"
 autopatch tracks owner/repo (main).
 Add a CLAUDE_CODE_OAUTH_TOKEN secret (claude setup-token), commit, and push.
 
-$ autopatch add fix-login
-captured 2 files in .autopatch/fix-login. Write its ## Intent, then commit.
+$ npx github:AVGVSTVS96/autopatch add dark-mode "Dark mode everywhere"
+captured 3 files in .autopatch/dark-mode. Write its ## Intent, then commit.
 
-$ autopatch sync
+$ git push
 ```
 
-Under it, small: *Runs as a GitHub Action, daily by default. Heals with Claude Code; set `agent` in `.autopatch/config.json` to any CLI agent that takes a prompt on stdin.*
-
-Check the README's install line before shipping this block: without a global install, `add` and `sync` are `npx github:AVGVSTVS96/autopatch add ...` too.
+Under it, small: *Runs nightly as a GitHub Action. Heals with Claude Code; set `agent` in `.autopatch/config.json` to Codex or any CLI agent that takes a prompt on stdin.*
 
 ## Meta
 
 - **Title:** autopatch: fork anything, keep your changes
-- **Description:** autopatch replays your patches on upstream every day. When one stops applying, an agent rewrites it from the intent in its PATCH.md.
+- **Description:** autopatch rebuilds your fork from upstream every night and replays your patches. When one stops applying, an agent re-implements it from its PATCH.md.
 - **Site:** https://autopatchmd.vercel.app
-- **Repo description (GitHub):** Keep your changes on top of someone else's repo. An agent heals the patches that drift.
+- **Repo description (GitHub):** Fork anything and keep your changes. An agent re-implements the ones that stop applying.
 
 ## OG image (1200×630)
 
 - **Big:** Fork anything. Keep your changes.
 - **Small:** autopatch · autopatchmd.vercel.app
-- **Alt text:** autopatch: fork anything, keep your changes. Patches replay on upstream daily; an agent heals the ones that drift.
+- **Alt text:** autopatch: fork anything, keep your changes. Patches replay on upstream every night, and an agent re-implements the ones that stop applying.
 
 Nothing else on it. Keep the bottom fifth clear for X's title bar.
 
@@ -132,12 +131,13 @@ Nothing else on it. Keep the bottom fifth clear for X's title bar.
 - A CLI and a GitHub Action, in one file of TypeScript ({tool.sourceLines} lines, {tool.runtimeDependencies} runtime dependencies, MIT).
 - Your patches as plain files in your fork: `.autopatch/<id>/PATCH.md` and `<id>.patch`, in order, listed in `.autopatch/config.json`.
 - Commands: `init`, `add`, `status`, `sync`.
+- Your fork's own `.github/` replaces upstream's on every rebuild, so upstream's workflows never run with your secrets.
 
 ## What it isn't
 
 - **Not a rebase bot.** It rebuilds your fork from upstream each time: upstream, then each patch in order. Patches stack, and a later one can touch the same files as an earlier one.
 - **Not hands-off forever.** If the agent can't make the change pass your verify command, nothing lands and the run fails, so you see it. Don't say "maintains itself", "zero maintenance" or "never breaks".
-- **Not a model call every day.** When every patch applies, there's no agent at all.
+- **Not a model call every night.** When every patch applies, there's no agent at all. A sync that failed isn't retried on the same upstream commit with the same patches, so a stuck heal can't burn your quota.
 - **Not a skill, a plugin or a mod.** It's a tool that runs in your fork's CI.
 
 ## Voice
@@ -157,7 +157,7 @@ Plain words, like the README. Short sentences, real numbers, what works and what
 
 | Don't | Do |
 |---|---|
-| Your fork maintains itself. | Your patches replay on upstream every day. |
+| Your fork maintains itself. | Your patches replay on upstream every night. |
 | AI-powered conflict resolution. | When a patch stops applying, an agent rewrites it from its intent. |
 | Never rebase again. | Git applies what it can. The agent handles the rest, and your tests check it. |
 | Fork anything, forever. | Fork anything. Keep your changes. |
