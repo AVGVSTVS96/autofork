@@ -3,78 +3,59 @@
   <img alt="autopatch: Fork anything. Keep your changes." src="assets/header-light.png">
 </picture>
 
-autopatch is a GitHub Action that updates your fork every night, and has an agent redo any change that stops applying.
-
-```
-upstream   ──●──────────●──────────●───────▶
-               \          \          \
-your fork  ─────●──────────●──────────●─────▶  every night: newest upstream + your patches
-```
-
-Each change you make to a fork is a patch: the diff, plus a `PATCH.md` that says what it does and why. Git applies the patches that still fit. When one doesn't, an agent reads its `PATCH.md` and builds it again on the new code.
-
-A real one: [my T3 Code fork](https://github.com/AVGVSTVS96/t3code) was 383 upstream commits behind. [This run](https://github.com/AVGVSTVS96/t3code/actions/runs/38093414658) had Claude rebuild its patch, typecheck it, and push a signed commit, in under two minutes.
-
-## Start
-
-In your fork:
+Fork anything and keep your changes. autopatch keeps your fork on top of upstream, and when upstream breaks one of your changes, an agent rebuilds it.
 
 ```sh
-npx github:AVGVSTVS96/autopatch init owner/repo --verify "bun install && bun test"
+npx github:AVGVSTVS96/autopatch fork pingdotgg/t3code
 ```
 
-That writes `.autopatch/config.json` and `.github/workflows/autopatch.yml`, which runs every night. Add a `CLAUDE_CODE_OAUTH_TOKEN` secret to the repo (`claude setup-token` prints one) and push. That's it.
+That forks the repo, clones it and adds the autopatch workflow. Set `CLAUDE_CODE_OAUTH_TOKEN` first (`claude setup-token` prints one) and it adds that secret too. Already have a fork? Run `init owner/repo` inside it.
 
-## Add a patch
+## Patches
 
-Change the code however you like, by hand or with your agent. Then say what it's for:
+Each change you keep is a folder in `.autopatch/`:
+
+```
+.autopatch/dark-mode/
+├── PATCH.md          what it does and why
+└── dark-mode.patch   the diff
+```
+
+Change the code, write the `PATCH.md`, and save the diff:
 
 ```sh
-npx github:AVGVSTVS96/autopatch add dark-mode "Follow the system theme in every view. Upstream hardcodes light colors in theme.ts, so add a dark palette and switch on prefers-color-scheme."
+npx github:AVGVSTVS96/autopatch save dark-mode
 ```
 
-`add` turns every change no patch holds yet into the diff, and writes your text as the `PATCH.md`:
+Or just write the `PATCH.md` and push. The workflow has an agent build it.
 
-```
-.autopatch/
-├── config.json
-└── dark-mode/
-    ├── PATCH.md          what it does and why
-    └── dark-mode.patch   the diff, kept current by autopatch
-```
+A `PATCH.md` is plain prose. Describe what the change does, not which lines it touches, so an agent can rebuild it on whatever upstream looks like next:
 
-Commit and push.
-
-- **More changes later?** Run `add` with the same id and they fold in.
-- **No code yet?** Run `add` with just the text. The agent builds it on the next sync.
-
-A `PATCH.md` is plain prose: no frontmatter, no required headings. Write it like you'd explain the change to someone: what it must do, not which lines it touches. Edit it any time; when the diff stops applying, it's what the agent rebuilds from. The format is [PATCH.md](https://patchmd.vercel.app).
-
-## What happens every night
-
-`autopatch sync` is what the action runs. It:
-
-1. picks upstream's newest commit whose checks passed, so a broken upstream never lands in your fork
-2. applies each patch with git, in order
-3. hands any patch that no longer applies (or has no diff yet) to an agent, which rebuilds it from its `PATCH.md` on the new code
-4. drops a patch if upstream already does what it asks, with the reason in the commit
-5. runs your `verify` command
-6. pushes a signed commit, with each rebuilt diff saved so git applies it alone next time
-
-When every patch applies cleanly, no agent is called at all. When anything fails, nothing is pushed and your fork stays on its last good build. A failed sync isn't retried on the same upstream commit until something changes, so a stuck patch can't burn your quota every night. Running the workflow by hand always retries.
-
-Your fork keeps its own `.github/`, so upstream's workflows never run with your secrets.
-
-## Commands
-
-```
-autopatch init <owner/repo>      track an upstream repo from this fork
-autopatch add <id> ["text"]      turn your changes into a patch, or fold them into one
-autopatch status                 list patches, and changes no patch holds yet
-autopatch sync                   rebuild on the latest upstream; an agent redoes what no longer applies
+```md
+Follow the system theme in every view. Upstream hardcodes light colors,
+so add a dark palette and switch on prefers-color-scheme.
 ```
 
-Run them with `npx github:AVGVSTVS96/autopatch <command>`.
+## Updates
+
+The workflow rebuilds your fork from upstream plus your patches. Patches that still apply go in with git. When one doesn't, an agent rebuilds it from its `PATCH.md`, your `verify` command checks the build, and the result is pushed as a signed commit. If upstream already does what a patch asks, the patch is dropped.
+
+It runs on two schedules you can change in `.github/workflows/autopatch.yml`:
+
+| | default | |
+| --- | --- | --- |
+| update | every 6 hours | git only, no agent. A patch that doesn't apply waits. |
+| heal | daily | the agent rebuilds what no longer applies |
+
+A failed heal doesn't retry until upstream or your fork changes. Running the workflow by hand always heals.
+
+## Agents
+
+```sh
+npx skills add AVGVSTVS96/autopatch
+```
+
+Your agent then knows how to fork a repo and keep its changes as patches.
 
 ## Config
 
@@ -82,28 +63,33 @@ Run them with `npx github:AVGVSTVS96/autopatch <command>`.
 
 | key | |
 | --- | --- |
-| `upstream` | `owner/repo` on GitHub, or any git URL |
-| `branch` | upstream branch to follow, read from upstream at `init` |
-| `verify` | shell command that proves the build, run after every rebuild |
-| `patches` | patch ids, in the order they apply |
-| `agent` | command that rebuilds a patch, prompt on stdin. Default: `claude -p --dangerously-skip-permissions` |
-| `green` | `false` to sync to upstream's tip even when its checks failed |
+| `upstream` | `owner/repo`, or any git URL |
+| `follow` | a branch, or `releases` for upstream's newest release tag |
+| `verify` | the command that checks a build |
+| `agent` | the command that rebuilds a patch, prompt on stdin. Default: `claude -p --dangerously-skip-permissions` |
+| `green` | `false` to take upstream's newest commit even when its checks failed |
 
-Any agent that reads a prompt from stdin works. Codex:
+For Codex: `"agent": "codex exec --dangerously-bypass-approvals-and-sandbox"`.
 
-```json
-"agent": "codex exec --dangerously-bypass-approvals-and-sandbox"
+## Commands
+
+```
+autopatch fork <owner/repo>   fork it, set it up and push
+autopatch init <owner/repo>   set up a fork you already have
+autopatch save <id>           save your changes as the patch in .autopatch/<id>
+autopatch status              your patches, and changes no patch holds yet
+autopatch sync                what the workflow runs
 ```
 
-Set up whatever `verify` needs (Node, Bun, Rust) in the workflow before the autopatch step, and add the agent's secret.
+`fork` and `init` take `--verify <command>` and `--follow <branch | releases>`.
 
-## Where it came from
+## History
 
-1. **[pi-patcher](https://github.com/AVGVSTVS96/pi-patcher)** (May): patches to the [pi](https://github.com/earendil-works/pi-coding-agent) coding agent that heal themselves across updates. A proof of concept.
-2. **[PATCH.md](https://patchmd.vercel.app)** (June): the format, a patch's intent in plain words beside its diff.
-3. **[herdr](https://github.com/AVGVSTVS96/herdr)** (July): the first fork kept this way, and another proof of concept.
-4. **[Claude Code plugins](https://github.com/AVGVSTVS96/claude-plugins-official), [Buzz](https://github.com/AVGVSTVS96/buzz) and [T3 Code](https://github.com/AVGVSTVS96/t3code)** (October): forks I rely on, the Claude Code plugins one most of all.
-5. **autopatch**: the loop those forks each carried their own copy of, written once for any fork.
+- **May 2026:** [pi-patcher](https://github.com/AVGVSTVS96/pi-patcher) keeps patches to the [pi](https://github.com/earendil-works/pi-coding-agent) coding agent working across updates. Proof of concept.
+- **June:** [PATCH.md](https://patchmd.vercel.app), the format.
+- **July:** [herdr](https://github.com/AVGVSTVS96/herdr), the first fork rebuilt from patches. Proof of concept.
+- **October:** forks of [Claude Code's plugins](https://github.com/AVGVSTVS96/claude-plugins-official), [Buzz](https://github.com/AVGVSTVS96/buzz) and [T3 Code](https://github.com/AVGVSTVS96/t3code), in daily use.
+- **October:** autopatch.
 
 ## License
 
