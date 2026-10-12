@@ -12,6 +12,24 @@ git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 heal=""
 [ "${HEAL:-true}" = true ] || heal="--no-heal"
 
+codex_auth="${CODEX_HOME:-$HOME/.codex}/auth.json"
+if [ -n "${CODEX_AUTH:-}" ]; then
+  mkdir -p "$(dirname "$codex_auth")"
+  printf '%s' "$CODEX_AUTH" > "$codex_auth"
+fi
+
+keep_codex_auth() {
+  [ -n "${CODEX_AUTH:-}" ] && [ -n "${CODEX_AUTH_URL:-}" ] || return 0
+  [ "$(cat "$codex_auth")" != "$CODEX_AUTH" ] || return 0
+  oidc="$(curl -fsS -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=autofork" | jq -r .value)"
+  if curl -fsS -X POST -H "Authorization: Bearer $oidc" -H "Content-Type: application/json" --data-binary @"$codex_auth" "$CODEX_AUTH_URL" > /dev/null; then
+    echo "saved Codex's refreshed sign-in"
+  else
+    echo "::warning::couldn't save Codex's refreshed sign-in; sign in again if the next run can't reach Codex"
+  fi
+}
+trap keep_codex_auth EXIT
+
 if ! node "$GITHUB_ACTION_PATH/dist/autofork.js" sync ${skip:+--skip "$skip"} $heal; then
   echo "result=failed" >> "$GITHUB_OUTPUT"
   exit 1
@@ -23,7 +41,7 @@ if [ "$(git rev-parse HEAD)" != "$head" ]; then
   remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
   scratch="refs/heads/autofork-objects-${GITHUB_RUN_ID}"
   git push --quiet "$remote" "HEAD:$scratch" 2>&1 | { grep -v '^remote:' || true; } >&2
-  trap 'git push --quiet "$remote" --delete "$scratch" || true' EXIT
+  trap 'git push --quiet "$remote" --delete "$scratch" || true; keep_codex_auth' EXIT
   signed="$(gh api "repos/$GITHUB_REPOSITORY/git/commits" \
     -f message="$(git log -1 --format=%B)" -f tree="$(git rev-parse 'HEAD^{tree}')" "${parents[@]}" --jq .sha)"
   gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/heads/$GITHUB_REF_NAME" -f sha="$signed" > /dev/null

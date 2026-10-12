@@ -78,10 +78,10 @@ Your agent then knows how to fork a repo and keep its changes as patches.
 | `upstream` | `owner/repo`, or any git URL |
 | `follow` | `releases` (upstream's newest release tag, skipping pre-releases) or a branch. Default: `releases`, or the default branch if upstream has no releases |
 | `verify` | the command that checks a build |
-| `agent` | the command that rebuilds a patch, prompt on stdin. Default: `claude -p --dangerously-skip-permissions`. For Codex: `codex exec --dangerously-bypass-approvals-and-sandbox` |
+| `agent` | the command that rebuilds a patch, prompt on stdin. Default: Claude Code when `CLAUDE_CODE_OAUTH_TOKEN` is set, otherwise Codex when it's signed in (a `CODEX_AUTH` secret holding `~/.codex/auth.json`) |
 | `green` | when following a branch, `false` takes upstream's newest commit even when its checks failed |
 
-`.github/workflows/autofork.yml` is yours too: change how often it checks, and set up what `verify` needs (Node, Bun, Rust) before the autofork step. The action takes `heal: false` to apply what still fits without calling the agent, if you want rebuilds on one schedule and heals on another.
+`.github/workflows/autofork.yml` is yours too: change how often it checks, and set up what `verify` needs (Node, Bun, Rust) before the autofork step. The action takes `heal: false` to apply what still fits without calling the agent, if you want rebuilds on one schedule and heals on another. With Codex, give it `codex-auth-url` and `id-token: write` so a refreshed sign-in is saved back to the secret.
 
 ## Commands
 

@@ -187,9 +187,15 @@ Don't edit anything in ${DIR}/ or .github/, and don't commit. Leave only your so
 If upstream already does what PATCH.md asks on its own, change nothing and write one line saying how to ${DIR}/${id}/OBSOLETE.`;
 }
 
+const installed = (bin: string) => run("sh", ["-c", `command -v ${bin}`], ".").ok;
+
 function agentCommand(config: Config) {
   if (config.agent) return config.agent;
-  const claude = run("sh", ["-c", "command -v claude"], ".").ok ? "claude" : "npx -y @anthropic-ai/claude-code";
+  if (!process.env.CLAUDE_CODE_OAUTH_TOKEN && existsSync(join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "auth.json"))) {
+    const codex = installed("codex") ? "codex" : "npx -y @openai/codex";
+    return `${codex} exec --dangerously-bypass-approvals-and-sandbox -`;
+  }
+  const claude = installed("claude") ? "claude" : "npx -y @anthropic-ai/claude-code";
   return `${claude} -p --dangerously-skip-permissions`;
 }
 
