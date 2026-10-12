@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>autofork · B logo proposals</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+  :root { --bg: #FBFBFC; --panel: #FFFFFF; --ink: #0E0E12; --ink-2: #4D4D57; --ink-3: #6E6E78; --hair: rgb(14 14 18 / .12); --trunk: #0E0E12; --you: #3B2BFF; --tab: #EDEDF0; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0C0C0F; --panel: #141419; --ink: #EEEEF2; --ink-2: #A6A6B2; --ink-3: #8A8A96; --hair: rgb(238 238 242 / .12); --trunk: #EEEEF2; --you: #8F84FF; --tab: #1C1C22; } }
+  body { font: 16px/1.5 "Hubot Sans", system-ui, sans-serif; padding: 48px 56px 64px; }
+  h1 { margin: 0 0 4px; font-size: 26px; font-weight: 800; letter-spacing: -0.03em; }
+  .lede { margin: 0 0 32px; color: var(--ink-2); }
+  .logo .ink { fill: var(--ink); } .logo .accent { fill: var(--you); } .logo .trunk { stroke: var(--trunk); } .logo .accent-s { stroke: var(--you); }
+  .row { display: grid; grid-template-columns: 36px 420px 1fr 240px; gap: 32px; align-items: center; padding: 28px 0; border-top: 1px solid var(--hair); }
+  .n { font: 400 13px "Fragment Mono", monospace; color: var(--ink-3); align-self: start; padding-top: 6px; }
+  .big { height: 64px; display: flex; align-items: center; }
+  .big .logo { height: 100%; } .big .logo svg { width: auto; }
+  .cap { margin-top: 12px; font-size: 14px; color: var(--ink-2); max-width: 46ch; }
+  .cap b { color: var(--ink); font-weight: 700; }
+  .nav { display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 22px; background: var(--bg); border: 1px solid var(--hair); }
+  .nav .logo { height: 28px; } .nav .logo svg { width: auto; }
+  .nav .links { display: flex; gap: 22px; font-size: 14px; color: var(--ink-2); }
+  .sizes { display: flex; align-items: end; gap: 18px; }
+  .sizes .logo { flex: none; }
+  .m64 { width: 64px; height: 64px; } .m32 { width: 32px; height: 32px; } .m16 { width: 16px; height: 16px; }
+  .tab { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; background: var(--tab); border-radius: 8px 8px 0 0; font-size: 12px; color: var(--ink-2); }
+</style>
+</head>
+<body>
+  <h1>autofork · logo proposals for B</h1>
+  <p class="lede">All drawn from Hubot Sans 800 outlines. Each shown big, in the nav at real size, and as a mark at 64, 32 and 16 px plus a browser tab.</p>
+  <div id="rows"></div>
+  <script type="module">
+    const items = [
+      ["node", "The branch", "Your line leaves the app's line and ends in a node. The round 1 draft, redrawn in Hubot Sans."],
+      ["plus", "The added branch", "Same branch, but it ends in a plus: what you added, the diff's sign."],
+      ["forkedF", "The forked f", "The f's crossbar keeps going and branches off into your node. The letter is the fork."],
+      ["dot", "The node o", "The o in fork is the node. Quiet in the nav; the mark is that node on an ink tile."],
+      ["split", "The split word", "auto stays on the app's line; fork leaves it and rides a line of its own, a step up. The mark is af, split the same way."],
+    ]
+    const svg = async (n) => await (await fetch(`logos/${n}.svg`)).text()
+    const rows = document.getElementById("rows")
+    let i = 1
+    for (const [id, name, cap] of items) {
+      const [l, m] = await Promise.all([svg(`b-${id}`), svg(`b-${id}-mark`)])
+      rows.insertAdjacentHTML("beforeend", `<div class="row">
+        <div class="n">${String(i++).padStart(2, "0")}</div>
+        <div><div class="big"><span class="logo">${l}</span></div><div class="cap"><b>${name}.</b> ${cap}</div></div>
+        <div class="nav"><span class="logo">${l}</span><span class="links"><span>How it works</span><span>GitHub</span><span>Sign in</span></span></div>
+        <div><div class="sizes"><span class="logo m64">${m}</span><span class="logo m32">${m}</span><span class="logo m16">${m}</span></div>
+          <div class="tab" style="margin-top:14px"><span class="logo m16">${m}</span>autofork</div></div>
+      </div>`)
+    }
+    document.documentElement.dataset.ready = ""
+  </script>
+</body>
+</html>
