@@ -2,7 +2,7 @@
 
 The source of truth for how we talk about autopatch. The site, README, OG image and launch post draw from here. Numbers come from `copy/facts.json` (run `node copy/facts.mjs`), never typed by hand. When this file and an asset disagree, fix it here first, then `rg` every asset for the old wording.
 
-Every claim below was checked against `~/Developer/autopatch` (`src/autopatch.ts`, `action.yml`, `action.sh`, `README.md`) on Oct 10 2026. The README's first line and this hero say the same thing; keep them in step.
+Every claim below was checked against `~/Developer/autopatch` (`src/autopatch.ts`, `action.yml`, `action.sh`, `README.md`) on Oct 10 2026, and the patch model (plain-prose PATCH.md, `add <id> "text"`) on Oct 11. The README's first line and this hero's sub line say the same thing; keep them in step.
 
 ## The idea in one sentence
 
@@ -13,108 +13,44 @@ Bassim's own words, for the README and the launch, verbatim: "i can fork and cus
 ## Hero
 
 - **Headline:** Fork anything. Keep your changes.
-- **Sub line:** Your patches replay on upstream every night, and an agent re-implements the ones that stop applying. *(16 words)*
+- **Sub line:** A GitHub Action that updates your fork every night, and has an agent redo any change that stops applying. *(19 words)*
+- **Band above it:** your fork, every night *(no SHAs: plain words read as a product, not a log)*
 - **Command under it:** `npx github:AVGVSTVS96/autopatch init owner/repo`
-
-Runners-up for the headline, in order:
-
-1. **Your fork, rebuilt every night.** Plain, but says less about why you'd fork.
-2. **Customize anything. Keep up with upstream.** Two jobs in one line; reads like a list.
-
-"re-implement" is Bassim's word ("re-implement my changes") and the README's. "heal" and "drift" are the CLI's ("an agent heals what drifts"): fine in sections and the post, kept out of the hero so it reads cold.
 
 ## Sections
 
-One headline, one short line, one visual each. The visual carries the explanation. Sentence case on the site; the name is always lowercase.
+Oct 11 rework, from Bassim: "the copy's quite heavy... makes this look so complicated", "a little too techy feeling... like hacker feeling. i want it to feel more like a finished product", "show just how easy it is to set up autopatch and fork a repo", and explain the commands: "What is adding a patch exactly? ... When do you do that exactly? ... How do you create patches exactly? Like files?" The PATCH.md site's hand-written copy (`~/Developer/PATCH.md/apps/website/src/spec.mdx`) sets the tone: say what the thing is, plainly, then show it.
 
-### 1. A patch is a diff plus what you meant
+One headline, at most one short line, one visual each. No terminal logs, SHAs or YAML on the page; those live in the README and the linked run.
 
-**Line:** Each change lives in `.autopatch/<id>/`: the git diff, and a PATCH.md that says in plain words what it's for.
+### 1. Set it up once
 
-**Visual:** the folder, then a real PATCH.md beside its `.patch`. Use herdr's `pane-border-ids` (public: github.com/AVGVSTVS96/herdr/tree/main/patches/pane-border-ids), cropped to `## Intent` and the first two `## Invariants`. Sections a PATCH.md can have: Intent (required; sync refuses without it), and optionally Invariants, Verification, Removal.
+Three steps: fork it; run `init` (adds the nightly workflow, `--verify` takes the test command); `claude setup-token` and save it as `CLAUDE_CODE_OAUTH_TOKEN`, push. "That's it."
 
-### 2. Git first. The agent only when git can't
+### 2. Change anything. Say why.
 
-**Line:** Patches that still apply go in with a 3-way merge and no model call. Only a broken one wakes the agent.
+**Line:** Edit the code however you like, by hand or with your agent. Then `add` turns it into a patch.
 
-**Visual:** the sync's real output, in its exact shape (the CLI prints these lines; SHAs are 12 characters):
+**Visual:** the `add` command with its sentence, then what it writes: PATCH.md holding exactly that sentence, the folder, and the real `window-title.patch` diff from the T3 Code fork. Two asides: same id folds more in; words only makes an intent-only patch the agent builds on the next sync.
 
-```
-upstream 3f2a91c04be1 → 8b0e44d9a7c2, 4 patches
-healing pane-border-ids
-autopatch: sync herdrdev/herdr to 8b0e44d9a7c2
+### 3. Every night, it rebuilds your fork
 
-healed pane-border-ids
-pushed 8b0e44d9a7c2 to main, signed by GitHub
-```
+**Visual:** five diff rows in sans: upstream's newest green commit (context), your patches applied with git (+), any that no longer fit redone by an agent from their PATCH.md (+), any upstream now does itself dropped (-), your tests then a signed commit (context). Beside it, the real T3 Code run as a result card: 383 upstream commits behind, 1 patch redone by Claude Code, typecheck passed, signed and pushed, 1m 55s.
 
-The last line is what the Action prints after it lands the commit through GitHub's API. Three of four patches applied without a line of output. That silence is the point; let it show.
+**Under it:** No agent runs when every patch fits. If anything fails, nothing is pushed.
 
-### 3. Healed from intent, proven by your tests
+### 4. Four commands
 
-**Line:** The agent rebuilds the change on today's code from its PATCH.md, and your verify command has to pass before anything lands.
+`init`, `add`, `status`, `sync`, one plain line each. Note: run with `npx github:AVGVSTVS96/autopatch`; Claude Code by default, `agent` in config.json for Codex or any CLI agent.
 
-**Visual:** the Intent paragraph on the left, the new diff on the right, the verify command under both with its pass. If verify fails, nothing is committed and the fork stays where it was.
+### 5. How it got here
 
-### 4. Healed once, plain git after
-
-**Line:** The rewritten diff goes back into the patch, so the next sync applies it without a model.
-
-**Visual:** the sync commit's change to `<id>.patch`, with the `baseline:` line in PATCH.md moving to the new upstream SHA.
-
-### 5. When upstream ships it, the patch retires
-
-**Line:** If upstream already does what the intent asks, the agent says how, and the patch is deleted with that reason in the commit.
-
-**Visual:** one commit message line: `dropped retry-login: upstream retries in auth.ts since #4123`. *(Made up but realistic; the format `dropped <id>: <reason>` is real.)*
-
-### 6. Built on green
-
-**Line:** It picks upstream's newest commit whose checks all passed, so a broken upstream main never becomes yours.
-
-**Visual:** upstream's last few commits with their check dots; the tip is red or pending, the arrow lands on the newest green one. (It looks back up to 30 commits; `"green": false` turns this off.)
-
-### 7. Three forks, kept this way since July
-
-**Line:** Claude Code plugins, buzz and herdr took in {totals.upstreamCommitsAbsorbed} upstream commits, and an agent rewrote patches {totals.heals} times along the way.¹
-
-**Visual:** a three-row ledger, one per fork: name, upstream repo, patch count, upstream commits taken in, heals. Numbers from `facts.json` `forks[]`. herdr's 315 dwarfs the others' 28 and 51: show numbers as text, no bars.
-
-¹ Footnote, verbatim: *Counted with `gh` on Oct 10 2026 from each fork's sync commits and patched releases. These forks run the per-repo workflows autopatch was packaged from.*
-
-That second sentence is required. autopatch itself is new today; the forks prove the technique, not this release.
-
-### 8. pi-patcher, then PATCH.md, then autopatch
-
-**Line:** Self-healing patches for one coding agent in May, a spec for any patch in June, any repo today.
-
-**Visual:** three steps on a line with dates from `facts.json` `lineage` (May 22, Jun 27, today), each with its repo link. Credit pi-patcher and PATCH.md by name here and in the README.
-
-### 9. Start
-
-**Headline:** Three commands.
-
-**Line:** Track upstream, turn your changes into a patch, push.
-
-**Visual:** a terminal with the real commands and their real replies:
-
-```
-$ npx github:AVGVSTVS96/autopatch init owner/repo --verify "bun install && bun test"
-autopatch tracks owner/repo (main).
-Add a CLAUDE_CODE_OAUTH_TOKEN secret (claude setup-token), commit, and push.
-
-$ npx github:AVGVSTVS96/autopatch add dark-mode "Dark mode everywhere"
-captured 3 files in .autopatch/dark-mode. Write its ## Intent, then commit.
-
-$ git push
-```
-
-Under it, small: *Runs nightly as a GitHub Action. Heals with Claude Code; set `agent` in `.autopatch/config.json` to Codex or any CLI agent that takes a prompt on stdin.*
+A dated timeline, in Bassim's order: pi-patcher (May 22, proof of concept), PATCH.md (Jun 27, the format), herdr (Jul 24, the first fork kept this way, also a proof of concept; {forks.2.upstreamCommitsAbsorbed} upstream commits), Claude Code plugins (Oct 4, "the one I rely on most"), Buzz (Oct 5), T3 Code (Oct 6, the first fork on autopatch), autopatch (Oct 10).
 
 ## Meta
 
 - **Title:** autopatch: fork anything, keep your changes
-- **Description:** autopatch rebuilds your fork from upstream every night and replays your patches. When one stops applying, an agent re-implements it from its PATCH.md.
+- **Description:** A GitHub Action that updates your fork every night, and has an agent redo any change that stops applying.
 - **Site:** https://autopatchmd.vercel.app
 - **Repo description (GitHub):** Fork anything and keep your changes. An agent re-implements the ones that stop applying.
 
