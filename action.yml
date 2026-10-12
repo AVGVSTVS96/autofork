@@ -12,7 +12,7 @@ inputs:
     description: Let the agent rebuild patches that no longer apply. When false, they wait for a run that heals.
     default: "true"
   codex-auth-url:
-    description: Where to send Codex's sign-in after it refreshes, so the CODEX_AUTH secret stays current. Needs `id-token: write`.
+    description: "Where to send Codex's sign-in after it refreshes, so the CODEX_AUTH secret stays current. Needs `id-token: write`."
     default: ""
 outputs:
   result:
