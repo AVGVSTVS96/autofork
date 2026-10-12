@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>autofork · direction B · the branch</title>
 <link rel="stylesheet" href="shared.css">
-<script>document.documentElement.dataset.font = new URLSearchParams(location.search).get("font") ?? "bricolage"</script>
+<script>document.documentElement.dataset.font = new URLSearchParams(location.search).get("font") ?? "host"</script>
 <style>
   @font-face { font-family: "Geist"; src: url("../fonts/candidates/cand-geist.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
-  @font-face { font-family: "Host Grotesk"; src: url("../fonts/candidates/cand-host-grotesk.woff2") format("woff2"); font-weight: 300 800; font-display: block; }
+  @font-face { font-family: "Host Grotesk"; src: url("../fonts/host-grotesk.woff2") format("woff2"); font-weight: 300 800; font-display: block; }
   @font-face { font-family: "Inter Display"; src: url("../fonts/candidates/cand-inter-opsz.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
   @font-face { font-family: "Satoshi"; src: url("../fonts/candidates/Satoshi-Regular.woff2") format("woff2"); font-weight: 400; font-display: block; }
   @font-face { font-family: "Satoshi"; src: url("../fonts/candidates/Satoshi-Medium.woff2") format("woff2"); font-weight: 500 600; font-display: block; }
@@ -18,7 +18,7 @@
   html[data-font=hubot] { --sans: "Hubot Sans", system-ui, sans-serif; --h1-w: 800; --h1-t: -0.03em; }
   html[data-font=geist] { --sans: "Geist", system-ui, sans-serif; --h1-w: 700; --h1-t: -0.05em; }
   html[data-font=satoshi] { --sans: "Satoshi", system-ui, sans-serif; --h1-w: 900; --h1-t: -0.04em; }
-  html[data-font=host] { --sans: "Host Grotesk", system-ui, sans-serif; --h1-w: 800; --h1-t: -0.04em; }
+  html[data-font=host] { --sans: "Host Grotesk", system-ui, sans-serif; --h1-w: 800; --h1-t: -0.028em; }
   html[data-font=inter] { --sans: "Inter Display", system-ui, sans-serif; --h1-w: 800; --h1-t: -0.045em; --h1-lh: 1; }
   :root {
     --bg: #FBFBFC; --panel: #FFFFFF; --ink: #0E0E12; --ink-2: #4D4D57; --ink-3: #6E6E78; --hair: rgb(14 14 18 / .12);
@@ -46,8 +46,8 @@
   .tag { position: absolute; font: 400 12px/1 var(--mono); color: var(--ink-3); transform: translateY(-50%); white-space: nowrap; }
 
   nav { display: flex; align-items: center; justify-content: space-between; height: 76px; margin-left: calc(-1 * var(--rail)); }
-  nav .brand { display: flex; align-items: center; gap: 9px; font-size: 25px; font-weight: var(--h1-w); letter-spacing: var(--h1-t); }
-  nav .brand .m { width: 30px; height: 30px; }
+  nav .brand { height: 36px; } nav .brand svg { width: auto; }
+  .logo .app { stroke: var(--ink); } .logo .you { stroke: var(--you); } .logo .node { fill: var(--you); }
   nav .links { display: flex; gap: 28px; font-size: 15px; color: var(--ink-2); }
 
   h1 { margin: clamp(48px, 10vh, 112px) 0 0; font-size: clamp(54px, 8.4vw, 128px); line-height: var(--h1-lh); letter-spacing: var(--h1-t); font-weight: var(--h1-w); font-stretch: 100%; }
@@ -74,7 +74,7 @@
   <div class="page">
     <svg class="graph" aria-hidden="true"></svg>
     <nav>
-      <a class="brand"><span class="m" data-logo="mark-b"></span>autofork</a>
+      <a class="brand" data-logo="r3-3-lockup" aria-label="autofork"></a>
       <div class="links"><a>How it works</a><a>GitHub</a><a>Sign in</a></div>
     </nav>
     <main>
@@ -116,7 +116,7 @@
         el("line", { class: "tick", x1: T - 8, x2: T + 8, y1: y, y2: y })
         if (y > y2) { el("path", { class: "link", d: `M${T + 10} ${y}H${B - 6}` }); el("circle", { class: "dot", cx: B, cy: y, r: 4.5 }) }
         const tag = document.createElement("span"); tag.className = "tag"; tag.textContent = label
-        page.append(tag); tag.style.top = `${y}px`; tag.style.left = `${T - 16 - tag.offsetWidth}px`
+        page.append(tag); tag.style.top = `${y}px`; tag.style.left = `${T - 16 - tag.offsetWidth}px`; if (T - 16 - tag.offsetWidth < 6) tag.remove()
       }
       el("circle", { class: "ring", cx: T, cy: y1, r: 8 })
       el("circle", { class: "dot", cx: B, cy: y2, r: 8 })
