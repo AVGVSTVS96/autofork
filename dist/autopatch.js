@@ -116,52 +116,36 @@ async function newestGreen(root, config, base, tip) {
 }
 function intent(root, id) {
   const doc = existsSync(patchDoc(root, id)) ? readFileSync(patchDoc(root, id), "utf8") : "";
-  const text = doc.match(/^## Intent\s*\n([\s\S]*?)(?=^## |$(?![\s\S]))/m)?.[1].trim();
-  if (!text || text.startsWith("TODO"))
-    throw new Failure(`${DIR}/${id}/PATCH.md needs an ## Intent: it's what the agent rebuilds the patch from`);
+  if (!doc.trim())
+    throw new Failure(`${DIR}/${id}/PATCH.md is empty: say what the patch does and why. It's what the agent rebuilds it from.`);
 }
-function frontmatterEnd(doc) {
-  return doc.startsWith(`---
-`) ? doc.indexOf(`
----`, 3) : -1;
-}
-function frontmatter(doc, key) {
-  const end = frontmatterEnd(doc);
-  return end < 0 ? undefined : doc.slice(0, end).match(new RegExp(`^${key}: *(.+)$`, "m"))?.[1].trim();
-}
-function setFrontmatter(doc, key, value) {
-  const end = frontmatterEnd(doc);
-  if (end < 0)
-    return doc;
-  const head = doc.slice(0, end);
-  const line = new RegExp(`^${key}:.*$`, "m");
-  const next = line.test(head) ? head.replace(line, `${key}: ${value}`) : `${head}
-${key}: ${value}`;
-  return next + doc.slice(end);
-}
+var isEmpty = (file) => !existsSync(file) || readFileSync(file).length === 0;
 function touched(dir, file) {
   const stat = run("git", ["apply", "--numstat", file], dir);
   return stat.ok ? stat.out.toString().trim().split(`
 `).filter(Boolean).map((line) => line.split("\t")[2]) : [];
 }
-function healPrompt(config, build, id, source) {
-  const doc = readFileSync(patchDoc(build.dir, id), "utf8");
+function healPrompt(config, build, id, source, from) {
   const before = config.patches.slice(0, config.patches.indexOf(id));
-  const old = frontmatter(doc, "baseline");
+  const fresh = isEmpty(patchFile(build.dir, id));
   const files = touched(build.dir, patchFile(build.dir, id));
-  const changes = old && files.length ? `
-To see what upstream changed under it: git diff ${old} ${source} -- ${files.join(" ")}` : "";
+  const changes = from !== source && files.length ? `
+To see what upstream changed under it: git diff ${from} ${source} -- ${files.join(" ")}` : "";
+  const steps = [
+    `Read ${DIR}/${id}/PATCH.md. It says what the patch does and why, and that's the contract.`,
+    ...fresh ? [] : [`${DIR}/${id}/${id}.patch is how it was done before. Use it as a guide, not as text to force in.${changes}`],
+    "Build it on the current source, the smallest change that fully does what PATCH.md says. Build on what upstream has now: where upstream has its own version of what the patch touches, change that rather than bringing the old one back. Follow upstream's code and conventions, and leave everything else alone.",
+    ...config.verify ? [`Run \`${config.verify}\` and fix what your change breaks. Patches after this one aren't applied yet.`] : []
+  ];
   return `You are keeping a patched fork of ${config.upstream} in sync. The fork is upstream plus a stack of patches, each one described in ${DIR}/<id>/PATCH.md.
 
-This checkout is upstream at ${source}${before.length ? `, with ${before.join(", ")} already applied` : ""}. Upstream changed, and patch "${id}" no longer applies.
+This checkout is upstream at ${source}${before.length ? `, with ${before.join(", ")} already applied` : ""}. ${fresh ? `Patch "${id}" is new and hasn't been built yet.` : `Upstream changed, and patch "${id}" no longer applies.`}
 
-1. Read ${DIR}/${id}/PATCH.md. Its intent is the contract.
-2. ${DIR}/${id}/${id}.patch is how it was done on the old source. Use it as a guide, not as text to force in.${changes}
-3. Implement the intent on the current source: the smallest change that fully delivers it and keeps its invariants. Follow upstream's current code and conventions, and leave everything else alone.${config.verify ? `
-4. Run \`${config.verify}\` and fix what your change breaks. Patches after this one aren't applied yet.` : ""}
+${steps.map((step, index) => `${index + 1}. ${step}`).join(`
+`)}
 
 Don't edit anything in ${DIR}/ or .github/, and don't commit. Leave only your source change: remove anything your checks generated that git would pick up.
-If upstream now does what the intent asks on its own, change nothing and write one line saying how to ${DIR}/${id}/OBSOLETE.`;
+If upstream already does what PATCH.md asks on its own, change nothing and write one line saying how to ${DIR}/${id}/OBSOLETE.`;
 }
 function agentCommand(config) {
   if (config.agent)
@@ -179,19 +163,20 @@ function restoreControl(dir, base) {
 function changed(dir) {
   return git(dir, "status", "--porcelain").length > 0;
 }
-function heal(config, build, id, source) {
-  const prompt = healPrompt(config, build, id, source);
+function heal(config, build, id, source, from) {
+  const prompt = healPrompt(config, build, id, source, from);
   const obsolete = join(build.dir, DIR, id, "OBSOLETE");
+  const [doing, done] = isEmpty(patchFile(build.dir, id)) ? ["building", "built"] : ["healing", "healed"];
   let nudge = "";
   for (let attempt = 1;attempt <= 2; attempt++) {
-    say(`healing ${id}${attempt > 1 ? " (second try)" : ""}`);
+    say(`${doing} ${id}${attempt > 1 ? " (second try)" : ""}`);
     if (!shell(agentCommand(config), build.dir, prompt + nudge))
-      throw new Failure(`the agent failed while healing ${id}`);
+      throw new Failure(`the agent failed while ${doing} ${id}`);
     git(build.dir, "reset", "--soft", "--quiet", build.steps.at(-1));
     const reason = existsSync(obsolete) ? readFileSync(obsolete, "utf8").trim() : "";
     restoreControl(build.dir, build.steps[0]);
     if (changed(build.dir)) {
-      build.healed.push(id);
+      build.healed.push(`${done} ${id}`);
       return;
     }
     if (reason) {
@@ -200,9 +185,9 @@ function heal(config, build, id, source) {
     }
     nudge = `
 
-Your last attempt exited without changing any source file. Implement the intent, or write ${DIR}/${id}/OBSOLETE if upstream already covers it.`;
+Your last attempt exited without changing any source file. Build what PATCH.md asks for, or write ${DIR}/${id}/OBSOLETE if upstream already covers it.`;
   }
-  throw new Failure(`the agent changed nothing while healing ${id}`);
+  throw new Failure(`the agent changed nothing while ${doing} ${id}`);
 }
 function commit(dir, message) {
   git(dir, "add", "-A");
@@ -210,8 +195,6 @@ function commit(dir, message) {
   return git(dir, "rev-parse", "HEAD");
 }
 function apply(dir, file) {
-  if (!existsSync(file) || readFileSync(file).length === 0)
-    return true;
   if (run("git", ["apply", "--3way", "--whitespace=nowarn", file], dir).ok)
     return true;
   git(dir, "reset", "--hard", "--quiet");
@@ -241,10 +224,11 @@ function build(root, config, base, options) {
   const dir = worktree(root, base);
   const build = { dir, steps: [commit(dir, `upstream ${short(base)}`)], healed: [], dropped: new Map };
   for (const id of config.patches) {
-    if (!apply(dir, patchFile(dir, id))) {
-      if (!options.heal)
+    const file = patchFile(dir, id);
+    if (isEmpty(file) ? options.healFrom : !apply(dir, file)) {
+      if (!options.healFrom)
         throw new Failure(`${id} doesn't apply to ${short(base)}`);
-      heal(config, build, id, base);
+      heal(config, build, id, base, options.healFrom);
     }
     if (options.fold?.id === id && !apply(dir, options.fold.patch)) {
       throw new Failure(`your changes don't apply on top of ${id}`);
@@ -253,14 +237,10 @@ function build(root, config, base, options) {
   }
   return build;
 }
-function refresh(target, config, build, base) {
+function refresh(target, config, build) {
   config.patches.forEach((id, index) => {
     const diff = gitBytes(build.dir, "diff-tree", "-p", "--binary", "--full-index", build.steps[index], build.steps[index + 1], "--", ...SOURCE);
     writeFileSync(patchFile(target, id), diff);
-    if (existsSync(patchDoc(target, id))) {
-      const doc = readFileSync(patchDoc(target, id), "utf8");
-      writeFileSync(patchDoc(target, id), setFrontmatter(doc, "baseline", base));
-    }
   });
   for (const id of build.dropped.keys())
     rmSync(join(target, DIR, id), { recursive: true, force: true });
@@ -282,7 +262,7 @@ function workingTree(root) {
 }
 function check(root, config, against) {
   const base = baseline(root);
-  const rebuilt = build(root, config, base, { heal: false });
+  const rebuilt = build(root, config, base, {});
   try {
     const drift = git(root, "diff-tree", "-r", "--name-only", rebuilt.steps.at(-1), against, "--", ...SOURCE);
     return { base, rebuilt: rebuilt.steps.at(-1), drift: drift.split(`
@@ -315,12 +295,12 @@ Capture them first: autopatch add <id>`);
   say(`upstream ${moved}, ${config.patches.length} patch${config.patches.length === 1 ? "" : "es"}`);
   let result;
   try {
-    result = build(root, config, source, { heal: true });
+    result = build(root, config, source, { healFrom: base });
     if (config.verify && !shell(config.verify, result.dir))
       throw new Failure(`verify failed: ${config.verify}`);
     git(result.dir, "reset", "--hard", "--quiet");
     git(result.dir, "clean", "-fdq");
-    refresh(result.dir, config, result, source);
+    refresh(result.dir, config, result);
     const tree = git(result.dir, "rev-parse", `${commit(result.dir, "refresh")}^{tree}`);
     if (tree === git(root, "rev-parse", "HEAD^{tree}")) {
       say("already up to date");
@@ -331,7 +311,7 @@ Capture them first: autopatch add <id>`);
     if (!run("git", ["merge-base", "--is-ancestor", source, head], root).ok)
       parents.push("-p", source);
     const lines = [
-      ...result.healed.map((id) => `healed ${id}`),
+      ...result.healed,
       ...[...result.dropped].map(([id, reason]) => `dropped ${id}: ${reason}`)
     ];
     const message = [`autopatch: sync ${config.upstream} to ${short(source)}`, lines.join(`
@@ -346,37 +326,37 @@ Capture them first: autopatch add <id>`);
   }
 }
 async function add(root, args) {
-  const id = args[0];
+  const [id, ...words] = args;
   if (!id || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id))
-    throw new Failure("usage: autopatch add <id> [summary]   (id like fix-login)");
+    throw new Failure('usage: autopatch add <id> ["what it does and why"]   (id like fix-login)');
+  const text = words.join(" ").trim();
   const config = readConfig(root);
   fetchUpstream(root, config);
   const files = workingTree(root);
   const { base, rebuilt, drift } = check(root, config, files);
-  if (!drift.length)
-    throw new Failure("nothing to capture: your files match what the patches already build");
-  const captured = gitBytes(root, "diff-tree", "-p", "--binary", "--full-index", rebuilt, files, "--", ...SOURCE);
-  if (!config.patches.includes(id)) {
-    mkdirSync(join(root, DIR, id), { recursive: true });
-    writeFileSync(patchFile(root, id), captured);
-    writeFileSync(patchDoc(root, id), `---
-summary: ${args.slice(1).join(" ") || id}
-baseline: ${base}
----
-
-## Intent
-
-TODO: what this patch does and why, in plain words. An agent rebuilds the patch from this when upstream changes.
+  if (!drift.length && !text)
+    throw new Failure(`nothing to capture: your files match what the patches already build. To have the agent build it instead, say what it does: autopatch add ${id} "..."`);
+  const count = `${drift.length} file${drift.length === 1 ? "" : "s"}`;
+  mkdirSync(join(root, DIR, id), { recursive: true });
+  if (text)
+    writeFileSync(patchDoc(root, id), `${text}
 `);
+  if (!config.patches.includes(id)) {
+    if (drift.length)
+      writeFileSync(patchFile(root, id), gitBytes(root, "diff-tree", "-p", "--binary", "--full-index", rebuilt, files, "--", ...SOURCE));
     writeConfig(root, { ...config, patches: [...config.patches, id] });
-    return say(`captured ${drift.length} file${drift.length === 1 ? "" : "s"} in ${DIR}/${id}. Write its ## Intent, then commit.`);
+    if (!drift.length)
+      return say(`added ${id}. The agent builds it from its PATCH.md on the next sync.`);
+    return say(`captured ${count} in ${DIR}/${id}. ${text ? "Commit when ready." : "Say what it does and why in its PATCH.md, then commit."}`);
   }
+  if (!drift.length)
+    return say(`rewrote ${DIR}/${id}/PATCH.md`);
   const fold = join(git(root, "rev-parse", "--path-format=absolute", "--git-dir"), "autopatch-fold.patch");
-  writeFileSync(fold, captured);
-  const result = build(root, config, base, { heal: false, fold: { id, patch: fold } });
+  writeFileSync(fold, gitBytes(root, "diff-tree", "-p", "--binary", "--full-index", rebuilt, files, "--", ...SOURCE));
+  const result = build(root, config, base, { fold: { id, patch: fold } });
   try {
-    refresh(root, config, result, base);
-    say(`folded ${drift.length} file${drift.length === 1 ? "" : "s"} into ${id}. Commit when ready.`);
+    refresh(root, config, result);
+    say(`folded ${count} into ${id}. Commit when ready.`);
   } finally {
     rmSync(fold, { force: true });
     cleanup(root, result);
@@ -450,7 +430,7 @@ async function status(root) {
 var USAGE = `autopatch: keep your changes on top of someone else's repo
 
   autopatch init <owner/repo>   track an upstream repo from this fork
-  autopatch add <id> [summary]  turn your changes into a patch (or fold them into one)
+  autopatch add <id> ["what"]   turn your changes into a patch, or describe one for the agent to build
   autopatch status              what's patched, and what isn't yet
   autopatch sync                rebuild on the latest upstream; an agent heals what drifts
 `;
