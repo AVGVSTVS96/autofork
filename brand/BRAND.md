@@ -1,6 +1,6 @@
 # autopatch · brand
 
-**The idea in a sentence:** the page is a diff. autopatch's whole job is to keep one `+` alive on top of someone else's code, so the brand is built from the unified diff itself: the `@@` hunk band, the red `-` row, the green `+` row, set big.
+**The idea in a sentence:** the page is a diff. autopatch's whole job is to keep one `+` alive on top of someone else's code, so the brand is built from the unified diff itself: the red `-` row and the green `+` row, set big.
 
 ## Why this direction (picked without a round, for a same-day ship)
 
@@ -10,7 +10,7 @@ Three directions were drawn (`logo/explore-*.svg`):
 - **B, the minus-plus sign (picked):** `∓`, a red minus over a green plus. It's the order a diff reads in (old line out, new line in), it's one glyph tall like a letter, and it holds up at 16px as two bars and a cross. It's also exactly what a heal is: a stale line replaced.
 - **C, the stack:** patches as bars on an upstream baseline. True to the quilt model, but reads as a generic "layers" icon.
 
-The page system follows from B. Big type sits in real diff rows, so the hero is literally a two-line hunk: a context line (`Fork anything.`) and an added line (`Keep your changes.`) under a hunk band carrying the real first line of a real sync. Nothing on the page is a picture of a diff when it could be a diff.
+The page system follows from B. Big type sits in real diff rows, so the hero is literally a two-line hunk: a context line (`Fork anything.`) and an added line (`Keep your changes.`). Nothing on the page is a picture of a diff when it could be a diff.
 
 Distinct from hex (poppy blocks, hard shadows) and commonplace (paper, one red pen): autopatch is white or near-black like a diff viewer, three colors that each mean what they mean in `git diff`, and a heavy mono display face.
 
@@ -42,21 +42,23 @@ Distinct from hex (poppy blocks, hard shadows) and commonplace (paper, one red p
 | `--del-sign` | `#D7402C` | `#EC5A45` | `-`, the mark's minus |
 | `--del` | `#C13A28` | `#F2735F` | red text |
 | `--del-bg` | `#FDE8E4` | `#221110` | removed rows |
-| `--hunk` | `#1D64A8` | `#6CB4F0` | `@@` bands, SHAs, footnote marks |
-| `--hunk-bg` | `#E5F0FA` | `#0F1D2A` | hunk band |
+| `--hunk` | `#1D64A8` | `#6CB4F0` | the agent: heal marks and icons |
+| `--hunk-bg` | `#E5F0FA` | `#0F1D2A` | behind the agent's icons |
+| `--panel` | `#FFFFFF` | `#121514` | cards |
 
-Rule: **green means it's yours and it's alive; red means upstream made it stale or it was dropped; blue means where.** Never decoration. In dark, the removed row is darker than the added row on purpose: same-lightness red and green bands side by side fight.
+Rule: **green means it's yours and it's alive; red means upstream made it stale or it was dropped; blue means the agent.** Never decoration. In dark, the removed row is darker than the added row on purpose: same-lightness red and green bands side by side fight.
 
 ### Grid
 
-8px base, page max 74rem, gutters `clamp(1rem, 4vw, 3rem)`. Hero diff rows bleed to the gutter edge. Sections are split by hairlines, never by background color. Square corners, no shadows. 1px `--ink` border only on the primary thing in view (the folder, the verify bar, the command).
+8px base, page max 74rem, gutters `clamp(1rem, 4vw, 3rem)`. Hero diff rows bleed to the gutter edge. Sections are split by hairlines, never by background color. Square corners, no shadows. 1px `--ink` border only on the primary thing in view (the hero command, the top rule of a list).
 
 ### Motifs
 
 1. **The diff row.** `-`/`+`/context in a 2-char gutter, tinted row, mono. Used at display size in the hero and OG, at 13px in panels.
-2. **The hunk band.** Blue band with a real CLI line in it (`upstream 9503155da67a → 62da1cd48bb4, 1 patch`), the brand's eyebrow.
-3. **The real run.** Exact CLI output in its own shape, 12-character SHAs.
-4. **The stack and the commit line.** Upstream commits as dots on a line, the one your fork builds on filled green.
+2. **The real run.** A real heal as a product UI: what happened, one line per step, with the agent's own words quoted. No SHAs on the page.
+3. **Cards.** Code, files and runs sit on `--panel` (white in light, a step above the field in dark) with a hairline border, so the page reads finished, not wireframe.
+
+The blue hunk band over the hero was retired on Oct 12: three stacked bands (blue, field, green) read as stripes, and its SHAs read as a log. The hero is the two rows alone, in the site, the OG image and the README header.
 
 ### Motion
 
