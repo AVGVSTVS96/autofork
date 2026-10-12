@@ -34,9 +34,9 @@
     const items = [
       ["node", "The branch", "Your line leaves the app's line and ends in a node. The round 1 draft, redrawn in Hubot Sans."],
       ["plus", "The added branch", "Same branch, but it ends in a plus: what you added, the diff's sign."],
-      ["forkedF", "The forked f", "The f's crossbar keeps going and branches off into your node. The letter is the fork."],
+      ["forkedF", "The forked f", "The f's top arm keeps going and ends in your node, over the o. The letter is the fork; at a glance it can read as an accent."],
       ["dot", "The node o", "The o in fork is the node. Quiet in the nav; the mark is that node on an ink tile."],
-      ["split", "The split word", "auto stays on the app's line; fork leaves it and rides a line of its own, a step up. The mark is af, split the same way."],
+      ["split", "The split word", "auto stays on the app's line; fork leaves it and rides a line of its own, a step up. The mark is af, split the same way. In the nav it reads like a link."],
     ]
     const svg = async (n) => await (await fetch(`logos/${n}.svg`)).text()
     const rows = document.getElementById("rows")

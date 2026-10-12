@@ -32,25 +32,27 @@ const svg = (x0, y0, w, h, body) =>
 
 const line = (cls, w, d) => `<path class="${cls}" fill="none" stroke-width="${f(w)}" d="${d}"/>`
 
+// The f whose top arm keeps going and ends in your node, in font units: arm from 400 to 560 at the arm's height, node r 95 at 640.
+const forkedF = (x, base, size) => {
+  const U = (u) => (u / 1000) * size
+  const g = font.charToGlyph("f").getPath(x, base, size).toPathData(2)
+  const y = base - U(668.5)
+  return `<path class="ink" d="${g}"/><rect class="accent" x="${f(x + U(395))}" y="${f(y - U(60.5))}" width="${f(U(175))}" height="${f(U(121))}"/><circle class="accent" cx="${f(x + U(640))}" cy="${f(y)}" r="${f(U(95))}"/>`
+}
+
 // Marks are drawn on a 32 grid at (0,0)
 const marks = {
   node: () => line("trunk", 5, "M0 25H32") + line("accent-s", 5, "M3 25C11 25 9 9 17 9H20") + `<circle class="accent" cx="25.5" cy="9" r="6"/>`,
   plus: () => line("trunk", 5, "M0 26H32") + line("accent-s", 5, "M2 26C9 26 8 11 15 11H17") + `<path class="accent" d="M22 4h5v4.5h4.5v5H27V18h-5v-4.5h-4.5v-5H22z"/>`,
   forkedF: () => {
-    const s = 32 / 0.78
-    const x = 1, y = 30
-    const g = font.charToGlyph("f").getPath(x, y, s).toPathData(2)
-    const U = (u) => (u / 1000) * s
-    const cy = y - U(472)
-    const ex = x + U(395)
-    const nx = x + U(880), ny = y - U(690)
-    return `<path class="ink" d="${g}"/>` + line("accent-s", U(138), `M${f(ex)} ${f(cy)}H${f(ex + U(110))}C${f(ex + U(330))} ${f(cy)} ${f(nx - U(150))} ${f(ny)} ${f(nx - U(60))} ${f(ny)}`) + `<circle class="accent" cx="${f(nx)}" cy="${f(ny)}" r="${f(U(118))}"/>`
+    const s = 32 / 0.8
+    return forkedF(-((21 + 735) / 2 / 1000) * s + 16 - 0, 31.5, s)
   },
   dot: () => `<rect class="ink" x="0" y="0" width="32" height="32" rx="7"/><circle class="accent" cx="16" cy="16" r="7.5"/>`,
   af: () => {
-    const s = 32 / 0.74
+    const s = 32 / 1.12
     const a = font.charToGlyph("a"), fg = font.charToGlyph("f")
-    const ax = 0, fx = (a.advanceWidth / 1000) * s - 1.5
+    const ax = 0, fx = (a.advanceWidth / 1000) * s - 1.2
     return `<path class="ink" d="${a.getPath(ax, 31, s).toPathData(2)}"/><path class="accent" d="${fg.getPath(fx, 31 - XH * s * 0.42, s).toPathData(2)}"/>`
   },
 }
@@ -66,9 +68,18 @@ const lockup = (name, markScale = 1.3) => {
 }
 
 const out = {}
-for (const [name, scale] of [["node", 1.25], ["plus", 1.25], ["forkedF", 1.05]]) {
+for (const [name, scale] of [["node", 1.25], ["plus", 1.25]]) {
   const l = lockup(name, scale)
   out[name] = { lockup: svg(0, l.top - 2, l.w + 2, l.h - l.top + 4, l.body), mark: svg(0, 0, 32, 32, marks[name]()) }
+}
+
+// The forked f, inside the word.
+{
+  const g = glyphs("autofork", 0)
+  const fl = g.list.find((l) => l.ch === "f")
+  const body = `<path class="ink" d="${g.list.filter((l) => l !== fl).map((l) => l.d).join("")}"/>${forkedF(fl.x, BASE, SIZE)}`
+  const top = BASE - 0.763 * SIZE - 2
+  out.forkedF = { lockup: svg(0, top, g.end + 2, BASE + 6 - top, body), mark: svg(0, 0, 32, 32, marks.forkedF()) }
 }
 
 // The node o: the o of fork is the node your line ends on.
