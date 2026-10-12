@@ -19,49 +19,32 @@ That pair is enough to maintain a [self-healing fork](#example-a-self-healing-fo
 
 ## The spec
 
-A `PATCH.md` file kept at `<patch-id>/PATCH.md`. The `<patch-id>` can be a custom or generated name, id, etc. This draft also proposes a convention for splitting a patch into multiple files, see [splitting a patch](#splitting-a-patch).
+A `PATCH.md` file kept at `<patch-id>/PATCH.md`. The `<patch-id>` can be a custom or generated name, id, etc.
 
 ### Structure
 
-Frontmatter isn't required as of this early draft but it's recommended:
+No frontmatter or headings are required. The file is the patch's intent, in plain prose:
 
-```yaml
----
-id: <patch-id>
-summary: <short summary of the patch's intent>
-baseline: <upstream version or commit the edits were last verified against>
-lastUpdated: <yyyy-mm-dd>
----
-```
-
-The `baseline` pins the edits to the source they were written against. When a patch drifts, a healing agent can diff the baseline against the current source to see exactly what changed.
-
-The only required heading is `## Intent`. After that, edits are defined inside fenced code blocks, in any [format](#patch-format).
-
-Each edit identifies the file it targets, either from the patch's own header or with `file=<path>` on the fence.
-
-````md
+```md
 # Patch Title
-
-## Intent
 
 > What the patch does and why, in plain prose. Helps the agent understand
 > the original intent so it can easily heal or redesign the patch.
-
-## Patch edits
-
-> Any format, one or more per file, each defined inside a fenced code block.
-
-```diff file=<path>
- context
--removed line
-+added line
 ```
-````
+
+Write it so an agent could build the patch on whatever the source looks like at the time.
 
 ### Patch format
 
-A patch edit is a fenced code block that defines the patch's current code. Use any diff or patch format you like. The same `search/replace` and `diff` formats agents already produce work here, as do conventional patches supported by `git apply`, `patch`, or a library like Google's `diff-match-patch`. Some examples:
+The patch is a `<patch-id>.patch` git diff next to the `PATCH.md`, which `git apply` takes as is:
+
+```txt
+<patch-id>/
+├── PATCH.md
+└── <patch-id>.patch
+```
+
+Edits can also live inside the `PATCH.md` as fenced code blocks. Use any diff or patch format you like. The same `search/replace` and `diff` formats agents already produce work here, as do conventional patches supported by `git apply`, `patch`, or a library like Google's `diff-match-patch`. Some examples:
 
 A `search/replace` block, showing the full before and after:
 
@@ -96,62 +79,35 @@ diff --git a/dist/package-manager-cli.js b/dist/package-manager-cli.js
 > [!NOTE]
 > Each edit needs to identify the file it targets. A git or unified diff already carries the path in its header; for formats that don't, add `file=<path>` to the fence so tools can find the target without interpreting prose.
 
-Edits can also live next to the file. A `PATCH.md` with only the intent can sit beside a `<patch-id>.patch` git diff, which `git apply` takes as is. Tools then apply the diff directly and hand the agent the `PATCH.md` only when the diff stops applying.
-
-### Splitting a patch
-
-A patch can touch several files, but when one grows large or bundles unrelated changes, split it into smaller sub-patches. Smaller patches are easier to maintain, and easier for an agent to heal. Sub-patches nest inside their parent's directory, and the relationships are declared in frontmatter.
-
-```txt
-bootstrap-hook/
-├── PATCH.md
-├── hook-insert/
-│   └── PATCH.md
-└── hook-config/
-    └── PATCH.md
-```
-
-```yaml
-# parent patch frontmatter
-parts: [hook-insert, hook-config]
-
-# sub-patch frontmatter
-parent: bootstrap-hook
-```
-
-### Applying edits
-
-Every edit has a before and an after. The before should appear exactly once in the target file, so there's no ambiguity about where the edit goes. Applying replaces the before with the after. Because the match is unique, applying the same patch twice is safe, and a tool can read each edit's state directly:
-
-- **applied**: the after is present
-- **pending**: the before is present
-- **drift**: neither is present
-
 All edits in a patch should apply together or not at all. If any edit fails, the patch has drifted.
 
 ### Agent-driven healing
 
-A `PATCH.md` is executable two ways: as data, and as a prompt. You can use existing tools to apply patches when they apply cleanly, and call an agent when they need to be healed. The agent gets the whole file: the intent is its prompt, and the stale edits show what applied last looked like. Healing rewrites the edit blocks against the new source and applies them, so the healed `PATCH.md` lands alongside the change it made. Verify a healed patch with the project's tests or checks before accepting it.
+You can use existing tools to apply patches when they apply cleanly, and call an agent when they drift or don't exist yet. The agent builds the patch from the intent on the current source. If the source already does what the intent asks, it says so and the patch is dropped. Verify a healed patch with the project's tests or checks before accepting it.
 
 You can also have agents handle the full process of applying and healing patches, which can be as simple as `SKILL.md` or `AGENTS.md` instructions. You can even set up a GitHub workflow that maintains a project fork, integrating new upstream commits on a set schedule.
 
 ### Example: a self-healing fork
 
-A patched fork of an upstream repo, maintained with no bespoke tooling. The fork's entire divergence from upstream is the `patches/` tree, and the fork branch is rebuilt from it on every sync, so each `PATCH.md` stays the single source of truth:
+A patched fork of an upstream repo, maintained with no bespoke tooling. The fork's entire divergence from upstream is the `patches/` tree, and the fork branch is rebuilt from it on every sync:
 
 ```txt
 my-fork/
 ├── patches/
-│   ├── disable-telemetry/PATCH.md
-│   └── custom-auth/PATCH.md
+│   ├── disable-telemetry/
+│   │   ├── PATCH.md
+│   │   └── disable-telemetry.patch
+│   └── custom-auth/
+│       ├── PATCH.md
+│       └── custom-auth.patch
 └── .github/workflows/sync-upstream.yml
 ```
 
 On a schedule or on upstream release, the workflow:
 
 1. resets the fork branch to upstream
-2. applies each patch with `git apply` or a small script
-3. calls an agent to heal any patch that fails; the agent rewrites the edit blocks, applies them, and updates the `baseline`
+2. applies each patch with `git apply`
+3. calls an agent to heal any patch that fails, and saves the fresh diff
 4. runs the project's tests to verify each patch still does what its intent says
 5. pushes when everything is clean, or opens a PR for review when a patch was healed
 
@@ -169,14 +125,7 @@ When every patch applies cleanly, no model is called. When one drifts, its `PATC
 The `bootstrap-hook` patch from [pi-patcher](https://github.com/AVGVSTVS96/pi-patcher), defined as a single `PATCH.md`:
 
 ````md
----
-id: bootstrap-hook
-summary: Run `pi-patcher reconcile` after `pi update` finishes updating itself.
----
-
 # Bootstrap hook
-
-## Intent
 
 Patches Pi to run `pi-patcher reconcile` after `pi update`.
 
