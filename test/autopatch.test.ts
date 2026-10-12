@@ -168,3 +168,20 @@ test("a fork can follow upstream's releases instead of a branch", () => {
   expect(autopatch(fork, "sync").ok).toBe(true);
   expect(file(fork, "notes.txt")).toBe("four\n");
 });
+
+test("a fork ahead of upstream's newest release stays where it is", () => {
+  const follow = (to: string) => {
+    const config = JSON.parse(file(fork, ".autopatch/config.json"));
+    write(fork, ".autopatch/config.json", `${JSON.stringify({ ...config, follow: to }, null, 2)}\n`);
+    sh(fork, `git commit -qam 'follow ${to}'`);
+  };
+  follow("main");
+  write(upstream, "notes.txt", "five\n");
+  sh(upstream, "git commit -qam notes");
+  expect(autopatch(fork, "sync").ok).toBe(true);
+  follow("releases");
+  const { ok, log } = autopatch(fork, "sync");
+  expect(ok).toBe(true);
+  expect(log).toContain("already up to date");
+  expect(file(fork, "notes.txt")).toBe("five\n");
+});

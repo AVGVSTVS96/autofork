@@ -106,7 +106,7 @@ function upstreamUrl(upstream: string) {
 function fetchUpstream(root: string, config: Config) {
   const url = upstreamUrl(config.upstream);
   const ref = config.follow === "releases" ? latestRelease(root, url) : `refs/heads/${config.follow}`;
-  git(root, "fetch", "--quiet", "--no-tags", url, `+${ref}:refs/autopatch/upstream`);
+  git(root, "fetch", "--quiet", "--no-tags", url, `+${ref}:refs/autopatch/upstream`, "+HEAD:refs/autopatch/branch");
   return git(root, "rev-parse", "refs/autopatch/upstream^{commit}");
 }
 
@@ -122,9 +122,15 @@ function latestRelease(root: string, url: string) {
 }
 
 function baseline(root: string) {
-  const base = run("git", ["merge-base", "HEAD", "refs/autopatch/upstream"], root);
+  const synced = git(root, "log", "--first-parent", "-1", "--format=%s", "--grep=^autopatch: sync ", "HEAD").split(" ").at(-1);
+  const last = synced && run("git", ["rev-parse", "--verify", "--quiet", `${synced}^{commit}`], root);
+  const base = last && last.ok ? last : run("git", ["merge-base", "HEAD", "refs/autopatch/branch"], root);
   if (!base.ok) throw new Failure("this branch shares no history with upstream");
   return base.out.toString().trim();
+}
+
+function newer(root: string, base: string, candidate: string) {
+  return candidate !== base && run("git", ["merge-base", "--is-ancestor", candidate, base], root).ok ? base : candidate;
 }
 
 async function newestGreen(root: string, config: Config, base: string, tip: string) {
@@ -313,7 +319,7 @@ async function sync(root: string, args: string[]) {
   if (drift.length) {
     throw new Failure(`these files differ from what your patches build, so a sync would drop them:\n  ${drift.join("\n  ")}\nSave them as a patch first: write ${DIR}/<id>/PATCH.md, then run autopatch save <id>`);
   }
-  const source = await newestGreen(root, config, base, tip);
+  const source = newer(root, base, await newestGreen(root, config, base, tip));
   const key = `${short(source)}-${short(git(root, "rev-parse", "HEAD"))}`;
   output({ key });
   if (flag(args, "--skip") === key) {
