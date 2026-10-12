@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>autofork · direction B · the branch</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+  :root {
+    --bg: #FBFBFC; --panel: #FFFFFF; --ink: #0E0E12; --ink-2: #4D4D57; --ink-3: #6E6E78; --hair: rgb(14 14 18 / .12);
+    --trunk: #CACAD2; --you: #3B2BFF; --you-ink: #FFFFFF; --you-soft: #ECEAFF;
+    --sans: "Bricolage Grotesque", system-ui, sans-serif; --mono: "Fragment Mono", ui-monospace, monospace;
+    --gutter: clamp(20px, 4vw, 56px);
+    --rail: clamp(64px, 9vw, 120px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0C0C0F; --panel: #141419; --ink: #EEEEF2; --ink-2: #A6A6B2; --ink-3: #8A8A96; --hair: rgb(238 238 242 / .12);
+      --trunk: #34343D; --you: #8F84FF; --you-ink: #0C0C0F; --you-soft: #1D1A3A; }
+  }
+  body { font: 18px/1.5 var(--sans); font-optical-sizing: auto; overflow-x: hidden; }
+  .logo .ink { fill: var(--ink); } .logo .accent { fill: var(--you); } .logo .ink-stroke { stroke: var(--ink); } .logo .accent-stroke { stroke: var(--you); }
+
+  .page { position: relative; min-height: 100vh; padding-left: calc(var(--gutter) + var(--rail)); padding-right: var(--gutter); }
+  svg.graph { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+  .graph .trunk { stroke: var(--trunk); stroke-width: 3; fill: none; }
+  .graph .yours { stroke: var(--you); stroke-width: 3; fill: none; }
+  .graph .tick { stroke: var(--trunk); stroke-width: 3; }
+  .graph .ring { fill: var(--bg); stroke: var(--trunk); stroke-width: 3; }
+  .graph .dot { fill: var(--you); }
+  .graph .link { stroke: var(--you); stroke-width: 1.5; stroke-dasharray: 2 4; fill: none; opacity: .7; }
+  @media (max-width: 600px) { .tag { display: none; } }
+  .tag { position: absolute; font: 400 12px/1 var(--mono); color: var(--ink-3); transform: translateY(-50%); white-space: nowrap; }
+
+  nav { display: flex; align-items: center; justify-content: space-between; height: 76px; margin-left: calc(-1 * var(--rail)); }
+  nav .brand { height: 30px; width: 150px; }
+  nav .links { display: flex; gap: 28px; font-size: 15px; color: var(--ink-2); }
+
+  h1 { margin: clamp(48px, 10vh, 112px) 0 0; font-size: clamp(54px, 8.4vw, 128px); line-height: .96; letter-spacing: -0.022em; font-weight: 700; font-stretch: 100%; }
+  h1 span { display: block; }
+  h1 .you { color: var(--you); }
+  .sub { margin: 30px 0 32px; font-size: 22px; line-height: 1.4; color: var(--ink-2); max-width: 40ch; letter-spacing: -0.01em; text-wrap: balance; }
+
+  .ask { display: flex; align-items: center; max-width: 720px; height: 68px; padding: 0 8px 0 22px; background: var(--panel); border: 1.5px solid var(--you); border-radius: 16px; }
+  .ask .field { flex: 1; font-size: 19px; color: var(--ink-3); white-space: nowrap; overflow: hidden; letter-spacing: -0.01em; }
+  .ask .field b { font-weight: 560; color: var(--ink); }
+  .ask .field i { display: inline-block; width: 2px; height: 22px; background: var(--you); vertical-align: -4px; margin-left: 2px; }
+  .ask button { height: 52px; padding: 0 22px; border: 0; border-radius: 11px; background: var(--you); color: var(--you-ink); font-size: 17px; font-weight: 640; letter-spacing: -0.01em; }
+
+  .signin { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+  .btn { display: inline-flex; align-items: center; gap: 10px; height: 46px; padding: 0 16px; border: 1px solid var(--hair); border-radius: 12px; background: var(--panel); font-size: 16px; font-weight: 540; }
+  .btn .logo { width: 18px; height: 18px; }
+  .btn .soon { color: var(--ink-3); font-weight: 400; }
+  .btn .inv { margin-left: 6px; color: var(--you); font-weight: 620; }
+  .note { margin: 14px 0 0; font-size: 15px; color: var(--ink-3); }
+</style>
+</head>
+<body>
+  <div class="page">
+    <svg class="graph" aria-hidden="true"></svg>
+    <nav>
+      <a class="brand" data-logo="lockup-b" aria-label="autofork"></a>
+      <div class="links"><a>How it works</a><a>GitHub</a><a>Sign in</a></div>
+    </nav>
+    <main>
+      <h1><span class="from">Fork anything.</span><span class="you">Keep your changes.</span></h1>
+      <p class="sub">Name an open source app and what you'd change. Your fork keeps up with every release.</p>
+      <form class="ask" onsubmit="return false">
+        <span class="field"><b>T3 Code</b>, but always show context usage<i></i></span>
+        <button>Fork it</button>
+      </form>
+      <div class="signin">
+        <a class="btn"><span data-logo="openai"></span>Sign in with ChatGPT</a>
+        <a class="btn"><span data-logo="claude"></span>Claude <span class="soon">· coming soon</span><span class="inv">Get an invite</span></a>
+      </div>
+      <p class="note">Runs on the ChatGPT or Claude plan you already pay for.</p>
+    </main>
+  </div>
+  <script type="module">
+    import "./logos.js"
+    await document.fonts.ready
+    const page = document.querySelector(".page"), svg = document.querySelector(".graph")
+    const draw = () => {
+      const box = page.getBoundingClientRect()
+      const at = (el) => { const r = el.getBoundingClientRect(); return { x: r.left - box.left, y: r.top - box.top, w: r.width, h: r.height } }
+      const pad = parseFloat(getComputedStyle(page).paddingLeft)
+      const rail = pad - at(document.querySelector("nav")).x
+      const T = pad - rail + Math.min(34, rail * .28), B = pad - Math.min(40, rail * .32)
+      const from = at(document.querySelector("h1 .from")), you = at(document.querySelector("h1 .you")), ask = at(document.querySelector(".ask")), sub = at(document.querySelector(".sub"))
+      const y1 = from.y + from.h * .55, y2 = you.y + you.h * .55, y3 = ask.y + ask.h / 2, end = box.height
+      const releases = [[Math.max(from.y - 64, at(document.querySelector("nav")).h + 30), "v0.0.43"], [sub.y + 12, "v0.0.44"], [ask.y + ask.h + 70, "v0.0.45"]].filter(([y]) => y > 90 && y < end - 20)
+      const NS = "http://www.w3.org/2000/svg"
+      const el = (tag, attrs) => { const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); svg.append(n); return n }
+      svg.replaceChildren()
+      document.querySelectorAll(".tag").forEach((t) => t.remove())
+      const top = at(document.querySelector("nav")).h + 8
+      el("path", { class: "trunk", d: `M${T} ${top}V${end}` })
+      const bend = (y2 - y1) * .55
+      el("path", { class: "yours", d: `M${T} ${y1}C${T} ${y1 + bend} ${B} ${y2 - bend} ${B} ${y2}V${end}` })
+      for (const [y, label] of releases) {
+        el("line", { class: "tick", x1: T - 8, x2: T + 8, y1: y, y2: y })
+        if (y > y2) { el("path", { class: "link", d: `M${T + 10} ${y}H${B - 6}` }); el("circle", { class: "dot", cx: B, cy: y, r: 4.5 }) }
+        const tag = document.createElement("span"); tag.className = "tag"; tag.textContent = label
+        page.append(tag); tag.style.top = `${y}px`; tag.style.left = `${T - 16 - tag.offsetWidth}px`
+      }
+      el("circle", { class: "ring", cx: T, cy: y1, r: 8 })
+      el("circle", { class: "dot", cx: B, cy: y2, r: 8 })
+      el("circle", { class: "dot", cx: B, cy: y3, r: 6 })
+      el("path", { class: "yours", d: `M${B} ${y3}H${ask.x - 2}` })
+    }
+    draw()
+    addEventListener("resize", draw)
+  </script>
+</body>
+</html>
