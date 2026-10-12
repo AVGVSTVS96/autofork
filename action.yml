@@ -1,4 +1,4 @@
-name: autopatch
+name: autofork
 description: Rebuild your fork from upstream plus your patches. An agent re-implements the ones that stop applying.
 author: AVGVSTVS96
 branding:
@@ -20,9 +20,9 @@ runs:
   steps:
     - uses: actions/cache/restore@v6
       with:
-        path: ${{ runner.temp }}/autopatch-failed
-        key: autopatch-failed-${{ github.run_id }}
-        restore-keys: autopatch-failed-
+        path: ${{ runner.temp }}/autofork-failed
+        key: autofork-failed-${{ github.run_id }}
+        restore-keys: autofork-failed-
     - id: sync
       shell: bash
       env:
@@ -31,9 +31,9 @@ runs:
       run: '"$GITHUB_ACTION_PATH/action.sh"'
     - if: failure() && steps.sync.outputs.key != ''
       shell: bash
-      run: echo '${{ steps.sync.outputs.key }}' > "$RUNNER_TEMP/autopatch-failed"
+      run: echo '${{ steps.sync.outputs.key }}' > "$RUNNER_TEMP/autofork-failed"
     - if: failure() && steps.sync.outputs.key != ''
       uses: actions/cache/save@v6
       with:
-        path: ${{ runner.temp }}/autopatch-failed
-        key: autopatch-failed-${{ steps.sync.outputs.key }}
+        path: ${{ runner.temp }}/autofork-failed
+        key: autofork-failed-${{ steps.sync.outputs.key }}

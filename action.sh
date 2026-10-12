@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-failed="$RUNNER_TEMP/autopatch-failed"
+failed="$RUNNER_TEMP/autofork-failed"
 skip="$(cat "$failed" 2>/dev/null || true)"
 [ "${GITHUB_EVENT_NAME:-}" = schedule ] || skip=""
 head="$(git rev-parse HEAD)"
@@ -12,7 +12,7 @@ git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 heal=""
 [ "${HEAL:-true}" = true ] || heal="--no-heal"
 
-if ! node "$GITHUB_ACTION_PATH/dist/autopatch.js" sync ${skip:+--skip "$skip"} $heal; then
+if ! node "$GITHUB_ACTION_PATH/dist/autofork.js" sync ${skip:+--skip "$skip"} $heal; then
   echo "result=failed" >> "$GITHUB_OUTPUT"
   exit 1
 fi
@@ -21,7 +21,7 @@ if [ "$(git rev-parse HEAD)" != "$head" ]; then
   parents=()
   for parent in $(git log -1 --format=%P); do parents+=(-f "parents[]=$parent"); done
   remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-  scratch="refs/heads/autopatch-objects-${GITHUB_RUN_ID}"
+  scratch="refs/heads/autofork-objects-${GITHUB_RUN_ID}"
   git push --quiet "$remote" "HEAD:$scratch" 2>&1 | { grep -v '^remote:' || true; } >&2
   trap 'git push --quiet "$remote" --delete "$scratch" || true' EXIT
   signed="$(gh api "repos/$GITHUB_REPOSITORY/git/commits" \

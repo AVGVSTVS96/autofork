@@ -1,18 +1,19 @@
 {
-  "name": "autopatch",
+  "name": "autofork",
   "version": "0.1.0",
   "description": "Keep your changes on top of someone else's repo. An agent heals the patches that drift.",
   "type": "module",
   "license": "MIT",
+  "repository": "github:AVGVSTVS96/autofork",
   "bin": {
-    "autopatch": "dist/autopatch.js"
+    "autofork": "dist/autofork.js"
   },
   "files": ["dist"],
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "build": "bun build src/autopatch.ts --target node --outfile dist/autopatch.js",
+    "build": "bun build src/autofork.ts --target node --outfile dist/autofork.js",
     "test": "bun run build && bun test",
     "typecheck": "tsc --noEmit"
   },

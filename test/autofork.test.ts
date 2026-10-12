@@ -4,8 +4,8 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const cli = join(import.meta.dir, "../dist/autopatch.js");
-const home = mkdtempSync(join(tmpdir(), "autopatch-test-"));
+const cli = join(import.meta.dir, "../dist/autofork.js");
+const home = mkdtempSync(join(tmpdir(), "autofork-test-"));
 const gitconfig = join(home, "gitconfig");
 writeFileSync(gitconfig, "[user]\n\tname = test\n\temail = test@example.com\n[commit]\n\tgpgsign = false\n[init]\n\tdefaultBranch = main\n[diff]\n\tnoprefix = true\n");
 const env = { ...process.env, GIT_CONFIG_GLOBAL: gitconfig, GIT_CONFIG_NOSYSTEM: "1", RUNNER_TEMP: home };
@@ -16,7 +16,7 @@ function sh(cwd: string, command: string) {
   return result.stdout.trim();
 }
 
-function autopatch(cwd: string, ...args: string[]) {
+function autofork(cwd: string, ...args: string[]) {
   const result = spawnSync("node", [cli, ...args], { cwd, env, encoding: "utf8" });
   return { ok: result.status === 0, log: result.stderr };
 }
@@ -29,8 +29,8 @@ const write = (dir: string, name: string, text: string) => writeFileSync(join(di
 function agent(script: string) {
   const path = join(home, "agent.sh");
   writeFileSync(path, `cat > /dev/null\n${script}\n`);
-  const config = JSON.parse(file(fork, ".autopatch/config.json"));
-  write(fork, ".autopatch/config.json", `${JSON.stringify({ ...config, agent: `sh ${path}` }, null, 2)}\n`);
+  const config = JSON.parse(file(fork, ".autofork/config.json"));
+  write(fork, ".autofork/config.json", `${JSON.stringify({ ...config, agent: `sh ${path}` }, null, 2)}\n`);
   sh(fork, "git diff --quiet || git commit -qam 'use test agent'");
 }
 
@@ -40,8 +40,8 @@ function commitUpstream(text: string, message: string) {
 }
 
 function patch(id: string, text: string) {
-  mkdirSync(join(fork, ".autopatch", id), { recursive: true });
-  write(fork, `.autopatch/${id}/PATCH.md`, `${text}\n`);
+  mkdirSync(join(fork, ".autofork", id), { recursive: true });
+  write(fork, `.autofork/${id}/PATCH.md`, `${text}\n`);
 }
 
 test("init tracks upstream", () => {
@@ -52,27 +52,27 @@ test("init tracks upstream", () => {
   write(upstream, ".gitignore", "*.patch\n");
   sh(upstream, "git add -A && git commit -qm init");
   sh(home, `git clone -q ${upstream} fork`);
-  const { ok, log } = autopatch(fork, "init", upstream, "--verify", "node -e \"import('./app.js').then(m => process.exit(m.greet('x') === 'x' ? 1 : 0))\"");
+  const { ok, log } = autofork(fork, "init", upstream, "--verify", "node -e \"import('./app.js').then(m => process.exit(m.greet('x') === 'x' ? 1 : 0))\"");
   expect(ok).toBe(true);
-  expect(log).toContain(`autopatch follows ${upstream}'s main branch, since it has no releases`);
+  expect(log).toContain(`autofork follows ${upstream}'s main branch, since it has no releases`);
   sh(fork, "git add -A && git commit -qm 'track upstream'");
 });
 
 test("save turns your changes into the patch PATCH.md describes", () => {
   write(fork, "app.js", 'export function greet(name) {\n  return "hello " + name.toUpperCase();\n}\n');
-  expect(autopatch(fork, "save", "shout").log).toContain("write .autopatch/shout/PATCH.md first");
+  expect(autofork(fork, "save", "shout").log).toContain("write .autofork/shout/PATCH.md first");
   patch("shout", "greet() shouts the name in upper case.");
-  const { ok, log } = autopatch(fork, "save", "shout");
+  const { ok, log } = autofork(fork, "save", "shout");
   expect(ok).toBe(true);
-  expect(log).toContain("saved 1 file to .autopatch/shout");
-  expect(file(fork, ".autopatch/shout/shout.patch")).toContain("+  return \"hello \" + name.toUpperCase();");
+  expect(log).toContain("saved 1 file to .autofork/shout");
+  expect(file(fork, ".autofork/shout/shout.patch")).toContain("+  return \"hello \" + name.toUpperCase();");
   sh(fork, "git add -A && git commit -qm 'shout'");
-  expect(sh(fork, "git ls-files .autopatch/shout")).toContain("shout.patch");
+  expect(sh(fork, "git ls-files .autofork/shout")).toContain("shout.patch");
 });
 
 test("sync with nothing new is a no-op", () => {
   agent("exit 1");
-  const { ok, log } = autopatch(fork, "sync");
+  const { ok, log } = autofork(fork, "sync");
   expect(ok).toBe(true);
   expect(log).toContain("already up to date");
 });
@@ -80,7 +80,7 @@ test("sync with nothing new is a no-op", () => {
 test("a clean upstream change applies without the agent", () => {
   write(upstream, "notes.txt", "two\n");
   sh(upstream, "git commit -qam notes");
-  const { ok, log } = autopatch(fork, "sync", "--no-heal");
+  const { ok, log } = autofork(fork, "sync", "--no-heal");
   expect(ok).toBe(true);
   expect(log).not.toContain("healing");
   expect(file(fork, "notes.txt")).toBe("two\n");
@@ -91,7 +91,7 @@ test("a clean upstream change applies without the agent", () => {
 test("a drifted patch waits for a run that heals", () => {
   commitUpstream('export function greet(name) {\n  return "hi " + name;\n}\n', "hi");
   const head = sh(fork, "git rev-parse HEAD");
-  const { ok, log } = autopatch(fork, "sync", "--no-heal");
+  const { ok, log } = autofork(fork, "sync", "--no-heal");
   expect(ok).toBe(true);
   expect(log).toContain("shout doesn't apply");
   expect(log).toContain("The next run that heals rebuilds it");
@@ -100,20 +100,20 @@ test("a drifted patch waits for a run that heals", () => {
 
 test("a drifted patch is healed from its PATCH.md", () => {
   agent(`sed -i 's/"hi " + name;/"hi " + name.toUpperCase();/' app.js`);
-  const { ok, log } = autopatch(fork, "sync");
+  const { ok, log } = autofork(fork, "sync");
   expect(ok).toBe(true);
   expect(log).toContain("healing shout");
   expect(log).toContain("healed shout");
   expect(file(fork, "app.js")).toContain('"hi " + name.toUpperCase()');
-  expect(file(fork, ".autopatch/shout/shout.patch")).toContain('+  return "hi " + name.toUpperCase();');
+  expect(file(fork, ".autofork/shout/shout.patch")).toContain('+  return "hi " + name.toUpperCase();');
   agent("exit 1");
-  expect(autopatch(fork, "sync").log).toContain("already up to date");
+  expect(autofork(fork, "sync").log).toContain("already up to date");
 });
 
 test("sync refuses to drop changes no patch holds", () => {
   write(fork, "notes.txt", "mine\n");
   sh(fork, "git commit -qam 'stray change'");
-  const { ok, log } = autopatch(fork, "sync");
+  const { ok, log } = autofork(fork, "sync");
   expect(ok).toBe(false);
   expect(log).toContain("notes.txt");
   sh(fork, "git reset -q --hard HEAD~1");
@@ -121,34 +121,34 @@ test("sync refuses to drop changes no patch holds", () => {
 
 test("a patch upstream absorbed is dropped with the agent's reason", () => {
   commitUpstream('export function greet(name) {\n  return "hi " + name.toUpperCase() + "!";\n}\n', "shout upstream");
-  agent("echo 'upstream greet() upper-cases the name now' > .autopatch/shout/OBSOLETE");
-  const { ok, log } = autopatch(fork, "sync");
+  agent("echo 'upstream greet() upper-cases the name now' > .autofork/shout/OBSOLETE");
+  const { ok, log } = autofork(fork, "sync");
   expect(ok).toBe(true);
   expect(log).toContain("dropped shout: upstream greet() upper-cases the name now");
-  expect(sh(fork, "ls .autopatch")).toBe("config.json");
+  expect(sh(fork, "ls .autofork")).toBe("config.json");
 });
 
 test("a patch that's only a PATCH.md is built by the agent", () => {
   patch("wave", "greet() waves at the end.");
   sh(fork, "git add -A && git commit -qm wave");
-  expect(autopatch(fork, "status").log).toContain("wave  (not built yet)");
+  expect(autofork(fork, "status").log).toContain("wave  (not built yet)");
   agent(`sed -i 's/ + "!";/ + "! o\\/";/' app.js`);
-  const { ok, log } = autopatch(fork, "sync");
+  const { ok, log } = autofork(fork, "sync");
   expect(ok).toBe(true);
   expect(log).toContain("built wave");
   expect(file(fork, "app.js")).toContain('"! o/"');
-  expect(file(fork, ".autopatch/wave/wave.patch")).toContain('"! o/"');
+  expect(file(fork, ".autofork/wave/wave.patch")).toContain('"! o/"');
   agent("exit 1");
-  expect(autopatch(fork, "sync").log).toContain("already up to date");
+  expect(autofork(fork, "sync").log).toContain("already up to date");
 });
 
 test("files verify leaves behind stay out of the fork", () => {
-  const config = JSON.parse(file(fork, ".autopatch/config.json"));
-  write(fork, ".autopatch/config.json", `${JSON.stringify({ ...config, verify: "touch verify-output.log" }, null, 2)}\n`);
+  const config = JSON.parse(file(fork, ".autofork/config.json"));
+  write(fork, ".autofork/config.json", `${JSON.stringify({ ...config, verify: "touch verify-output.log" }, null, 2)}\n`);
   sh(fork, "git commit -qam 'noisy verify'");
   write(upstream, "notes.txt", "three\n");
   sh(upstream, "git commit -qam notes");
-  const { ok } = autopatch(fork, "sync");
+  const { ok } = autofork(fork, "sync");
   expect(ok).toBe(true);
   expect(sh(fork, "git ls-files verify-output.log")).toBe("");
 });
@@ -157,30 +157,30 @@ test("a fork can follow upstream's releases instead of a branch", () => {
   sh(upstream, "git tag v1.0.0");
   write(upstream, "notes.txt", "four\n");
   sh(upstream, "git commit -qam notes && git tag v1.1.0-beta.1");
-  const config = JSON.parse(file(fork, ".autopatch/config.json"));
-  write(fork, ".autopatch/config.json", `${JSON.stringify({ ...config, follow: "releases" }, null, 2)}\n`);
+  const config = JSON.parse(file(fork, ".autofork/config.json"));
+  write(fork, ".autofork/config.json", `${JSON.stringify({ ...config, follow: "releases" }, null, 2)}\n`);
   sh(fork, "git commit -qam 'follow releases'");
-  const { ok, log } = autopatch(fork, "sync");
+  const { ok, log } = autofork(fork, "sync");
   expect(ok).toBe(true);
   expect(log).toContain("already up to date");
   expect(file(fork, "notes.txt")).toBe("three\n");
   sh(upstream, "git tag v1.1.0");
-  expect(autopatch(fork, "sync").ok).toBe(true);
+  expect(autofork(fork, "sync").ok).toBe(true);
   expect(file(fork, "notes.txt")).toBe("four\n");
 });
 
 test("a fork ahead of upstream's newest release stays where it is", () => {
   const follow = (to: string) => {
-    const config = JSON.parse(file(fork, ".autopatch/config.json"));
-    write(fork, ".autopatch/config.json", `${JSON.stringify({ ...config, follow: to }, null, 2)}\n`);
+    const config = JSON.parse(file(fork, ".autofork/config.json"));
+    write(fork, ".autofork/config.json", `${JSON.stringify({ ...config, follow: to }, null, 2)}\n`);
     sh(fork, `git commit -qam 'follow ${to}'`);
   };
   follow("main");
   write(upstream, "notes.txt", "five\n");
   sh(upstream, "git commit -qam notes");
-  expect(autopatch(fork, "sync").ok).toBe(true);
+  expect(autofork(fork, "sync").ok).toBe(true);
   follow("releases");
-  const { ok, log } = autopatch(fork, "sync");
+  const { ok, log } = autofork(fork, "sync");
   expect(ok).toBe(true);
   expect(log).toContain("already up to date");
   expect(file(fork, "notes.txt")).toBe("five\n");

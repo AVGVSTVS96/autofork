@@ -1,22 +1,22 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/header-dark.png">
-  <img alt="autopatch: Fork anything. Keep your changes." src="assets/header-light.png">
+  <img alt="autofork: Fork anything. Keep your changes." src="assets/header-light.png">
 </picture>
 
-Fork anything and keep your changes. autopatch keeps your fork on top of upstream, and when upstream breaks one of your changes, an agent rebuilds it.
+Fork anything and keep your changes. autofork keeps your fork on top of upstream, and when upstream breaks one of your changes, an agent rebuilds it.
 
 ```sh
-npx github:AVGVSTVS96/autopatch fork pingdotgg/t3code
+npx github:AVGVSTVS96/autofork fork pingdotgg/t3code
 ```
 
-That forks the repo, clones it and adds the autopatch workflow. Set `CLAUDE_CODE_OAUTH_TOKEN` first (`claude setup-token` prints one) and it adds that secret too. Already have a fork? Run `init owner/repo` inside it.
+That forks the repo, clones it and adds the autofork workflow. Set `CLAUDE_CODE_OAUTH_TOKEN` first (`claude setup-token` prints one) and it adds that secret too. Already have a fork? Run `init owner/repo` inside it.
 
 ## Patches
 
-Each change you keep is a folder in `.autopatch/`:
+Each change you keep is a folder in `.autofork/`:
 
 ```
-.autopatch/context-usage/
+.autofork/context-usage/
 ├── PATCH.md              what it does and why
 └── context-usage.patch   the diff
 ```
@@ -24,12 +24,12 @@ Each change you keep is a folder in `.autopatch/`:
 Change the code, write the `PATCH.md`, and save the diff:
 
 ```sh
-npx github:AVGVSTVS96/autopatch save context-usage
+npx github:AVGVSTVS96/autofork save context-usage
 ```
 
 Or just write the `PATCH.md` and push. The workflow has an agent build it.
 
-A `PATCH.md` is plain prose. Describe what the change does, not which lines it touches, so an agent can rebuild it on whatever upstream looks like next. This is the one in [my T3 Code fork](https://github.com/AVGVSTVS96/t3code/tree/main/.autopatch/context-usage):
+A `PATCH.md` is plain prose. Describe what the change does, not which lines it touches, so an agent can rebuild it on whatever upstream looks like next. This is the one in [my T3 Code fork](https://github.com/AVGVSTVS96/t3code/tree/main/.autofork/context-usage):
 
 ```md
 Always show the thread's context usage in the composer.
@@ -56,14 +56,14 @@ To follow a branch instead, set `"follow": "main"`. Every upstream commit then g
 ## Agents
 
 ```sh
-npx skills add AVGVSTVS96/autopatch
+npx skills add AVGVSTVS96/autofork
 ```
 
 Your agent then knows how to fork a repo and keep its changes as patches.
 
 ## Config
 
-`.autopatch/config.json`:
+`.autofork/config.json`:
 
 ```json
 {
@@ -81,20 +81,20 @@ Your agent then knows how to fork a repo and keep its changes as patches.
 | `agent` | the command that rebuilds a patch, prompt on stdin. Default: `claude -p --dangerously-skip-permissions`. For Codex: `codex exec --dangerously-bypass-approvals-and-sandbox` |
 | `green` | when following a branch, `false` takes upstream's newest commit even when its checks failed |
 
-`.github/workflows/autopatch.yml` is yours too: change how often it checks, and set up what `verify` needs (Node, Bun, Rust) before the autopatch step. The action takes `heal: false` to apply what still fits without calling the agent, if you want rebuilds on one schedule and heals on another.
+`.github/workflows/autofork.yml` is yours too: change how often it checks, and set up what `verify` needs (Node, Bun, Rust) before the autofork step. The action takes `heal: false` to apply what still fits without calling the agent, if you want rebuilds on one schedule and heals on another.
 
 ## Commands
 
 ```
-$ npx github:AVGVSTVS96/autopatch --help
-autopatch: fork anything and keep your changes
+$ npx github:AVGVSTVS96/autofork --help
+autofork: fork anything and keep your changes
 
 Usage:
-  autopatch fork <owner/repo>   fork it on GitHub, set it up and push
-  autopatch init <owner/repo>   set up a fork you already have, from inside it
-  autopatch save <id>           save your changes as the patch in .autopatch/<id>
-  autopatch status              your patches, and changes no patch holds yet
-  autopatch sync                rebuild on upstream; an agent heals what no longer applies
+  autofork fork <owner/repo>    fork it on GitHub, set it up and push
+  autofork init <owner/repo>    set up a fork you already have, from inside it
+  autofork save <id>            save your changes as the patch in .autofork/<id>
+  autofork status               your patches, and changes no patch holds yet
+  autofork sync                 rebuild on upstream; an agent heals what no longer applies
 
 Options for fork and init:
   --follow <releases | branch>  what to keep up with (default: releases, or the
@@ -108,7 +108,7 @@ Options for fork and init:
 - **June:** [PATCH.md](https://patchmd.vercel.app), the format.
 - **July:** [herdr](https://github.com/AVGVSTVS96/herdr), the first fork rebuilt from patches. Proof of concept.
 - **October:** forks of [Claude Code's plugins](https://github.com/AVGVSTVS96/claude-plugins-official), [Buzz](https://github.com/AVGVSTVS96/buzz) and [T3 Code](https://github.com/AVGVSTVS96/t3code), in daily use.
-- **October:** autopatch.
+- **October:** autofork.
 
 ## License
 
