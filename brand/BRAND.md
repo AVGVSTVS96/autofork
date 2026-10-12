@@ -50,7 +50,7 @@ Rule: **green means it's yours and it's alive; red means upstream made it stale 
 
 ### Grid
 
-8px base, page max 74rem, gutters `clamp(1rem, 4vw, 3rem)`. Hero diff rows bleed to the gutter edge. Sections are split by hairlines, never by background color. Square corners, no shadows. 1px `--ink` border only on the primary thing in view (the hero command, the top rule of a list).
+8px base, page max 74rem, gutters `clamp(1rem, 4vw, 3rem)`. Hero diff rows bleed to the gutter edge. Sections are split by space, not rules; one tinted band (the release flow) breaks the rhythm. Oct 12, Bassim: "there are horizontal lines everywhere... the page feels flat, static and templated." Square corners, no shadows. 1px `--ink` border only on the primary thing in view (the hero command, the top rule of a list).
 
 ### Motifs
 

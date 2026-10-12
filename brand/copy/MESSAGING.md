@@ -11,25 +11,21 @@ Bassim's own words, for the launch, verbatim: "i can fork and customize anything
 ## Hero
 
 - **Headline:** Fork anything. / Keep your changes. (two diff rows, mono, no band above them)
-- **Sub line:** autopatch keeps your fork on top of upstream. When upstream breaks one of your changes, an agent rebuilds it.
-- **Command:** `npx github:AVGVSTVS96/autopatch fork pingdotgg/t3code`
-- **Under it:** the real T3 Code heal as a product view: its PATCH.md beside the run (383 commits pulled in, window-title no longer applied, Claude Code rebuilt it, typecheck passed, signed commit, 1m 55s).
+- **Sub line:** Tell your agent what to change. autopatch keeps it working through every upstream release.
+- **Command:** `npx skills add AVGVSTVS96/autopatch`
+- **Under it:** the one example. The prompt ("Fork T3 Code with autopatch. Always show context usage in the composer, and put the thread's title in the window and tab title."), the two patches it makes, and T3 Code with both changes marked.
 
 ## Sections
 
-Oct 12, Bassim, on a hardcoded schedule: "If a schedule is going to be hardcoded to run the user's coding agent, spending the user's money, it shouldn't be on a nightly schedule. It should just be based on full fucking releases. Nightlies and all that shit should be configuration options", and "use t3 code for the auto patch examples".
+Oct 12, Bassim: "Showing the full patch.md as plain text across the whole app isn't good design. There's far too much text overall. Do less", "The core flow is simple. You tell your coding agent to auto-patch a fork of T3 Code to add context usage and to set the window and tab titles. Show only one example for that first part, and show the others further down the page", "Make the site more designed and distinctive, but minimal."
 
-Oct 12, Bassim: "the page still has that kind of bare-bones skeleton kind of feel... I wanted to feel more like a complete finished product", "like other projects you go there, you kind of get it and you're impressed", "agents are going to be using this. We're not expecting human beings to use the CLI", "the every night wording that you put in everywhere as if every repo has nightly releases", and on the timeline: "don't make it sound cringe".
+One headline, at most one short line, one visual each.
 
-One headline, one short line, one visual each.
-
-1. **One command.** `fork` forks, clones and adds the workflow (and the secret, if `CLAUDE_CODE_OAUTH_TOKEN` is set). `init owner/repo` for a fork you already have.
-2. **A patch is a folder.** PATCH.md says what the change does, the diff sits beside it. The real `context-usage` patch from the T3 Code fork, its PATCH.md in full. Changed the code: write the PATCH.md, `save <id>`. Only an idea: push the PATCH.md and the workflow has an agent build it.
-3. **Made for your agent.** `npx skills add AVGVSTVS96/autopatch`, then an example session on T3 Code: fork, edit, write the context-usage PATCH.md, save, push.
-4. **Follows releases.** A new upstream release rebuilds the fork; nightlies and other pre-releases are skipped; `"follow": "main"` follows a branch instead. The visual is T3 Code's real releases over two weeks (Sep 28 to Oct 11: 3 releases, 71 nightlies and previews). Release: rebuilt, signed commit. Agent: only when a release breaks a patch. Check: hourly, git only.
-5. **Yours to change.** The T3 Code fork's real `config.json`, every key from the README's Config table, and the workflow file being yours (`heal: false`).
-6. **Commands.** `fork`, `init`, `save`, `status`, `sync` and the `--follow`/`--verify` options, worded as `--help` prints them.
-7. **History.** The README's list, as is: pi-patcher (May, proof of concept), PATCH.md (June, the format), herdr (July, the first fork rebuilt from patches, proof of concept), forks of Claude Code's plugins, Buzz and T3 Code (October, in daily use), autopatch (October). Facts, no ranking of which fork he likes.
+1. **Every release, your changes go back on top.** Three releases on an upstream track: both patches apply; one breaks and the agent rebuilds it; upstream ships one and it's dropped. Nightlies skipped, checks run before a push.
+2. **A patch is a folder.** PATCH.md's first sentence and the diffstat, not the whole file.
+3. **Forks I use every day.** Claude Code plugins, Buzz, herdr: a few of their patches each as `+` rows.
+4. **Get started.** The skill, or `fork owner/repo` by hand; commands and config live in the README.
+5. **How it got here.** pi-patcher, PATCH.md, herdr, the forks, autopatch, as a five-dot line.
 
 ## Meta
 
