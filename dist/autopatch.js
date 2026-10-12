@@ -2,7 +2,7 @@
 
 // src/autopatch.ts
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
@@ -20,6 +20,9 @@ var BOT = [
 var RED = ["failure", "timed_out", "action_required", "startup_failure"];
 
 class Failure extends Error {
+}
+
+class Drifted extends Failure {
 }
 function run(command, args, cwd, env) {
   const result = spawnSync(command, args, { cwd, env, maxBuffer: 1 << 30 });
@@ -63,11 +66,15 @@ function readConfig(root) {
   if (!existsSync(configFile(root))) {
     throw new Failure("no .autopatch/config.json here. Start with: autopatch init <owner/repo>");
   }
-  return { branch: "main", patches: [], ...JSON.parse(readFileSync(configFile(root), "utf8")) };
+  const { branch, patches: _, ...config } = JSON.parse(readFileSync(configFile(root), "utf8"));
+  return { follow: branch ?? "main", ...config, patches: discover(root) };
 }
-function writeConfig(dir, config) {
+function discover(root) {
+  return readdirSync(join(root, DIR), { withFileTypes: true }).filter((entry) => entry.isDirectory() && existsSync(patchDoc(root, entry.name))).map((entry) => entry.name).sort();
+}
+function writeConfig(dir, { upstream, follow, verify, agent, green }) {
   mkdirSync(join(dir, DIR), { recursive: true });
-  writeFileSync(configFile(dir), `${JSON.stringify(config, null, 2)}
+  writeFileSync(configFile(dir), `${JSON.stringify({ upstream, follow, verify, agent, green }, null, 2)}
 `);
   writeFileSync(join(dir, DIR, ".gitignore"), `!*.patch
 `);
@@ -79,8 +86,18 @@ function upstreamUrl(upstream) {
   return /^[\w.-]+\/[\w.-]+$/.test(upstream) ? `https://github.com/${upstream}.git` : upstream;
 }
 function fetchUpstream(root, config) {
-  git(root, "fetch", "--quiet", "--no-tags", upstreamUrl(config.upstream), `+refs/heads/${config.branch}:refs/autopatch/upstream`);
-  return git(root, "rev-parse", "refs/autopatch/upstream");
+  const url = upstreamUrl(config.upstream);
+  const ref = config.follow === "releases" ? latestRelease(root, url) : `refs/heads/${config.follow}`;
+  git(root, "fetch", "--quiet", "--no-tags", url, `+${ref}:refs/autopatch/upstream`);
+  return git(root, "rev-parse", "refs/autopatch/upstream^{commit}");
+}
+function latestRelease(root, url) {
+  const tags = git(root, "ls-remote", "--tags", "--refs", "--sort=-v:refname", url).split(`
+`);
+  const release = tags.map((line) => line.split("\t")[1]).find((ref) => ref && !ref.includes("-"));
+  if (!release)
+    throw new Failure(`${url} has no release tags to follow`);
+  return release;
 }
 function baseline(root) {
   const base = run("git", ["merge-base", "HEAD", "refs/autopatch/upstream"], root);
@@ -90,7 +107,7 @@ function baseline(root) {
 }
 async function newestGreen(root, config, base, tip) {
   const repo = githubRepo(config.upstream);
-  if (config.green === false || !repo)
+  if (config.green === false || config.follow === "releases" || !repo)
     return tip;
   const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
   const headers = { accept: "application/vnd.github+json" };
@@ -227,7 +244,7 @@ function build(root, config, base, options) {
     const file = patchFile(dir, id);
     if (isEmpty(file) ? options.healFrom : !apply(dir, file)) {
       if (!options.healFrom)
-        throw new Failure(`${id} doesn't apply to ${short(base)}`);
+        throw new Drifted(`${id} doesn't apply to ${short(base)}`);
       heal(config, build, id, base, options.healFrom);
     }
     if (options.fold?.id === id && !apply(dir, options.fold.patch)) {
@@ -240,11 +257,11 @@ function build(root, config, base, options) {
 function refresh(target, config, build) {
   config.patches.forEach((id, index) => {
     const diff = gitBytes(build.dir, "diff-tree", "-p", "--binary", "--full-index", build.steps[index], build.steps[index + 1], "--", ...SOURCE);
-    writeFileSync(patchFile(target, id), diff);
+    if (diff.length || existsSync(patchFile(target, id)))
+      writeFileSync(patchFile(target, id), diff);
   });
   for (const id of build.dropped.keys())
     rmSync(join(target, DIR, id), { recursive: true, force: true });
-  writeConfig(target, { ...config, patches: config.patches.filter((id) => !build.dropped.has(id)) });
 }
 function cleanup(root, build) {
   if (build)
@@ -282,7 +299,7 @@ async function sync(root, args) {
     throw new Failure(`these files differ from what your patches build, so a sync would drop them:
   ${drift.join(`
   `)}
-Capture them first: autopatch add <id>`);
+Save them as a patch first: write ${DIR}/<id>/PATCH.md, then run autopatch save <id>`);
   }
   const source = await newestGreen(root, config, base, tip);
   const key = `${short(source)}-${short(git(root, "rev-parse", "HEAD"))}`;
@@ -295,7 +312,14 @@ Capture them first: autopatch add <id>`);
   say(`upstream ${moved}, ${config.patches.length} patch${config.patches.length === 1 ? "" : "es"}`);
   let result;
   try {
-    result = build(root, config, source, { healFrom: base });
+    try {
+      result = build(root, config, source, { healFrom: args.includes("--no-heal") ? undefined : base });
+    } catch (error) {
+      if (!(error instanceof Drifted))
+        throw error;
+      say(`${error.message}. The next heal run rebuilds it.`);
+      return output({ result: "waiting" });
+    }
     if (config.verify && !shell(config.verify, result.dir))
       throw new Failure(`verify failed: ${config.verify}`);
     git(result.dir, "reset", "--hard", "--quiet");
@@ -325,48 +349,37 @@ Capture them first: autopatch add <id>`);
     cleanup(root, result);
   }
 }
-async function add(root, args) {
-  const [id, ...words] = args;
+async function save(root, args) {
+  const id = args[0];
   if (!id || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id))
-    throw new Failure('usage: autopatch add <id> ["what it does and why"]   (id like fix-login)');
-  const text = words.join(" ").trim();
+    throw new Failure("usage: autopatch save <id>   (id like fix-login)");
+  if (!existsSync(patchDoc(root, id)))
+    throw new Failure(`write ${DIR}/${id}/PATCH.md first: what the change does and why`);
+  intent(root, id);
   const config = readConfig(root);
   fetchUpstream(root, config);
   const files = workingTree(root);
   const { base, rebuilt, drift } = check(root, config, files);
-  if (!drift.length && !text)
-    throw new Failure(`nothing to capture: your files match what the patches already build. To have the agent build it instead, say what it does: autopatch add ${id} "..."`);
-  const count = `${drift.length} file${drift.length === 1 ? "" : "s"}`;
-  mkdirSync(join(root, DIR, id), { recursive: true });
-  if (text)
-    writeFileSync(patchDoc(root, id), `${text}
-`);
-  if (!config.patches.includes(id)) {
-    if (drift.length)
-      writeFileSync(patchFile(root, id), gitBytes(root, "diff-tree", "-p", "--binary", "--full-index", rebuilt, files, "--", ...SOURCE));
-    writeConfig(root, { ...config, patches: [...config.patches, id] });
-    if (!drift.length)
-      return say(`added ${id}. The agent builds it from its PATCH.md on the next sync.`);
-    return say(`captured ${count} in ${DIR}/${id}. ${text ? "Commit when ready." : "Say what it does and why in its PATCH.md, then commit."}`);
-  }
   if (!drift.length)
-    return say(`rewrote ${DIR}/${id}/PATCH.md`);
+    return say(`nothing to save: your code matches what the patches build. Push ${DIR}/${id}/PATCH.md as it is and the next heal run builds it.`);
   const fold = join(git(root, "rev-parse", "--path-format=absolute", "--git-dir"), "autopatch-fold.patch");
   writeFileSync(fold, gitBytes(root, "diff-tree", "-p", "--binary", "--full-index", rebuilt, files, "--", ...SOURCE));
   const result = build(root, config, base, { fold: { id, patch: fold } });
   try {
     refresh(root, config, result);
-    say(`folded ${count} into ${id}. Commit when ready.`);
+    say(`saved ${drift.length} file${drift.length === 1 ? "" : "s"} to ${DIR}/${id}. Commit and push.`);
   } finally {
     rmSync(fold, { force: true });
     cleanup(root, result);
   }
 }
+var UPDATE = "0 */6 * * *";
 var WORKFLOW = `name: autopatch
 
 on:
   schedule:
-    - cron: "17 6 * * *"
+    - cron: "${UPDATE}"
+    - cron: "30 6 * * *"
   workflow_dispatch:
 
 permissions:
@@ -385,34 +398,57 @@ jobs:
           persist-credentials: false
       # Set up whatever your verify command needs here (node, bun, rust, ...).
       - uses: AVGVSTVS96/autopatch@v1
+        with:
+          heal: \${{ github.event.schedule != '${UPDATE}' }}
         env:
           CLAUDE_CODE_OAUTH_TOKEN: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 `;
-async function init(root, args) {
-  const upstream = args[0];
-  if (!upstream)
-    throw new Failure("usage: autopatch init <owner/repo | git url> [--verify <command>]");
+function setup(root, upstream, args) {
   if (existsSync(configFile(root)))
     throw new Failure(`${DIR}/config.json already exists`);
   const head = run("git", ["ls-remote", "--symref", upstreamUrl(upstream), "HEAD"], root).out.toString();
-  const branch = head.match(/^ref: refs\/heads\/(\S+)\s+HEAD/m)?.[1] ?? "main";
-  const verify = flag(args, "--verify");
-  const config = { upstream, branch, ...verify && { verify }, patches: [] };
+  const follow = flag(args, "--follow") ?? head.match(/^ref: refs\/heads\/(\S+)\s+HEAD/m)?.[1] ?? "main";
+  const config = { upstream, follow, verify: flag(args, "--verify") };
   writeConfig(root, config);
   const workflow = join(root, ".github/workflows/autopatch.yml");
   mkdirSync(join(root, ".github/workflows"), { recursive: true });
   if (!existsSync(workflow))
     writeFileSync(workflow, WORKFLOW);
   fetchUpstream(root, config);
-  const { drift } = check(root, config, workingTree(root));
+  const { drift } = check(root, { ...config, patches: [] }, workingTree(root));
   const inherited = git(root, "ls-files", ".github/workflows").split(`
 `).filter((file) => file && !file.endsWith("/autopatch.yml"));
-  say(`autopatch tracks ${upstream} (${branch}).`);
+  say(`autopatch follows ${upstream} (${follow === "releases" ? "its releases" : follow}).`);
   if (inherited.length)
     say(`Your fork has ${inherited.length} workflow${inherited.length === 1 ? "" : "s"} copied from upstream, and they run here too. Delete the ones you don't want; upstream's new ones never get copied in.`);
   if (drift.length)
-    say(`Your branch already changes ${drift.length} file${drift.length === 1 ? "" : "s"}. Capture them: autopatch add <id>`);
+    say(`Your branch already changes ${drift.length} file${drift.length === 1 ? "" : "s"}. Save them as a patch: write ${DIR}/<id>/PATCH.md, then autopatch save <id>`);
+}
+async function init(root, args) {
+  if (!args[0])
+    throw new Failure("usage: autopatch init <owner/repo | git url> [--verify <command>] [--follow <branch | releases>]");
+  setup(root, args[0], args);
   say("Add a CLAUDE_CODE_OAUTH_TOKEN secret (claude setup-token), commit, and push.");
+}
+async function fork(cwd, args) {
+  const upstream = args[0];
+  if (!/^[\w.-]+\/[\w.-]+$/.test(upstream ?? ""))
+    throw new Failure("usage: autopatch fork <owner/repo> [--verify <command>] [--follow <branch | releases>]");
+  if (!run("gh", ["repo", "fork", upstream, "--clone", "--default-branch-only"], cwd).ok)
+    throw new Failure("gh couldn't fork it. Is the GitHub CLI installed and logged in?");
+  const root = join(cwd, upstream.split("/")[1]);
+  setup(root, upstream, args);
+  const repo = run("gh", ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"], root).out.toString().trim();
+  run("gh", ["api", "-X", "PUT", `repos/${repo}/actions/permissions`, "-F", "enabled=true"], root);
+  const token = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+  if (token)
+    run("gh", ["secret", "set", "CLAUDE_CODE_OAUTH_TOKEN", "--repo", repo, "--body", token], root);
+  git(root, "add", DIR, ".github/workflows/autopatch.yml");
+  git(root, "commit", "--quiet", "-m", `autopatch: follow ${upstream}`);
+  git(root, "push", "--quiet");
+  say(`${repo} now keeps itself current with ${upstream}. It's cloned in ./${basename(root)}.`);
+  if (!token)
+    say(`Last step: run claude setup-token, then gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo ${repo}`);
 }
 async function status(root) {
   const config = readConfig(root);
@@ -421,21 +457,24 @@ async function status(root) {
   const behind = git(root, "rev-list", "--count", "--first-parent", `${base}..refs/autopatch/upstream`);
   say(`${config.upstream} at ${short(base)}, ${behind} commit${behind === "1" ? "" : "s"} behind upstream`);
   for (const id of config.patches)
-    say(`  ${id}`);
+    say(`  ${id}${isEmpty(patchFile(root, id)) ? "  (not built yet)" : ""}`);
   if (drift.length)
     say(`not in any patch yet:
   ${drift.join(`
   `)}`);
 }
-var USAGE = `autopatch: keep your changes on top of someone else's repo
+var USAGE = `autopatch: fork anything and keep your changes
 
-  autopatch init <owner/repo>   track an upstream repo from this fork
-  autopatch add <id> ["what"]   turn your changes into a patch, or describe one for the agent to build
-  autopatch status              what's patched, and what isn't yet
-  autopatch sync                rebuild on the latest upstream; an agent heals what drifts
+  autopatch fork <owner/repo>   fork it, set it up and push, in one go
+  autopatch init <owner/repo>   set up a fork you already have
+  autopatch save <id>           save your changes as the patch in .autopatch/<id>
+  autopatch status              your patches, and changes no patch holds yet
+  autopatch sync                rebuild on upstream; an agent heals what no longer applies
 `;
-var commands = { init, add, status, sync };
+var commands = { init, save, status, sync };
 async function main([name, ...args]) {
+  if (name === "fork")
+    return fork(process.cwd(), args);
   const command = commands[name];
   if (!command)
     return void process.stdout.write(USAGE);

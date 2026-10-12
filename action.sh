@@ -9,7 +9,10 @@ head="$(git rev-parse HEAD)"
 git config user.name "github-actions[bot]"
 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-if ! node "$GITHUB_ACTION_PATH/dist/autopatch.js" sync ${skip:+--skip "$skip"}; then
+heal=""
+[ "${HEAL:-true}" = true ] || heal="--no-heal"
+
+if ! node "$GITHUB_ACTION_PATH/dist/autopatch.js" sync ${skip:+--skip "$skip"} $heal; then
   echo "result=failed" >> "$GITHUB_OUTPUT"
   exit 1
 fi

@@ -8,9 +8,12 @@ inputs:
   token:
     description: Token that pushes the signed sync commit
     default: ${{ github.token }}
+  heal:
+    description: Let the agent rebuild patches that no longer apply. When false, they wait for a run that heals.
+    default: "true"
 outputs:
   result:
-    description: synced, current, skipped, or failed
+    description: synced, current, waiting, skipped, or failed
     value: ${{ steps.sync.outputs.result }}
 runs:
   using: composite
@@ -24,6 +27,7 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.token }}
+        HEAL: ${{ inputs.heal }}
       run: '"$GITHUB_ACTION_PATH/action.sh"'
     - if: failure() && steps.sync.outputs.key != ''
       shell: bash

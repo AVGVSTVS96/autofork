@@ -39,6 +39,11 @@ function commitUpstream(text: string, message: string) {
   sh(upstream, `git commit -qam '${message}'`);
 }
 
+function patch(id: string, text: string) {
+  mkdirSync(join(fork, ".autopatch", id), { recursive: true });
+  write(fork, `.autopatch/${id}/PATCH.md`, `${text}\n`);
+}
+
 test("init tracks upstream", () => {
   mkdirSync(upstream);
   sh(upstream, "git init -q");
@@ -49,21 +54,20 @@ test("init tracks upstream", () => {
   sh(home, `git clone -q ${upstream} fork`);
   const { ok, log } = autopatch(fork, "init", upstream, "--verify", "node -e \"import('./app.js').then(m => process.exit(m.greet('x') === 'x' ? 1 : 0))\"");
   expect(ok).toBe(true);
-  expect(log).toContain(`autopatch tracks ${upstream} (main)`);
+  expect(log).toContain(`autopatch follows ${upstream} (main)`);
+  expect(file(fork, ".github/workflows/autopatch.yml")).toContain("heal: ${{ github.event.schedule != '0 */6 * * *' }}");
   sh(fork, "git add -A && git commit -qm 'track upstream'");
 });
 
-test("add captures uncommitted changes as a patch", () => {
+test("save turns your changes into the patch PATCH.md describes", () => {
   write(fork, "app.js", 'export function greet(name) {\n  return "hello " + name.toUpperCase();\n}\n');
-  const { ok, log } = autopatch(fork, "add", "shout");
+  expect(autopatch(fork, "save", "shout").log).toContain("write .autopatch/shout/PATCH.md first");
+  patch("shout", "greet() shouts the name in upper case.");
+  const { ok, log } = autopatch(fork, "save", "shout");
   expect(ok).toBe(true);
-  expect(log).toContain("captured 1 file in .autopatch/shout");
+  expect(log).toContain("saved 1 file to .autopatch/shout");
   expect(file(fork, ".autopatch/shout/shout.patch")).toContain("+  return \"hello \" + name.toUpperCase();");
   sh(fork, "git add -A && git commit -qm 'shout'");
-  expect(autopatch(fork, "sync").log).toContain("PATCH.md is empty");
-  expect(autopatch(fork, "add", "shout", "greet() shouts the name in upper case.").log).toContain("rewrote .autopatch/shout/PATCH.md");
-  expect(file(fork, ".autopatch/shout/PATCH.md")).toBe("greet() shouts the name in upper case.\n");
-  sh(fork, "git add -A && git commit -qm 'shout intent'");
   expect(sh(fork, "git ls-files .autopatch/shout")).toContain("shout.patch");
 });
 
@@ -77,7 +81,7 @@ test("sync with nothing new is a no-op", () => {
 test("a clean upstream change applies without the agent", () => {
   write(upstream, "notes.txt", "two\n");
   sh(upstream, "git commit -qam notes");
-  const { ok, log } = autopatch(fork, "sync");
+  const { ok, log } = autopatch(fork, "sync", "--no-heal");
   expect(ok).toBe(true);
   expect(log).not.toContain("healing");
   expect(file(fork, "notes.txt")).toBe("two\n");
@@ -85,8 +89,17 @@ test("a clean upstream change applies without the agent", () => {
   expect(sh(fork, "git log -1 --format=%P").split(" ")).toHaveLength(2);
 });
 
-test("a drifted patch is healed from its intent", () => {
+test("a drifted patch waits for a run that heals", () => {
   commitUpstream('export function greet(name) {\n  return "hi " + name;\n}\n', "hi");
+  const head = sh(fork, "git rev-parse HEAD");
+  const { ok, log } = autopatch(fork, "sync", "--no-heal");
+  expect(ok).toBe(true);
+  expect(log).toContain("shout doesn't apply");
+  expect(log).toContain("The next heal run rebuilds it");
+  expect(sh(fork, "git rev-parse HEAD")).toBe(head);
+});
+
+test("a drifted patch is healed from its PATCH.md", () => {
   agent(`sed -i 's/"hi " + name;/"hi " + name.toUpperCase();/' app.js`);
   const { ok, log } = autopatch(fork, "sync");
   expect(ok).toBe(true);
@@ -113,19 +126,17 @@ test("a patch upstream absorbed is dropped with the agent's reason", () => {
   const { ok, log } = autopatch(fork, "sync");
   expect(ok).toBe(true);
   expect(log).toContain("dropped shout: upstream greet() upper-cases the name now");
-  expect(JSON.parse(file(fork, ".autopatch/config.json")).patches).toEqual([]);
   expect(sh(fork, "ls .autopatch")).toBe("config.json");
 });
 
-test("a patch that's only intent is built by the agent", () => {
-  const { ok, log } = autopatch(fork, "add", "wave", "greet() waves at the end.");
-  expect(ok).toBe(true);
-  expect(log).toContain("added wave");
-  sh(fork, "git add -A && git commit -qm 'wave'");
+test("a patch that's only a PATCH.md is built by the agent", () => {
+  patch("wave", "greet() waves at the end.");
+  sh(fork, "git add -A && git commit -qm wave");
+  expect(autopatch(fork, "status").log).toContain("wave  (not built yet)");
   agent(`sed -i 's/ + "!";/ + "! o\\/";/' app.js`);
-  const synced = autopatch(fork, "sync");
-  expect(synced.ok).toBe(true);
-  expect(synced.log).toContain("built wave");
+  const { ok, log } = autopatch(fork, "sync");
+  expect(ok).toBe(true);
+  expect(log).toContain("built wave");
   expect(file(fork, "app.js")).toContain('"! o/"');
   expect(file(fork, ".autopatch/wave/wave.patch")).toContain('"! o/"');
   agent("exit 1");
@@ -141,4 +152,20 @@ test("files verify leaves behind stay out of the fork", () => {
   const { ok } = autopatch(fork, "sync");
   expect(ok).toBe(true);
   expect(sh(fork, "git ls-files verify-output.log")).toBe("");
+});
+
+test("a fork can follow upstream's releases instead of a branch", () => {
+  sh(upstream, "git tag v1.0.0");
+  write(upstream, "notes.txt", "four\n");
+  sh(upstream, "git commit -qam notes && git tag v1.1.0-beta.1");
+  const config = JSON.parse(file(fork, ".autopatch/config.json"));
+  write(fork, ".autopatch/config.json", `${JSON.stringify({ ...config, follow: "releases" }, null, 2)}\n`);
+  sh(fork, "git commit -qam 'follow releases'");
+  const { ok, log } = autopatch(fork, "sync");
+  expect(ok).toBe(true);
+  expect(log).toContain("already up to date");
+  expect(file(fork, "notes.txt")).toBe("three\n");
+  sh(upstream, "git tag v1.1.0");
+  expect(autopatch(fork, "sync").ok).toBe(true);
+  expect(file(fork, "notes.txt")).toBe("four\n");
 });
