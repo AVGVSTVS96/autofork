@@ -110,10 +110,14 @@ function fetchUpstream(root: string, config: Config) {
   return git(root, "rev-parse", "refs/autopatch/upstream^{commit}");
 }
 
-function latestRelease(root: string, url: string) {
+function releases(root: string, url: string) {
   const tags = git(root, "ls-remote", "--tags", "--refs", "--sort=-v:refname", url).split("\n");
-  const release = tags.map((line) => line.split("\t")[1]).find((ref) => ref && !ref.includes("-"));
-  if (!release) throw new Failure(`${url} has no release tags to follow`);
+  return tags.map((line) => line.split("\t")[1]).filter((ref) => ref && !ref.includes("-"));
+}
+
+function latestRelease(root: string, url: string) {
+  const release = releases(root, url)[0];
+  if (!release) throw new Failure(`${url} has no release tags. Follow a branch instead: set "follow" in ${DIR}/config.json`);
   return release;
 }
 
@@ -316,6 +320,10 @@ async function sync(root: string, args: string[]) {
     say(`already failed on upstream ${short(source)} with this fork, skipping until either changes`);
     return output({ result: "skipped" });
   }
+  if (base === source && config.patches.every((id) => !isEmpty(patchFile(root, id)))) {
+    say(`already up to date with ${config.upstream} at ${short(source)}`);
+    return output({ result: "current" });
+  }
   const moved = base === source ? short(source) : `${short(base)} → ${short(source)}`;
   say(`upstream ${moved}, ${config.patches.length} patch${config.patches.length === 1 ? "" : "es"}`);
   let result: Build | undefined;
@@ -324,7 +332,7 @@ async function sync(root: string, args: string[]) {
       result = build(root, config, source, { healFrom: args.includes("--no-heal") ? undefined : base });
     } catch (error) {
       if (!(error instanceof Drifted)) throw error;
-      say(`${error.message}. The next heal run rebuilds it.`);
+      say(`${error.message}. The next run that heals rebuilds it.`);
       return output({ result: "waiting" });
     }
     if (config.verify && !shell(config.verify, result.dir)) throw new Failure(`verify failed: ${config.verify}`);
@@ -361,7 +369,7 @@ async function save(root: string, args: string[]) {
   fetchUpstream(root, config);
   const files = workingTree(root);
   const { base, rebuilt, drift } = check(root, config, files);
-  if (!drift.length) return say(`nothing to save: your code matches what the patches build. Push ${DIR}/${id}/PATCH.md as it is and the next heal run builds it.`);
+  if (!drift.length) return say(`nothing to save: your code matches what the patches build. Push ${DIR}/${id}/PATCH.md as it is and the next sync has an agent build it.`);
   const fold = join(git(root, "rev-parse", "--path-format=absolute", "--git-dir"), "autopatch-fold.patch");
   writeFileSync(fold, gitBytes(root, "diff-tree", "-p", "--binary", "--full-index", rebuilt, files, "--", ...SOURCE));
   const result = build(root, config, base, { fold: { id, patch: fold } });
@@ -374,14 +382,11 @@ async function save(root: string, args: string[]) {
   }
 }
 
-const UPDATE = "0 */6 * * *";
-
 const WORKFLOW = `name: autopatch
 
 on:
   schedule:
-    - cron: "${UPDATE}"
-    - cron: "30 6 * * *"
+    - cron: "17 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -400,16 +405,16 @@ jobs:
           persist-credentials: false
       # Set up whatever your verify command needs here (node, bun, rust, ...).
       - uses: AVGVSTVS96/autopatch@v1
-        with:
-          heal: \${{ github.event.schedule != '${UPDATE}' }}
         env:
           CLAUDE_CODE_OAUTH_TOKEN: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 `;
 
 function setup(root: string, upstream: string, args: string[]) {
   if (existsSync(configFile(root))) throw new Failure(`${DIR}/config.json already exists`);
-  const head = run("git", ["ls-remote", "--symref", upstreamUrl(upstream), "HEAD"], root).out.toString();
-  const follow = flag(args, "--follow") ?? head.match(/^ref: refs\/heads\/(\S+)\s+HEAD/m)?.[1] ?? "main";
+  const url = upstreamUrl(upstream);
+  const head = run("git", ["ls-remote", "--symref", url, "HEAD"], root).out.toString();
+  const branch = head.match(/^ref: refs\/heads\/(\S+)\s+HEAD/m)?.[1] ?? "main";
+  const follow = flag(args, "--follow") ?? (releases(root, url).length ? "releases" : branch);
   const config: Config = { upstream, follow, verify: flag(args, "--verify") };
   writeConfig(root, config);
   const workflow = join(root, ".github/workflows/autopatch.yml");
@@ -418,20 +423,20 @@ function setup(root: string, upstream: string, args: string[]) {
   fetchUpstream(root, config);
   const { drift } = check(root, { ...config, patches: [] }, workingTree(root));
   const inherited = git(root, "ls-files", ".github/workflows").split("\n").filter((file) => file && !file.endsWith("/autopatch.yml"));
-  say(`autopatch follows ${upstream} (${follow === "releases" ? "its releases" : follow}).`);
+  say(follow === "releases" ? `autopatch follows ${upstream}'s releases.` : `autopatch follows ${upstream}'s ${follow} branch${flag(args, "--follow") ? "" : ", since it has no releases"}.`);
   if (inherited.length) say(`Your fork has ${inherited.length} workflow${inherited.length === 1 ? "" : "s"} copied from upstream, and they run here too. Delete the ones you don't want; upstream's new ones never get copied in.`);
   if (drift.length) say(`Your branch already changes ${drift.length} file${drift.length === 1 ? "" : "s"}. Save them as a patch: write ${DIR}/<id>/PATCH.md, then autopatch save <id>`);
 }
 
 async function init(root: string, args: string[]) {
-  if (!args[0]) throw new Failure("usage: autopatch init <owner/repo | git url> [--verify <command>] [--follow <branch | releases>]");
+  if (!args[0]) throw new Failure("usage: autopatch init <owner/repo | git url> [--follow <releases | branch>] [--verify <command>]");
   setup(root, args[0], args);
   say("Add a CLAUDE_CODE_OAUTH_TOKEN secret (claude setup-token), commit, and push.");
 }
 
 async function fork(cwd: string, args: string[]) {
   const upstream = args[0];
-  if (!/^[\w.-]+\/[\w.-]+$/.test(upstream ?? "")) throw new Failure("usage: autopatch fork <owner/repo> [--verify <command>] [--follow <branch | releases>]");
+  if (!/^[\w.-]+\/[\w.-]+$/.test(upstream ?? "")) throw new Failure("usage: autopatch fork <owner/repo> [--follow <releases | branch>] [--verify <command>]");
   if (!run("gh", ["repo", "fork", upstream, "--clone", "--default-branch-only"], cwd).ok) throw new Failure("gh couldn't fork it. Is the GitHub CLI installed and logged in?");
   const root = join(cwd, upstream.split("/")[1]);
   setup(root, upstream, args);
@@ -458,11 +463,20 @@ async function status(root: string) {
 
 const USAGE = `autopatch: fork anything and keep your changes
 
-  autopatch fork <owner/repo>   fork it, set it up and push, in one go
-  autopatch init <owner/repo>   set up a fork you already have
+Usage:
+  autopatch fork <owner/repo>   fork it on GitHub, set it up and push
+  autopatch init <owner/repo>   set up a fork you already have, from inside it
   autopatch save <id>           save your changes as the patch in .autopatch/<id>
   autopatch status              your patches, and changes no patch holds yet
   autopatch sync                rebuild on upstream; an agent heals what no longer applies
+
+Options for fork and init:
+  --follow <releases | branch>  what to keep up with (default: releases, or the
+                                default branch if upstream has none)
+  --verify <command>            the command that checks a build
+
+A patch is .autopatch/<id>/PATCH.md, saying what the change does and why, next
+to <id>.patch, the diff. https://github.com/AVGVSTVS96/autopatch
 `;
 
 const commands: Record<string, (root: string, args: string[]) => Promise<unknown>> = { init, save, status, sync };

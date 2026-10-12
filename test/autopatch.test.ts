@@ -54,8 +54,7 @@ test("init tracks upstream", () => {
   sh(home, `git clone -q ${upstream} fork`);
   const { ok, log } = autopatch(fork, "init", upstream, "--verify", "node -e \"import('./app.js').then(m => process.exit(m.greet('x') === 'x' ? 1 : 0))\"");
   expect(ok).toBe(true);
-  expect(log).toContain(`autopatch follows ${upstream} (main)`);
-  expect(file(fork, ".github/workflows/autopatch.yml")).toContain("heal: ${{ github.event.schedule != '0 */6 * * *' }}");
+  expect(log).toContain(`autopatch follows ${upstream}'s main branch, since it has no releases`);
   sh(fork, "git add -A && git commit -qm 'track upstream'");
 });
 
@@ -95,7 +94,7 @@ test("a drifted patch waits for a run that heals", () => {
   const { ok, log } = autopatch(fork, "sync", "--no-heal");
   expect(ok).toBe(true);
   expect(log).toContain("shout doesn't apply");
-  expect(log).toContain("The next heal run rebuilds it");
+  expect(log).toContain("The next run that heals rebuilds it");
   expect(sh(fork, "git rev-parse HEAD")).toBe(head);
 });
 

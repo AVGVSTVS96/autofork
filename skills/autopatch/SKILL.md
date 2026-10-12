@@ -19,7 +19,7 @@ A fork with an `.autopatch/` folder is upstream plus patches. A workflow rebuild
 npx github:AVGVSTVS96/autopatch fork owner/repo --verify "<command that checks a build>"
 ```
 
-It needs `gh` logged in. If `CLAUDE_CODE_OAUTH_TOKEN` is set, it also adds that secret; otherwise tell the user to run `claude setup-token` and `gh secret set CLAUDE_CODE_OAUTH_TOKEN`. In a fork that's already cloned, use `init owner/repo` instead.
+It follows upstream's releases, or its default branch if it has none. `--follow <branch>` picks a branch. It needs `gh` logged in. If `CLAUDE_CODE_OAUTH_TOKEN` is set, it also adds that secret; otherwise tell the user to run `claude setup-token` and `gh secret set CLAUDE_CODE_OAUTH_TOKEN`. In a fork that's already cloned, use `init owner/repo` instead.
 
 ## Change a fork
 
@@ -30,4 +30,4 @@ It needs `gh` logged in. If `CLAUDE_CODE_OAUTH_TOKEN` is set, it also adds that 
 
 Every source change must belong to a patch: a sync refuses to run while the fork has changes no patch holds, and `autopatch status` lists them. To change an existing patch, edit the code, update its `PATCH.md` if the intent changed, and `save` the same id.
 
-A patch can also be just a `PATCH.md`. Push it and the next heal run builds it.
+A patch can also be just a `PATCH.md`. Push it and the next sync has an agent build it.
