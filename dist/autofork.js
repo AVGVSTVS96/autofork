@@ -54,6 +54,7 @@ var flag = (args, name) => args.includes(name) ? args[args.indexOf(name) + 1] : 
 var short = (sha) => sha.slice(0, 12);
 var patchFile = (dir, id) => join(dir, DIR, id, `${id}.patch`);
 var patchDoc = (dir, id) => join(dir, DIR, id, "PATCH.md");
+var upstreamDoc = (dir, id) => join(dir, DIR, id, "UPSTREAM.md");
 var configFile = (dir) => join(dir, DIR, "config.json");
 function output(values) {
   const file = process.env.GITHUB_OUTPUT;
@@ -67,7 +68,7 @@ function readConfig(root) {
     throw new Failure("no .autofork/config.json here. Start with: autofork init <owner/repo>");
   }
   const { branch, patches: _, ...config } = JSON.parse(readFileSync(configFile(root), "utf8"));
-  return { follow: branch ?? "main", ...config, patches: discover(root) };
+  return { follow: branch ?? "main", ...config, patches: discover(root).filter((id) => !existsSync(upstreamDoc(root, id))) };
 }
 function discover(root) {
   return readdirSync(join(root, DIR), { withFileTypes: true }).filter((entry) => entry.isDirectory() && existsSync(patchDoc(root, entry.name))).map((entry) => entry.name).sort();
@@ -170,7 +171,7 @@ ${steps.map((step, index) => `${index + 1}. ${step}`).join(`
 `)}
 
 Don't edit anything in ${DIR}/ or .github/, and don't commit. Leave only your source change: remove anything your checks generated that git would pick up.
-If upstream already does what PATCH.md asks on its own, change nothing and write one line saying how to ${DIR}/${id}/OBSOLETE.`;
+If upstream already does what PATCH.md asks, or something close enough that building it would duplicate upstream's own version, change nothing and write one line saying what upstream does to ${DIR}/${id}/UPSTREAM.md.`;
 }
 var installed = (bin) => run("sh", ["-c", `command -v ${bin}`], ".").ok;
 function agentCommand(config) {
@@ -195,7 +196,6 @@ function changed(dir) {
 }
 function heal(config, build, id, source, from) {
   const prompt = healPrompt(config, build, id, source, from);
-  const obsolete = join(build.dir, DIR, id, "OBSOLETE");
   const [doing, done] = isEmpty(patchFile(build.dir, id)) ? ["building", "built"] : ["healing", "healed"];
   let nudge = "";
   for (let attempt = 1;attempt <= 2; attempt++) {
@@ -203,19 +203,19 @@ function heal(config, build, id, source, from) {
     if (!shell(agentCommand(config), build.dir, prompt + nudge))
       throw new Failure(`the agent failed while ${doing} ${id}`);
     git(build.dir, "reset", "--soft", "--quiet", build.steps.at(-1));
-    const reason = existsSync(obsolete) ? readFileSync(obsolete, "utf8").trim() : "";
+    const reason = existsSync(upstreamDoc(build.dir, id)) ? readFileSync(upstreamDoc(build.dir, id), "utf8").trim() : "";
     restoreControl(build.dir, build.steps[0]);
     if (changed(build.dir)) {
       build.healed.push(`${done} ${id}`);
       return;
     }
     if (reason) {
-      build.dropped.set(id, reason);
+      build.upstreamHas.set(id, reason);
       return;
     }
     nudge = `
 
-Your last attempt exited without changing any source file. Build what PATCH.md asks for, or write ${DIR}/${id}/OBSOLETE if upstream already covers it.`;
+Your last attempt exited without changing any source file. Build what PATCH.md asks for, or write ${DIR}/${id}/UPSTREAM.md if upstream already covers it.`;
   }
   throw new Failure(`the agent changed nothing while ${doing} ${id}`);
 }
@@ -252,13 +252,15 @@ function worktree(root, base) {
 }
 function build(root, config, base, options) {
   const dir = worktree(root, base);
-  const build = { dir, steps: [commit(dir, `upstream ${short(base)}`)], healed: [], dropped: new Map };
+  const build = { dir, source: base, steps: [commit(dir, `upstream ${short(base)}`)], healed: [], upstreamHas: new Map };
   for (const id of config.patches) {
     const file = patchFile(dir, id);
     if (isEmpty(file) ? options.healFrom : !apply(dir, file)) {
       if (!options.healFrom)
         throw new Drifted(`${id} doesn't apply to ${short(base)}`);
       heal(config, build, id, base, options.healFrom);
+    } else if (!isEmpty(file) && !changed(dir)) {
+      build.upstreamHas.set(id, "the same change, line for line");
     }
     if (options.fold?.id === id && !apply(dir, options.fold.patch)) {
       throw new Failure(`your changes don't apply on top of ${id}`);
@@ -273,8 +275,15 @@ function refresh(target, config, build) {
     if (diff.length || existsSync(patchFile(target, id)))
       writeFileSync(patchFile(target, id), diff);
   });
-  for (const id of build.dropped.keys())
-    rmSync(join(target, DIR, id), { recursive: true, force: true });
+  for (const [id, reason] of build.upstreamHas) {
+    rmSync(patchFile(target, id), { force: true });
+    writeFileSync(upstreamDoc(target, id), `${reason}
+
+${config.upstream} does this on its own as of ${short(build.source)}, so autofork stopped applying this patch.
+To keep upstream's version, delete ${DIR}/${id}/.
+To keep yours, say in PATCH.md how it differs from upstream's, delete this file and push. The next sync rebuilds it.
+`);
+  }
 }
 function cleanup(root, build) {
   if (build)
@@ -353,7 +362,7 @@ Save them as a patch first: write ${DIR}/<id>/PATCH.md, then run autofork save <
       parents.push("-p", source);
     const lines = [
       ...result.healed,
-      ...[...result.dropped].map(([id, reason]) => `dropped ${id}: ${reason}`)
+      ...[...result.upstreamHas].map(([id, reason]) => `upstream has ${id}: ${reason}`)
     ];
     const message = [`autofork: sync ${config.upstream} to ${short(source)}`, lines.join(`
 `)].filter(Boolean).join(`
@@ -373,6 +382,7 @@ async function save(root, args) {
   if (!existsSync(patchDoc(root, id)))
     throw new Failure(`write ${DIR}/${id}/PATCH.md first: what the change does and why`);
   intent(root, id);
+  rmSync(upstreamDoc(root, id), { force: true });
   const config = readConfig(root);
   fetchUpstream(root, config);
   const files = workingTree(root);
@@ -399,6 +409,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 concurrency: autofork
 
@@ -455,6 +466,7 @@ async function fork(cwd, args) {
   setup(root, upstream, args);
   const repo = run("gh", ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"], root).out.toString().trim();
   run("gh", ["api", "-X", "PUT", `repos/${repo}/actions/permissions`, "-F", "enabled=true"], root);
+  run("gh", ["repo", "edit", repo, "--enable-issues"], root);
   const token = process.env.CLAUDE_CODE_OAUTH_TOKEN;
   if (token)
     run("gh", ["secret", "set", "CLAUDE_CODE_OAUTH_TOKEN", "--repo", repo, "--body", token], root);
@@ -471,8 +483,10 @@ async function status(root) {
   const { base, drift } = check(root, config, workingTree(root));
   const behind = git(root, "rev-list", "--count", "--first-parent", `${base}..refs/autofork/upstream`);
   say(`${config.upstream} at ${short(base)}, ${behind} commit${behind === "1" ? "" : "s"} behind upstream`);
-  for (const id of config.patches)
-    say(`  ${id}${isEmpty(patchFile(root, id)) ? "  (not built yet)" : ""}`);
+  for (const id of discover(root)) {
+    const note = existsSync(upstreamDoc(root, id)) ? "  (upstream has it: see UPSTREAM.md)" : isEmpty(patchFile(root, id)) ? "  (not built yet)" : "";
+    say(`  ${id}${note}`);
+  }
   if (drift.length)
     say(`not in any patch yet:
   ${drift.join(`

@@ -31,3 +31,7 @@ It follows upstream's releases, or its default branch if it has none. `--follow 
 Every source change must belong to a patch: a sync refuses to run while the fork has changes no patch holds, and `autofork status` lists them. To change an existing patch, edit the code, update its `PATCH.md` if the intent changed, and `save` the same id.
 
 A patch can also be just a `PATCH.md`. Push it and the next sync has an agent build it.
+
+## When upstream has a patch
+
+If `.autofork/<id>/UPSTREAM.md` exists, upstream shipped its own version of that patch and autofork stopped applying it. Show the user what it says and ask which they want. Upstream's: delete `.autofork/<id>/`. Theirs: update `PATCH.md` to say how theirs differs from upstream's, delete `UPSTREAM.md`, and push; the next sync rebuilds it.

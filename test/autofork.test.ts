@@ -119,13 +119,32 @@ test("sync refuses to drop changes no patch holds", () => {
   sh(fork, "git reset -q --hard HEAD~1");
 });
 
-test("a patch upstream absorbed is dropped with the agent's reason", () => {
+test("a patch upstream now does is paused, not applied, until you pick it up", () => {
   commitUpstream('export function greet(name) {\n  return "hi " + name.toUpperCase() + "!";\n}\n', "shout upstream");
-  agent("echo 'upstream greet() upper-cases the name now' > .autofork/shout/OBSOLETE");
+  agent("echo 'upstream greet() upper-cases the name now' > .autofork/shout/UPSTREAM.md");
   const { ok, log } = autofork(fork, "sync");
   expect(ok).toBe(true);
-  expect(log).toContain("dropped shout: upstream greet() upper-cases the name now");
-  expect(sh(fork, "ls .autofork")).toBe("config.json");
+  expect(log).toContain("upstream has shout: upstream greet() upper-cases the name now");
+  expect(sh(fork, "ls .autofork/shout")).toBe("PATCH.md\nUPSTREAM.md");
+  expect(file(fork, ".autofork/shout/UPSTREAM.md")).toContain("autofork stopped applying this patch");
+  expect(file(fork, "app.js")).toContain('"hi " + name.toUpperCase() + "!"');
+  expect(autofork(fork, "status").log).toContain("shout  (upstream has it");
+  agent("exit 1");
+  write(upstream, "notes.txt", "two and a half\n");
+  sh(upstream, "git commit -qam notes");
+  expect(autofork(fork, "sync").ok).toBe(true);
+  expect(file(fork, "notes.txt")).toBe("two and a half\n");
+});
+
+test("deleting UPSTREAM.md brings your version back", () => {
+  write(fork, ".autofork/shout/PATCH.md", "greet() shouts the name and ends with three bangs, not upstream's one.\n");
+  sh(fork, "git rm -q .autofork/shout/UPSTREAM.md && git commit -qam 'keep mine'");
+  agent(`sed -i 's/ + "!";/ + "!!!";/' app.js`);
+  const { ok, log } = autofork(fork, "sync");
+  expect(ok).toBe(true);
+  expect(log).toContain("built shout");
+  expect(file(fork, "app.js")).toContain('"!!!"');
+  sh(fork, "git rm -rq .autofork/shout && git checkout refs/autofork/upstream -- app.js && git commit -qm 'take upstream'");
 });
 
 test("a patch that's only a PATCH.md is built by the agent", () => {
@@ -140,6 +159,15 @@ test("a patch that's only a PATCH.md is built by the agent", () => {
   expect(file(fork, ".autofork/wave/wave.patch")).toContain('"! o/"');
   agent("exit 1");
   expect(autofork(fork, "sync").log).toContain("already up to date");
+});
+
+test("a patch upstream merged as is is paused without the agent", () => {
+  commitUpstream(file(fork, "app.js"), "merge the wave");
+  agent("exit 1");
+  const { ok, log } = autofork(fork, "sync");
+  expect(ok).toBe(true);
+  expect(log).toContain("upstream has wave: the same change, line for line");
+  expect(sh(fork, "ls .autofork/wave")).toBe("PATCH.md\nUPSTREAM.md");
 });
 
 test("files verify leaves behind stay out of the fork", () => {

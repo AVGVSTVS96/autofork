@@ -46,4 +46,12 @@ if [ "$(git rev-parse HEAD)" != "$head" ]; then
     -f message="$(git log -1 --format=%B)" -f tree="$(git rev-parse 'HEAD^{tree}')" "${parents[@]}" --jq .sha)"
   gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/heads/$GITHUB_REF_NAME" -f sha="$signed" > /dev/null
   echo "pushed ${signed:0:12} to $GITHUB_REF_NAME, signed by GitHub"
+
+  for doc in $(git diff --name-only --diff-filter=A "$head" HEAD -- '.autofork/*/UPSTREAM.md'); do
+    id="$(basename "$(dirname "$doc")")"
+    if ! gh issue create -R "$GITHUB_REPOSITORY" --title "$id: upstream does this now" \
+      --body "$(cat "$doc")"$'\n\n'"Paused in ${signed:0:12}." > /dev/null; then
+      echo "::warning::upstream has $id now and autofork paused it, but couldn't open an issue about it: turn on the fork's issues and give the workflow issues: write"
+    fi
+  done
 fi
