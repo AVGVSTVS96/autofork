@@ -84,6 +84,8 @@ const iconSet = (dir, { big, bigTone, small, smallTone }) => {
 iconSet(here, { big: stack, bigTone: "blue", small: rails, smallTone: "blue" })
 // GitHub draws an app's logo at 55% of its round badge, so this one fills the tile and the badge takes the tile's color.
 writeFileSync(`${here}/github-app.svg`, tileSvg(32, stack({ rx: 0, zoom: 1.25 }), paint(tones.blue.light)))
+// The round one is a disk: its ink reaches 14.2 from the center at zoom 1, and keeps the wordmark's line width (1.27) of clear space to the edge.
+writeFileSync(`${here}/github-app-round.svg`, tileSvg(32, stack({ rx: 16, zoom: 16 / (14.2 + 1.27) }), paint(tones.blue.light)))
 // 3 · auto over fork on paper, handing off to the branch; Bassim, Oct 13: "keep 3 in our back pocket, different colors fit well still."
 iconSet(`${here}/alt`, { big: stack, bigTone: "paper", small: branch, smallTone: "trunk" })
 

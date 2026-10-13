@@ -48,6 +48,7 @@ Rule: **ultramarine is yours, gray is theirs.** Ink is for words. In dark, the u
 
 - `logo/icon.svg`, `icon-dark.svg`: rounded tile, for sheets and docs.
 - `logo/github-app.svg` → `github-app.png` (1024): the GitHub App logo. GitHub draws it at 55% of a round badge, so the mark fills the tile and the badge color is `#3B2BFF`.
+- `logo/github-app-round.svg` → `github-app-round.png` (1024, transparent corners): the same logo as a disk, the mark as big as a line's width of clearance allows. In the badge the mark comes out smaller than the square's (42% of the circle's height against 51%), since GitHub caps either image at 55%.
 - `logo/app-icon.svg` → `app-icon.png` (1024), `site/public/apple-touch-icon.png` (180) and `icon-512.png`, all full bleed; iOS and GitHub round them.
 - `logo/mark.svg`, `mark-dark.svg`, `mark-16.svg`, `mark-16-dark.svg`: the rails.
 - `logo/favicon.svg`: the rails, picking the 16px drawing when drawn at 24px or less, and following the system theme.
