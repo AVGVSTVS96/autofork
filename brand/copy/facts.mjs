@@ -90,7 +90,7 @@ const firstSync = perFork.map((fork) => fork.firstSync).sort()[0]
 const facts = {
   countedAt: new Date().toISOString(),
   owner,
-  site: "https://autofork.dev",
+  site: "https://autofork.com",
   repo: `https://github.com/${owner}/autofork`,
   action: `${owner}/autofork@v1`,
   engineToday: { repo: `https://github.com/${owner}/autopatch`, site: "https://autopatchmd.vercel.app" },

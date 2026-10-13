@@ -61,13 +61,13 @@ The site ships the same day as the product. These lines describe the product Bas
 
 - **Title:** autofork: make it yours, keep their updates
 - **Description:** Name an open source app and what you'd change. Every new release arrives with your changes already in it.
-- **Site:** https://autofork.dev (autofork.com later, once it's pointed; it isn't yet)
+- **Site:** https://autofork.com (autofork.dev redirects to it)
 - **GitHub repo description:** Make it yours, keep their updates. Your fork gets every release; when one breaks a change, an agent rebuilds it.
 
 ## OG image (1200×630)
 
 - **Big:** Make it yours. / Keep their updates.
-- **Small:** autofork.dev
+- **Small:** autofork.com
 - **Alt:** autofork: Make it yours. Keep their updates.
 - **The composer**, once: T3 Code, always show context usage, Fork it.
 - **The T3 Code fork's card**, three true moments from `facts.json` and `launch.md`, newest on top: 4 changes on top, ready for their next release; every change kept, +156 commits, Oct 12; rebuilt by the agent, a change broke on day one, +383 commits, Oct 10.

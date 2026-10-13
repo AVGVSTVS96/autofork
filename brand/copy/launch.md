@@ -31,7 +31,7 @@ Why each line is safe to say:
 ## First reply
 
 ```
-autofork.dev
+autofork.com
 
 rather run it yourself? the engine is open source: a cli and a github action that work with your own agent
 npx skills add AVGVSTVS96/autofork
@@ -49,7 +49,7 @@ An 8 to 15 second screen recording of the real site, phone legible: type `T3 Cod
 
 ## Before posting
 
-- [x] Continue with ChatGPT and Continue with Claude both work end to end on autofork.dev (Claude: AVGVSTVS96/Spoon-Knife, built in 27 s; ChatGPT: AVGVSTVS96/fzf, built in 1m 41s, both Oct 13), and the fork lands in the user's GitHub. If one isn't live, the first greentext line changes first.
+- [x] Continue with ChatGPT and Continue with Claude both work end to end on autofork.dev (Claude: AVGVSTVS96/Spoon-Knife, built in 27 s; ChatGPT: AVGVSTVS96/fzf, built in 1m 41s, both Oct 13), and the fork lands in the user's GitHub. Since the switch to autofork.com (autofork.dev now 308s to it, GitHub App callback autofork.com first), GitHub sign-in works there end to end and both agent sign-ins start there (Oct 13). If one isn't live, the first greentext line changes first.
 - [ ] `node copy/facts.mjs` rerun right before posting; if the T3 Code fork's 156 or its heal count moved, update the post.
 - [x] `npx skills add AVGVSTVS96/autofork` works (checked Oct 13: finds the autofork skill).
 - [ ] Visual attached (`launch-kit/autofork-fork-clip.mp4`), link only in the reply.
