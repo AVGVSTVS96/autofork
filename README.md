@@ -89,7 +89,8 @@ Your agent then knows how to fork a repo and keep its changes as patches.
 
 ```
 $ npx github:AVGVSTVS96/autofork --help
-autofork: fork anything and keep your changes
+autofork: Make it yours. Keep their updates.
+Name an open source app and what you'd change. Every new release arrives with your changes already in it.
 
 Usage:
   autofork fork <owner/repo>    fork it on GitHub, set it up and push

@@ -1,7 +1,7 @@
 {
   "name": "autofork",
   "version": "0.1.0",
-  "description": "Keep your changes on top of someone else's repo. An agent heals the patches that drift.",
+  "description": "Name an open source app and what you'd change. Every new release arrives with your changes already in it.",
   "type": "module",
   "license": "MIT",
   "repository": "github:AVGVSTVS96/autofork",

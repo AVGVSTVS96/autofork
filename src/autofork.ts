@@ -496,7 +496,8 @@ async function status(root: string) {
   if (drift.length) say(`not in any patch yet:\n  ${drift.join("\n  ")}`);
 }
 
-const USAGE = `autofork: fork anything and keep your changes
+const USAGE = `autofork: Make it yours. Keep their updates.
+Name an open source app and what you'd change. Every new release arrives with your changes already in it.
 
 Usage:
   autofork fork <owner/repo>    fork it on GitHub, set it up and push
