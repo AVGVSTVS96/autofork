@@ -88,12 +88,12 @@ Excluded: `vocals, voice, choir, vocal chops, dubstep, heavy drop, gong, cinemat
 
 ## Cinetic score takes (saves, no Suno)
 
-Rendered by cinetic's own engine (`scripts/audio/score.py` in Leon Lin's cinetic): tuned, deterministic, at exactly 126 BPM so every bar of the saves cut lands on the grid. Each is the length of the picture (40.7 s), -14 LUFS, and ends in digital silence. Re-render: `uv run --with numpy --with scipy --with pyloudnorm --with soundfile python3 <cinetic>/skills/cinetic/scripts/audio/score.py --cues cinetic/cues.json --score cinetic/score-a.json --out cinetic-saves-a.wav`. Not listened to; judged by the loudness map only. Previews muxed onto saves' video.mp4 are in `previews/` (untracked).
+Rendered by cinetic's own engine (`scripts/audio/score.py` in Leon Lin's cinetic), music only (no cues), at 126.2 BPM like the saves cut. `cinetic/build.py` renders four short scores (feed to the name, name to composer, composer to end card, end card) and joins them on beats, so the cut's landmarks fall on bar starts: drive on the name at 16.162 s, a fresh downbeat on the composer at 19.014 s, the resolve chord on the end card at 36.126 s. The feed's four sparse bars run to 7.6 s and the groove drops there, as before. 38.8 s, about -13 LUFS before saves' own -14 mix, ends on a fade. Re-render: `python3 cinetic/build.py .. a b` (needs uv; scores and chords are in the script). Not listened to; judged by the loudness map only. Previews on the saves cut are in `previews/` (untracked).
 
 | File | Key | What it does | Why it fits saves |
 |---|---|---|---|
-| cinetic-saves-a.wav | F major | 4 bars of breakdown with the clock tick (0-7.6 s), groove from 7.6 s, drive at 17.1 s on the wordmark's downbeat, groove to the end card, a soft resolve chord at 38.1 s | bar lines at 7.62, 17.14 and 38.10 s are exactly the storyboard's drop, name and end card |
-| cinetic-saves-b.wav | A dorian | same grid, four-on-the-floor from 7.6 s, brighter at 17.1 s, minor colour | darker and more tense under the X feed, a cooler read |
+| cinetic-saves-a.wav | F major | clock-tick breakdown 0-7.6 s, groove to the name, drive 16.2-19.0 s, groove through the product to a soft resolve at 36.1 s | the engine's section changes sit on the storyboard's cuts |
+| cinetic-saves-b.wav | A dorian | same grid, four-on-the-floor from 7.6 s on, brighter at the name, minor colour | darker and more tense under the X feed |
 
 ## Suno takes still in the library, not exported
 
