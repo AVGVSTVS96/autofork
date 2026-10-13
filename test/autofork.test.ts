@@ -151,12 +151,13 @@ test("a patch that's only a PATCH.md is built by the agent", () => {
   patch("wave", "greet() waves at the end.");
   sh(fork, "git add -A && git commit -qm wave");
   expect(autofork(fork, "status").log).toContain("wave  (not built yet)");
-  agent(`sed -i 's/ + "!";/ + "! o\\/";/' app.js`);
+  agent(`sed -i 's/ + "!";/ + "! o\\/";/' app.js\nprintf '\\nThe wave is text, so it works in any terminal.\\n' >> .autofork/wave/PATCH.md`);
   const { ok, log } = autofork(fork, "sync");
   expect(ok).toBe(true);
   expect(log).toContain("built wave");
   expect(file(fork, "app.js")).toContain('"! o/"');
   expect(file(fork, ".autofork/wave/wave.patch")).toContain('"! o/"');
+  expect(file(fork, ".autofork/wave/PATCH.md")).toBe("greet() waves at the end.\n\nThe wave is text, so it works in any terminal.\n");
   agent("exit 1");
   expect(autofork(fork, "sync").log).toContain("already up to date");
 });

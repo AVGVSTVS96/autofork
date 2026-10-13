@@ -161,7 +161,8 @@ To see what upstream changed under it: git diff ${from} ${source} -- ${files.joi
     `Read ${DIR}/${id}/PATCH.md. It says what the patch does and why, and that's the contract.`,
     ...fresh ? [] : [`${DIR}/${id}/${id}.patch is how it was done before. Use it as a guide, not as text to force in.${changes}`],
     "Build it on the current source, the smallest change that fully does what PATCH.md says. Build on what upstream has now: where upstream has its own version of what the patch touches, change that rather than bringing the old one back. Follow upstream's code and conventions, and leave everything else alone.",
-    ...config.verify ? [`Run \`${config.verify}\` and fix what your change breaks. Patches after this one aren't applied yet.`] : []
+    ...config.verify ? [`Run \`${config.verify}\` and fix what your change breaks. Patches after this one aren't applied yet.`] : [],
+    ...fresh ? [`Add a short paragraph to the end of ${DIR}/${id}/PATCH.md on why it's built the way it is, for whoever rebuilds it after upstream moves. Keep what's there as it is.`] : []
   ];
   return `You are keeping a patched fork of ${config.upstream} in sync. The fork is upstream plus a stack of patches, each one described in ${DIR}/<id>/PATCH.md.
 
@@ -170,7 +171,7 @@ This checkout is upstream at ${source}${before.length ? `, with ${before.join(",
 ${steps.map((step, index) => `${index + 1}. ${step}`).join(`
 `)}
 
-Don't edit anything in ${DIR}/ or .github/, and don't commit. Leave only your source change: remove anything your checks generated that git would pick up.
+Don't edit anything ${fresh ? "else " : ""}in ${DIR}/ or .github/, and don't commit. Leave only your source change: remove anything your checks generated that git would pick up.
 If upstream already does what PATCH.md asks, or something close enough that building it would duplicate upstream's own version, change nothing and write one line saying what upstream does to ${DIR}/${id}/UPSTREAM.md.`;
 }
 var installed = (bin) => run("sh", ["-c", `command -v ${bin}`], ".").ok;
@@ -196,7 +197,10 @@ function changed(dir) {
 }
 function heal(config, build, id, source, from) {
   const prompt = healPrompt(config, build, id, source, from);
-  const [doing, done] = isEmpty(patchFile(build.dir, id)) ? ["building", "built"] : ["healing", "healed"];
+  const fresh = isEmpty(patchFile(build.dir, id));
+  const [doing, done] = fresh ? ["building", "built"] : ["healing", "healed"];
+  const doc = patchDoc(build.dir, id);
+  const wish = readFileSync(doc, "utf8").trimEnd();
   let nudge = "";
   for (let attempt = 1;attempt <= 2; attempt++) {
     say(`${doing} ${id}${attempt > 1 ? " (second try)" : ""}`);
@@ -204,8 +208,11 @@ function heal(config, build, id, source, from) {
       throw new Failure(`the agent failed while ${doing} ${id}`);
     git(build.dir, "reset", "--soft", "--quiet", build.steps.at(-1));
     const reason = existsSync(upstreamDoc(build.dir, id)) ? readFileSync(upstreamDoc(build.dir, id), "utf8").trim() : "";
+    const why = fresh && existsSync(doc) ? readFileSync(doc, "utf8") : "";
     restoreControl(build.dir, build.steps[0]);
     if (changed(build.dir)) {
+      if (why.startsWith(wish))
+        writeFileSync(doc, why);
       build.healed.push(`${done} ${id}`);
       return;
     }
