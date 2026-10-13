@@ -71,7 +71,7 @@ export const stack = ({ rx = 7.5, id } = {}) => {
   const auto = set("auto", size, x, top), fork = set("fork", size, x, top + lead)
   const y1 = top + lead + gap, y2 = y1 + drop
   const start = Math.min(auto.x1, fork.x1), endX = fork.x2 - r
-  const p0 = fork.parts[0].x1 - w * 0.6, p1 = p0 + drop * 1.25
+  const p0 = fork.parts[0].x1 + w * 0.6, p1 = p0 + drop * 1.25
   return clipped(32, rx,
     `<path class="ink" d="${auto.d}${fork.d}"/>` +
     line("you", w, `M${f(p0)} ${f(y1)}${peelX(p0, y1, p1, y2)}H${f(endX)}`) +
