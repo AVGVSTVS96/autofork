@@ -512,10 +512,9 @@ function addNote(root: string, upstream: string, base: string, drift: string[]) 
   return readme;
 }
 
-function ownRepo(root: string) {
-  const origin = run("git", ["remote", "get-url", "origin"], root);
-  const view = run("gh", ["repo", "view", ...(origin.ok ? [origin.out.toString().trim()] : []), "--json", "nameWithOwner", "-q", ".nameWithOwner"], root);
-  return view.ok ? view.out.toString().trim() : "";
+function origin(root: string) {
+  const url = run("git", ["remote", "get-url", "origin"], root).out.toString().trim();
+  return url.match(/github\.com[/:]([\w.-]+\/[\w.-]+?)(?:\.git)?$/)?.[1] ?? "";
 }
 
 function describe(root: string, upstream: string) {
@@ -525,7 +524,7 @@ function describe(root: string, upstream: string) {
     const result = run("gh", ["api", ...args], root);
     return result.ok ? JSON.parse(result.out.toString()) : undefined;
   };
-  const repo = ownRepo(root);
+  const repo = origin(root);
   const fork = repo ? api(`repos/${repo}`) : undefined;
   if (fork?.parent?.full_name.toLowerCase() !== parent) return;
   const owner = api(`users/${fork.owner.login}`);
@@ -547,7 +546,7 @@ async function fork(cwd: string, args: string[]) {
   const root = join(cwd, upstream.split("/")[1]);
   const readme = await setup(root, upstream, args);
   describe(root, upstream);
-  const repo = ownRepo(root);
+  const repo = origin(root);
   run("gh", ["api", "-X", "PUT", `repos/${repo}/actions/permissions`, "-F", "enabled=true"], root);
   run("gh", ["repo", "edit", repo, "--enable-issues"], root);
   const token = process.env.CLAUDE_CODE_OAUTH_TOKEN;

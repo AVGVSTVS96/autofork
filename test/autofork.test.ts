@@ -298,3 +298,21 @@ test("init follows releases when every release is named with a dash", () => {
   sh(mine, "rm -rf .autofork .github");
   expect(autofork(mine, "init", "acme/desktop").log).toContain("acme/desktop's main branch, since it has no releases");
 });
+
+test("init works on the fork origin points to, not the upstream gh picks", () => {
+  const bin = join(home, "bin");
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(join(bin, "gh"), `#!/bin/sh
+echo "$*" >> ${home}/gh.log
+case "$*" in
+  "repo view"*) echo acme/app ;;
+  "api repos/me/app") echo '{"fork":true,"owner":{"login":"me"},"parent":{"full_name":"acme/app","description":"An app"}}' ;;
+  "api users/me") echo '{"type":"User","name":"Ada Lovelace"}' ;;
+  *) echo '{}' ;;
+esac
+`, { mode: 0o755 });
+  sh(home, `git clone -q ${join(github, "acme/app.git")} mine && git -C mine remote set-url origin git@github.com:me/app.git`);
+  const { ok } = autoforkWith({ PATH: `${bin}:${process.env.PATH}` }, join(home, "mine"), "init", "acme/app");
+  expect(ok).toBe(true);
+  expect(file(home, "gh.log")).toContain("api -X PATCH repos/me/app -f description=Ada's autofork · An app");
+});
