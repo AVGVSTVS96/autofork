@@ -29,7 +29,7 @@ npx github:AVGVSTVS96/autofork save context-usage
 
 Or just write the `PATCH.md` and push. The workflow has an agent build it.
 
-A `PATCH.md` is plain prose. Describe what the change does, not which lines it touches, so an agent can rebuild it on whatever upstream looks like next. This is the one in [my T3 Code fork](https://github.com/AVGVSTVS96/t3code/tree/main/.autofork/context-usage):
+A `PATCH.md` is plain prose: what you want and why, and why it's built the way it is, not which lines it touches, so an agent can rebuild it on whatever upstream looks like next. This is the one in [my T3 Code fork](https://github.com/AVGVSTVS96/t3code/tree/main/.autofork/context-usage):
 
 ```md
 Always show the thread's context usage in the composer.

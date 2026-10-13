@@ -24,7 +24,7 @@ It follows upstream's releases, or its default branch if it has none. `--follow 
 ## Change a fork
 
 1. Make the change.
-2. Write `.autofork/<id>/PATCH.md`: what the change does and why, as plain prose. Describe the behavior, not the lines, so an agent can rebuild it after upstream rewrites that code.
+2. Write `.autofork/<id>/PATCH.md`, the prose an agent rebuilds the change from after upstream rewrites that code: what the user wants and why, and why it's built the way it is where upstream does it differently. Write it from what the user asked for; a commit message or diff only says how.
 3. Run `npx github:AVGVSTVS96/autofork save <id>`.
 4. Commit everything and push.
 
