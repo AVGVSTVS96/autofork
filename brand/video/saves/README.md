@@ -2,7 +2,7 @@
 
 autofork's launch video told through Bassim's own X timeline. The feed sets it up in real posts from his likes, bookmarks and replies (people forking the tools they use, T3 Code taking more PRs a day than anyone can merge, Theo telling a forker to keep his fork on top of Orchestrator V2, then Bassim's own "i can fork and customize anything"), and autofork answers with the product.
 
-`out/video.mp4` · 1920×1080, 60 fps, 40.7 s, with sound · `out/sheet.png` is a frame every 2 s.
+`out/video.mp4` · 1920×1080, 60 fps, 38.8 s, with sound · `out/sheet.png` is a frame every 2 s.
 
 ## Storyboard
 
@@ -16,13 +16,13 @@ Cuts land on the music's beats (take C1, 126.2 BPM, a beat every 0.475 s).
 | 7.6 | feed | Theo: "there is literally no world in which we merge this" (the groove drops here) | and they won't merge yours |
 | 10.0 | feed | Theo: "would be easier to maintain your fork on top of" | the ask autofork answers |
 | 12.4 | feed | bassim: "i can fork and customize anything, the agents will autonomously track upstream and re-implement my changes", quoting his Oct 6 post | his words, the thesis |
-| 15.2 | intro | the camera flicks once more, off the end of the feed onto "Introducing" on the same white; the music sinks under a low-pass filter and a riser | the beat before the name, in the feed's own motion |
-| 17.1 | name | the wordmark draws its branch; "Make it yours. / Keep their updates." | the name and the hero line, on the music's return |
-| 20.9 | ask | the composer: T3 Code, types "always show context usage", Fork it; "you / t3code, forked from pingdotgg/t3code" | the whole product in one action |
-| 24.7 | graph | their line with releases; each merges into yours | "Every release arrives with your change already in it." |
-| 27.6 | heal | a release doesn't fit; the real PATCH.md line; the agent rebuilds it; the next release merges clean | the magic underneath |
-| 32.3 | proof | "156 commits from T3 Code. All 3 changes kept." over the fork's composer with the context button | a real number from `copy/facts.json` |
-| 38.0 | end | the wordmark, autofork.dev, the take's closing chord | where to go |
+| 15.2 | intro | the camera flicks once more, off the end of the feed onto "Introducing" on the same white, for two beats; the music dips under a low-pass filter and a riser | the beat before the name, in the feed's own motion |
+| 16.2 | name | the wordmark draws its branch; "Make it yours. / Keep their updates." | the name and the hero line, on the music's return |
+| 19.0 | ask | the composer: T3 Code, types "always show context usage", Fork it; "you / t3code, forked from pingdotgg/t3code" | the whole product in one action |
+| 22.8 | graph | their line with releases; each merges into yours | "Every release arrives with your change already in it." |
+| 25.7 | heal | a release doesn't fit; the real PATCH.md line; the agent rebuilds it; the next release merges clean | the magic underneath |
+| 30.4 | proof | "156 commits from T3 Code. All 3 changes kept." over the fork's composer with the context button | a real number from `copy/facts.json` |
+| 36.1 | end | the wordmark, autofork.dev, the take's closing chord | where to go |
 
 The feed is X's timeline column (Oct 2026), rebuilt from x.com's own markup: its icon paths, sizes and colors, real text, real counts (fetched Oct 13 from x.com and fxtwitter, in `data/posts.jsonl`), real images and avatars. Each post is shown whole; one phrase gets autofork's ultramarine as the camera lands on it. The camera snaps post to post on the beat, like a flick through the feed.
 
@@ -48,8 +48,8 @@ Suno take C1 from `../music/README.md` (crafty mallet pop-house, F major, [Suno]
 
 - it starts on its first downbeat at 0 s; its four sparse marimba bars run under the first posts and the full groove drops on Theo's "no world in which we merge this" at 7.6 s;
 - every cut sits on one of its beats (measured at 126.2 BPM by autocorrelating its onsets);
-- under "Introducing" (15.2 to 17.1 s) it plays on through a low-pass filter (`sound.js`): the downbeat lands full with the flick, the filter closes over one beat, holds, and opens over the last beat so the full groove returns on the downbeat with the wordmark. The break runs from the feed's last camera stop to the feed scene's end and its ramps are quarters of it, so retiming to another take means moving those two times;
-- at 34.2 s it jumps onto its last two bars, so the closing chord lands on the end card at 38.0 s.
+- under "Introducing" (15.2 to 16.2 s) it plays on through a low-pass filter (`sound.js`): the downbeat lands full with the flick, the filter closes over half a beat, holds, and opens over the last half beat so the full groove returns with the wordmark. The break runs from the feed's last camera stop to the feed scene's end and its ramps are quarters of it, so retiming to another take means moving those two times;
+- at 32.3 s it jumps onto its last two bars, so the closing chord lands on the end card at 36.1 s.
 
 Cues (Web Audio, all in F major to match, low-cut, panned to their element, one shared room): a riser under "Introducing", a bell chord on the wordmark, key ticks while the composer types, a tap on Fork it, a soft pluck for the fork landing, plucks for the merges, a muted clash when a release doesn't fit, a two-note chime when the agent rebuilds it, a pluck on the proof, a ringing chord on the end card (the take's own chord stops short). Nothing on the feed's snaps; the music carries those.
 
