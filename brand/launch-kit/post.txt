@@ -1,0 +1,12 @@
+t3 code's readme says big features won't be merged. it also says you should have everything you need to fork it
+
+but a fork with your changes falls behind every release they ship. so i made autofork
+
+> name an open source app and what you'd change. sign in with chatgpt or claude and your plan does the work
+> your fork lives in your github and runs in your own github actions, free on public repos
+> every release, your changes go back on top. when one breaks, an agent rebuilds it from what you asked for
+> if they ship their own version of your change, yours pauses until you pick
+
+my t3 code fork took 156 upstream commits in its first 2 days. one change broke on day one and the agent rebuilt it
+
+link in replies
