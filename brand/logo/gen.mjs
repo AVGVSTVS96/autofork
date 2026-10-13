@@ -35,19 +35,23 @@ const svg = (box, body, style = "") => `<svg xmlns="http://www.w3.org/2000/svg" 
 // A lane change with flat tangents at both ends, so a line peels off instead of turning.
 const peel = (x1, y1, x2, y2) => `C${f((x1 + x2) / 2)} ${f(y1)} ${f((x1 + x2) / 2)} ${f(y2)} ${f(x2)} ${f(y2)}`
 
-// The wordmark: autofork on the app's line. Under the f, your line peels off and runs beside it to a node flush with the k.
+// The wordmark: autofork on the app's line, which starts and ends flush with the ink of the a and the k.
+// Under the f, your line peels off from beneath it and runs to a node flush with the k.
+// The node is 1.8 lines wide and keeps a full line's width of clearance from the app's line.
 const wordmark = (c) => {
   const word = set("autofork", 0)
+  const start = word.parts[0].x + u(word.parts[0].g.getBoundingBox().x1)
   const fx = word.parts.find((p) => p.ch === "f").x + u(font.charToGlyph("f").getBoundingBox().x1)
-  const w = STEM * 0.5, y1 = S + 14, y2 = y1 + w * 2.1, r = w * 1.05
+  const w = STEM * 0.5, r = w * 0.9, y1 = S + 14, y2 = y1 + w / 2 + w + r
+  const p0 = fx - 6, p1 = p0 + (y2 - y1) * 1.25
   const endX = word.ink - r
   const paint = (cls, attr, color) => (c ? `${attr}="${color}"` : `class="${cls}"`)
   const body =
     `<path ${paint("ink", "fill", c?.ink)} d="${word.d}"/>` +
-    `<path ${paint("app", "stroke", c?.ink)} fill="none" stroke-width="${f(w)}" d="M0 ${f(y1)}H${f(word.ink)}"/>` +
-    `<path ${paint("you", "stroke", c?.you)} fill="none" stroke-width="${f(w)}" d="M${f(fx - 6)} ${f(y1)}${peel(fx - 6, y1, fx + 12, y2)}H${f(endX)}"/>` +
+    `<path ${paint("you", "stroke", c?.you)} fill="none" stroke-width="${f(w)}" d="M${f(p0)} ${f(y1)}${peel(p0, y1, p1, y2)}H${f(endX)}"/>` +
+    `<path ${paint("app", "stroke", c?.ink)} fill="none" stroke-width="${f(w)}" d="M${f(start)} ${f(y1)}H${f(word.ink)}"/>` +
     `<circle ${paint("node", "fill", c?.you)} cx="${f(endX)}" cy="${f(y2)}" r="${f(r)}"/>`
-  return svg([-1, S - CAP - 2, word.ink + 3, CAP + 2 + y2 + r - S + 3], body)
+  return svg([start - 1, S - CAP - 2, word.ink - start + 2, CAP + 2 + y2 + r - S + 1], body)
 }
 
 // The icon: the rails in a tile. The app's line runs through; yours leaves it at the ring and runs beside it.
