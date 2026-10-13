@@ -2,7 +2,7 @@ import { posts, render } from "./posts.js"
 
 const stage = document.getElementById("stage")
 const col = document.querySelector(".col")
-col.insertAdjacentHTML("beforeend", posts.map(render).join(""))
+col.insertAdjacentHTML("afterbegin", posts.map(render).join(""))
 
 const spring = (visual, bounce = 0) => {
   const zeta = 1 - bounce

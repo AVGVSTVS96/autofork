@@ -16,7 +16,7 @@ Cuts land on the music's beats (take C1, 126.2 BPM, a beat every 0.475 s).
 | 7.6 | feed | Theo: "there is literally no world in which we merge this" (the groove drops here) | and they won't merge yours |
 | 10.0 | feed | Theo: "would be easier to maintain your fork on top of" | the ask autofork answers |
 | 12.4 | feed | bassim: "i can fork and customize anything, the agents will autonomously track upstream and re-implement my changes", quoting his Oct 6 post | his words, the thesis |
-| 15.2 | intro | "Introducing" on night; the music stops under a riser | the beat before the name |
+| 15.2 | intro | the camera flicks once more, off the end of the feed onto "Introducing" on the same white; the music sinks under a low-pass filter and a riser | the beat before the name, in the feed's own motion |
 | 17.1 | name | the wordmark draws its branch; "Make it yours. / Keep their updates." | the name and the hero line, on the music's return |
 | 20.9 | ask | the composer: T3 Code, types "always show context usage", Fork it; "you / t3code, forked from pingdotgg/t3code" | the whole product in one action |
 | 24.7 | graph | their line with releases; each merges into yours | "Every release arrives with your change already in it." |
@@ -40,7 +40,7 @@ bun $s/video.mjs . video            # out/saves.mp4 (copied to out/video.mp4)
 
 - `index.html` holds the scenes (`data-s`/`data-e` seconds), `posts.js` the posts and the X post drawing, `video.js` the clock (springs baked to CSS `linear()`, the feed camera, typing), `sound.js` the cues and the mix.
 - Every `.a` element animates at its scene's start plus `--d`; `seek(t)` pauses every animation at `t`, so any frame renders on its own.
-- The feed camera takes `data-stops`: `[time, post id, scale, "top" | "center"]`.
+- The feed camera takes `data-stops`: `[time, post id, scale, "top" | "center"]`; its last stop is `#next`, the "Introducing" card at the end of the column.
 
 ## Music
 
@@ -48,7 +48,7 @@ Suno take C1 from `../music/README.md` (crafty mallet pop-house, F major, [Suno]
 
 - it starts on its first downbeat at 0 s; its four sparse marimba bars run under the first posts and the full groove drops on Theo's "no world in which we merge this" at 7.6 s;
 - every cut sits on one of its beats (measured at 126.2 BPM by autocorrelating its onsets);
-- it stops under "Introducing" (15.2 to 17.1 s) and comes back on the downbeat with the wordmark;
+- under "Introducing" (15.2 to 17.1 s) it plays on through a low-pass filter (`sound.js`): the downbeat lands full with the flick, the filter closes over one beat, holds, and opens over the last beat so the full groove returns on the downbeat with the wordmark. The break runs from the feed's last camera stop to the feed scene's end and its ramps are quarters of it, so retiming to another take means moving those two times;
 - at 34.2 s it jumps onto its last two bars, so the closing chord lands on the end card at 38.0 s.
 
 Cues (Web Audio, all in F major to match, low-cut, panned to their element, one shared room): a riser under "Introducing", a bell chord on the wordmark, key ticks while the composer types, a tap on Fork it, a soft pluck for the fork landing, plucks for the merges, a muted clash when a release doesn't fit, a two-note chime when the agent rebuilds it, a pluck on the proof, a ringing chord on the end card (the take's own chord stops short). Nothing on the feed's snaps; the music carries those.

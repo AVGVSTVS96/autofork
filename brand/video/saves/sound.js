@@ -1,5 +1,9 @@
 const RATE = 48000
 
+const feed = document.querySelector(".feed-view")
+const intro = { from: JSON.parse(feed.dataset.stops).at(-1)[0], to: +feed.closest(".scene").dataset.e }
+const beat = (intro.to - intro.from) / 4
+
 const seeded = seed => () => {
   seed = (seed + 0x6d2b79f5) | 0
   let t = Math.imul(seed ^ (seed >>> 15), seed | 1)
@@ -92,7 +96,7 @@ function voices(ctx, out) {
     land2: (t, pan) => tone(t, pan, [[C6, 1], [C6 * 2, 0.2]], 0.12, 0.5),
     broke: (t, pan, r) => (click(t, pan, r, 0.12, 900, 1.2, 0.06), tone(t, pan, [[E5, 1], [F5, 0.9]], 0.07, 0.3, "triangle")),
     mend: (t, pan) => tone(t, pan, [[C6, 1], [F6, 0.6, 0.09]], 0.11, 0.9),
-    intro: (t, pan) => riser(t, pan, 1.83, 0.3),
+    intro: (t, pan) => riser(t, pan, intro.to - t, 0.3),
     hero: (t, pan) => tone(t, pan, [[F5, 1], [A5, 0.7], [C6, 0.6], [F6, 0.35]], 0.12, 2.2),
     end: (t, pan) => tone(t, pan, [[F5, 0.6], [A5, 0.5], [C6, 0.5], [F6, 0.3]], 0.11, 3.2),
   }
@@ -102,6 +106,7 @@ async function cues() {
   const ctx = new OfflineAudioContext(2, Math.ceil((window.END + 1) * RATE), RATE)
   const v = voices(ctx, ctx.destination)
   window.CUES.forEach((cue, i) => v[cue.kind]?.(cue.t, cue.pan, seeded(i + 1)))
+  v.intro(intro.from + beat, 0)
   return ctx.startRendering()
 }
 
@@ -110,7 +115,16 @@ async function music() {
   const buffer = await ctx.decodeAudioData(await (await fetch("music.m4a")).arrayBuffer())
   const source = ctx.createBufferSource()
   source.buffer = buffer
-  source.connect(ctx.destination)
+  const filter = ctx.createBiquadFilter()
+  filter.type = "lowpass"
+  filter.Q.value = 4
+  const open = RATE / 2
+  filter.frequency.setValueAtTime(open, 0)
+  filter.frequency.setValueAtTime(open, intro.from)
+  filter.frequency.exponentialRampToValueAtTime(380, intro.from + beat)
+  filter.frequency.setValueAtTime(380, intro.to - beat)
+  filter.frequency.exponentialRampToValueAtTime(open, intro.to)
+  source.connect(filter).connect(ctx.destination)
   source.start(0)
   return ctx.startRendering()
 }

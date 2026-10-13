@@ -9,7 +9,6 @@
 :root {
   --bg: #FBFBFC; --panel: #FFFFFF; --panel-2: #F4F4F6; --ink: #0E0E12; --ink-2: #4D4D57; --ink-3: #6E6E78; --hair: rgb(14 14 18 / .11); --hair-2: rgb(14 14 18 / .2);
   --trunk: #CACAD2; --you: #3B2BFF; --you-soft: #EDEBFF; --you-line: rgb(59 43 255 / .28); --del: #C4321F;
-  --night: #0C0C0F; --night-ink: #EEEEF2;
   --sans: "Host Grotesk", sans-serif; --mono: "Fragment Mono", monospace;
   --x-ink: #000; --x-mute: rgb(0 0 0 / .6); --x-blue: #1D9BF0; --x-line: rgb(239 243 244); --x-edge: rgb(207 217 222);
   --x: "Inter X", sans-serif;
@@ -23,7 +22,6 @@ svg { display: block; }
 
 #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); color: var(--ink); font: 400 16px/1.35 var(--sans); -webkit-font-smoothing: antialiased; }
 #stage[data-theme="feed"] { background: #fff; }
-#stage[data-theme="night"] { background: var(--night); color: var(--night-ink); }
 
 .scene { position: absolute; inset: 0; visibility: hidden; }
 .scene.on { visibility: visible; }
@@ -81,9 +79,7 @@ svg { display: block; }
 
 /* autofork's own scenes, in the site's system */
 
-.night { background: var(--night); }
-.intro { position: absolute; inset: 0; display: grid; place-items: center; font: 800 190px/1 var(--sans); letter-spacing: -.035em; }
-.intro span { display: inline-block; }
+.next { position: relative; height: 354px; margin: 0 -1px; display: grid; place-items: center; background: #fff; font: 800 62.3px/1 var(--sans); letter-spacing: -.035em; color: var(--ink); }
 
 .mark { position: absolute; left: 50%; translate: -50% 0; }
 .mark .ink { fill: var(--ink); }
