@@ -1,9 +1,13 @@
 {
-  "name": "autopatch-brand",
+  "name": "autofork-brand",
   "private": true,
   "type": "module",
   "scripts": {
-    "logo": "bun logo/gen.mjs"
+    "logo": "bun logo/gen.mjs && bun run png",
+    "png": "s=~/.agents/skills/brand-it/scripts; bun $s/shoot.mjs logo/app-icon.svg 180x180 ../site/public/apple-touch-icon.png && bun $s/shoot.mjs logo/app-icon.svg 512x512 ../site/public/icon-512.png && bun $s/shoot.mjs logo/app-icon.svg 1024x1024 logo/app-icon.png",
+    "og": "s=~/.agents/skills/brand-it/scripts; bun $s/shoot.mjs ../site/og.html 1200x630 ../site/public/og.png && bun $s/shoot.mjs ../site/og.html 1280x640 social-preview.png",
+    "readme": "s=~/.agents/skills/brand-it/scripts; bun $s/shoot.mjs readme/header-light.html 838x300@2 readme/header-light.png && bun $s/shoot.mjs readme/header-dark.html 838x300@2 readme/header-dark.png",
+    "icons": "bun icons/gen.mjs"
   },
   "devDependencies": {
     "opentype.js": "1.3.4"

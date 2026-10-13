@@ -1,5 +1,6 @@
 import opentype from "opentype.js"
 import { copyFileSync, mkdirSync, writeFileSync } from "node:fs"
+import { branch, paint, rails, stack, svg as tileSvg, tones } from "./icon.mjs"
 
 const here = import.meta.dirname
 const site = new URL("../../site/public/", import.meta.url).pathname
@@ -14,8 +15,8 @@ const CAP = u(font.tables.os2.sCapHeight)
 const TRACK = -0.025 * S
 
 const C = {
-  light: { ink: "#0E0E12", you: "#3B2BFF", tile: "#3B2BFF", railApp: "#9C93FF", railYou: "#FFFFFF" },
-  dark: { ink: "#EEEEF2", you: "#8F84FF", tile: "#8F84FF", railApp: "#4B42B8", railYou: "#0C0C0F" },
+  light: { ink: "#0E0E12", you: "#3B2BFF" },
+  dark: { ink: "#EEEEF2", you: "#8F84FF" },
 }
 
 const set = (str, x, y = S) => {
@@ -30,7 +31,7 @@ const set = (str, x, y = S) => {
   const last = parts.at(-1)
   return { d: parts.map((p) => p.d).join(""), ink: last.x + u(last.g.getBoundingBox().x2), parts }
 }
-const svg = (box, body, style = "") => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${box.map(f).join(" ")}" role="img" aria-label="autofork">${style}${body}</svg>\n`
+const svg = (box, body) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${box.map(f).join(" ")}" role="img" aria-label="autofork">${body}</svg>\n`
 
 // A lane change with flat tangents at both ends, so a line peels off instead of turning.
 const peel = (x1, y1, x2, y2) => `C${f((x1 + x2) / 2)} ${f(y1)} ${f((x1 + x2) / 2)} ${f(y2)} ${f(x2)} ${f(y2)}`
@@ -54,26 +55,35 @@ const wordmark = (c) => {
   return svg([start - 1, S - CAP - 2, word.ink - start + 2, CAP + 2 + y2 + r - S + 1], body)
 }
 
-// The icon: the rails in a tile. The app's line runs through; yours leaves it at the ring and runs beside it.
-const rails = (c, k = 1, inset = 0) => {
-  const w = 3.4 * k
-  const X = (n) => f(inset + n * k), Y = X
-  return (
-    `<rect class="tile" fill="${c.tile}" x="${X(0)}" y="${Y(0)}" width="${f(32 * k)}" height="${f(32 * k)}" rx="${inset ? 0 : f(7.5 * k)}"/>` +
-    `<path class="rail-app" fill="none" stroke="${c.railApp}" stroke-width="${f(w)}" d="M${X(11)} ${Y(0)}V${Y(32)}"/>` +
-    `<path class="rail-you" fill="none" stroke="${c.railYou}" stroke-width="${f(w)}" d="M${X(11)} ${Y(10)}C${X(11)} ${Y(16)} ${X(21)} ${Y(14)} ${X(21)} ${Y(20)}V${Y(32)}"/>` +
-    `<circle class="ring" fill="${c.tile}" stroke="${c.railYou}" stroke-width="${f(w * 0.9)}" cx="${X(11)}" cy="${Y(9)}" r="${f(3.6 * k)}"/>`
-  )
-}
-
 writeFileSync(`${here}/autofork.svg`, wordmark(C.light))
 writeFileSync(`${here}/autofork-dark.svg`, wordmark(C.dark))
 writeFileSync(`${here}/autofork-classes.svg`, wordmark())
-writeFileSync(`${here}/mark.svg`, svg([0, 0, 32, 32], rails(C.light)))
-writeFileSync(`${here}/mark-dark.svg`, svg([0, 0, 32, 32], rails(C.dark)))
 
-const themed = `<style>@media (prefers-color-scheme: dark){.tile{fill:${C.dark.tile}}.rail-app{stroke:${C.dark.railApp}}.rail-you{stroke:${C.dark.railYou}}.ring{fill:${C.dark.tile};stroke:${C.dark.railYou}}}</style>`
-writeFileSync(`${here}/favicon.svg`, svg([0, 0, 32, 32], rails(C.light), themed))
-writeFileSync(`${here}/app-icon.svg`, svg([0, 0, 32, 32], rails(C.light, 1, 0.001).replace(/rx="[^"]*"/, 'rx="0"')))
+// An icon is two drawings: the name where there's room (icon), and a mark for 32 and 16, which has its own 16px drawing.
+// The favicon carries both marks and picks one by the size it's drawn at, in the system's theme.
+const iconSet = (dir, { big, bigTone, small, smallTone }) => {
+  mkdirSync(dir, { recursive: true })
+  const light = (tone) => paint(tones[tone].light)
+  const dark = (tone) => paint(tones[tone].dark)
+  const files = {
+    "icon.svg": tileSvg(32, big(), light(bigTone)),
+    "icon-dark.svg": tileSvg(32, big(), dark(bigTone)),
+    "app-icon.svg": tileSvg(32, big({ rx: 0 }), light(bigTone)),
+    "mark.svg": tileSvg(32, small(32), light(smallTone)),
+    "mark-dark.svg": tileSvg(32, small(32), dark(smallTone)),
+    "mark-16.svg": tileSvg(16, small(16), light(smallTone)),
+    "mark-16-dark.svg": tileSvg(16, small(16), dark(smallTone)),
+    "favicon.svg": tileSvg(32,
+      `<g class="at32">${small(32, { id: "c32" })}</g><g class="at16" transform="scale(2)">${small(16, { id: "c16" })}</g>`,
+      `${light(smallTone)}.at16{display:none}@media (max-width:24px){.at32{display:none}.at16{display:inline}}@media (prefers-color-scheme:dark){${dark(smallTone)}}`),
+  }
+  for (const [name, body] of Object.entries(files)) writeFileSync(`${dir}/${name}`, body)
+}
+
+// 4 · auto over fork in ultramarine, picked Oct 13; the rails at 32 and 16.
+iconSet(here, { big: stack, bigTone: "blue", small: rails, smallTone: "blue" })
+// 3 · auto over fork on paper, handing off to the branch; Bassim, Oct 13: "keep 3 in our back pocket, different colors fit well still."
+iconSet(`${here}/alt`, { big: stack, bigTone: "paper", small: branch, smallTone: "trunk" })
+
 copyFileSync(`${here}/favicon.svg`, `${site}/favicon.svg`)
-console.log("autofork.svg autofork-dark.svg autofork-classes.svg mark.svg mark-dark.svg favicon.svg app-icon.svg")
+console.log("wordmark, icon set, alt icon set, site/public/favicon.svg")

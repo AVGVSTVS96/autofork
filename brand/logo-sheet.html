@@ -1,12 +1,50 @@
-<!doctype html><meta charset="utf-8"><style>
-body{margin:0;font:14px system-ui;display:grid;grid-template-columns:1fr 1fr;}
-section{padding:32px;display:grid;gap:24px;align-content:start}
-.l{background:#FBFBFA}.d{background:#0B0D0C;color:#E9ECEA}
-img.big{height:56px}.row{display:flex;gap:16px;align-items:center}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>autofork · logo</title>
+<style>
+  @font-face { font-family: "Host Grotesk"; src: url("fonts/host-grotesk.woff2") format("woff2"); font-weight: 300 800; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 40px; width: 1400px; background: #E6E6E3; color: #111; font: 15px/1.45 "Host Grotesk", system-ui; -webkit-font-smoothing: antialiased; }
+  h1 { margin: 0 0 24px; font-size: 26px; font-weight: 800; letter-spacing: -0.02em; }
+  .row { display: grid; grid-template-columns: 200px 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .label b { display: block; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; margin-bottom: 4px; }
+  .label span { color: #555; }
+  .t { --bg: #FBFBFC; --ink-2: #4D4D57; --hair: rgb(14 14 18 / .12); display: grid; gap: 22px; padding: 26px; background: var(--bg); border-radius: 4px; }
+  .t.dark { --bg: #0C0C0F; --ink-2: #A6A6B2; --hair: rgb(238 238 242 / .12); }
+  .wm { height: 34px; display: block; }
+  .sizes { display: flex; align-items: flex-end; gap: 22px; }
+  figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 11.5px; color: var(--ink-2); }
+  .i { display: block; border-radius: 23.4%; }
+  .round { border-radius: 50%; }
+  .t:not(.dark) .paper { box-shadow: 0 0 0 1px var(--hair); }
 </style>
-<section class="l">
-<img class="big" src="logo/explore-a-hunk.svg"><img class="big" src="logo/explore-b-minus-plus.svg"><img class="big" src="logo/explore-c-stack.svg">
-<div class="row"><img src="logo/mark.svg" width=16><img src="logo/mark.svg" width=32><img src="logo/mark.svg" width=48><img src="logo/autopatch.svg" height=20></div>
-</section>
-<section class="d"><img class="big" src="logo/autopatch-dark.svg"><img src="logo/app-icon.svg" width=90><div class="row"><img src="logo/favicon.svg" width=16><img src="logo/favicon.svg" width=32><img src="logo/favicon.svg" width=48></div>
-<div class="row"><img src="logo/mark-dark.svg" width=16><img src="logo/mark-dark.svg" width=32><img src="logo/mark-dark.svg" width=48><img src="logo/autopatch-dark.svg" height=20></div></section>
+</head>
+<body>
+  <h1>autofork · logo</h1>
+  <div id="rows"></div>
+  <script>
+    const rows = [
+      { dir: "logo", name: "4 · auto over fork, ultramarine", why: "Picked Oct 13. The name in the tile where there's room; the rails at 32 and 16, with their own 16px drawing.", paper: false },
+      { dir: "logo/alt", name: "3 · auto over fork, paper", why: "On file. \"keep 3 in our back pocket, different colors fit well still.\" Hands off to the branch at 32 and 16.", paper: true },
+    ]
+    const im = (src, size, cls = "") => `<img class="i ${cls}" src="${src}" width="${size}" height="${size}" alt="">`
+    const cell = (r, dark) => {
+      const d = dark ? "-dark" : ""
+      const p = r.paper ? "paper" : ""
+      return `<div class="t${dark ? " dark" : ""}">
+        <img class="wm" src="logo/autofork${d}.svg" alt="">
+        <div class="sizes">
+          <figure>${im(`${r.dir}/icon${d}.svg`, 180, p)}180</figure>
+          <figure>${im(`${r.dir}/icon${d}.svg`, 64, p)}64</figure>
+          <figure>${im(`${r.dir}/icon${d}.svg`, 64, `round ${p}`)}avatar</figure>
+          <figure>${im(`${r.dir}/mark${d}.svg`, 32, p)}32</figure>
+          <figure>${im(`${r.dir}/mark-16${d}.svg`, 16, p)}16</figure>
+        </div>
+      </div>`
+    }
+    document.querySelector("#rows").innerHTML = rows.map((r) => `<div class="row"><div class="label"><b>${r.name}</b><span>${r.why}</span></div>${cell(r, false)}${cell(r, true)}</div>`).join("")
+  </script>
+</body>
+</html>
