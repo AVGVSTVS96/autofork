@@ -23,7 +23,7 @@ Beats are the music's (129.9 BPM, a beat is 0.46 s). Every cut is on a beat; the
 | 13.89 | 30–36 | an agent rebuilds it from what you asked for. | white on the ultramarine field, a word an eighth | the part nobody else does |
 | 16.67 | 36–40 | flash: what you asked | the site's "You asked" card and the three releases it went back into | proof of "what you asked for" |
 | 18.52 | 40–48 | If they ship your change, yours pauses until you pick. | "until you pick" lands on the one beat where the song's kick and bass stop | the honest edge, timed to the music pausing |
-| 22.21 | 48–54 | 156 commits from T3 Code. All 3 changes kept. | "My T3 Code fork, first 2 days" over 156, white on ultramarine, with a bright tone | the real number (`copy/facts.json`), slammed in as the music comes back |
+| 22.21 | 48–54 | 156 commits from T3 Code. One change broke on day one. The agent rebuilt it. | "My T3 Code fork, first 2 days" over 156, white on ultramarine, with a bright tone | the real number (`copy/facts.json`), slammed in as the music comes back |
 | 24.98 | 54–60 | Your GitHub. Your plan. | the fork's GitHub card, then Continue with ChatGPT / Continue with Claude | where it lives, who pays |
 | 27.69 | 60–64 | Introducing | | the song's break; the stop-down before the name |
 | 29.54 | 64–70 + 1 s | autofork | the wordmark lands with a chord as the groove returns, its gray line draws, the branch leaves it and lands on its node; the tagline and autofork.dev land on the song's last two stabs | the name, then a short ring-out |
