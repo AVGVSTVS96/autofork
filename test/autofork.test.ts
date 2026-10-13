@@ -71,6 +71,7 @@ test("init tracks upstream", () => {
   const { ok, log } = autofork(fork, "init", upstream, "--verify", "node -e \"import('./app.js').then(m => process.exit(m.greet('x') === 'x' ? 1 : 0))\"");
   expect(ok).toBe(true);
   expect(log).toContain(`autofork follows ${upstream}'s main branch, since it has no releases`);
+  expect(file(fork, ".github/workflows/autofork.yml")).toContain('push:\n    branches: [main]\n    paths: [".autofork/**"]');
   sh(fork, "git add -A && git commit -qm 'track upstream'");
 });
 

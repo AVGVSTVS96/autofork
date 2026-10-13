@@ -425,12 +425,15 @@ async function save(root: string, args: string[]) {
   }
 }
 
-const WORKFLOW = `name: autofork
+const workflow = (branch: string) => `name: autofork
 
 on:
   schedule:
     - cron: "17 * * * *"
   workflow_dispatch:
+  push:
+    branches: [${branch}]
+    paths: [".autofork/**"]
 
 permissions:
   contents: write
@@ -461,9 +464,9 @@ async function setup(root: string, upstream: string, args: string[]) {
   const follow = flag(args, "--follow") ?? ((await latestRelease(root, upstream)) ? "releases" : branch);
   const config: Config = { upstream, follow, verify: flag(args, "--verify") };
   writeConfig(root, config);
-  const workflow = join(root, ".github/workflows/autofork.yml");
+  const path = join(root, ".github/workflows/autofork.yml");
   mkdirSync(join(root, ".github/workflows"), { recursive: true });
-  if (!existsSync(workflow)) writeFileSync(workflow, WORKFLOW);
+  if (!existsSync(path)) writeFileSync(path, workflow(git(root, "branch", "--show-current") || branch));
   await fetchUpstream(root, config);
   const { base, drift } = check(root, { ...config, patches: [] }, workingTree(root));
   const readme = addNote(root, upstream, base, drift);
