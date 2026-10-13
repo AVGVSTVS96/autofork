@@ -159,15 +159,15 @@ for (const s of SYNCS) {
   draw(MERGE(s.x), "merge", s.T - 0.1, 0.35)
   pop("node", s.x + DX, G, 12, s.T + 0.25)
 }
-const context = label("chip", "context-usage", SYNCS[3].x + DX, G, 62, SYNCS[3].T + 0.35)
+label("chip", "context-usage", SYNCS[3].x + DX, G, 62, SYNCS[3].T + 0.35)
 pop("node", README.x, G, 12, README.T + 0.25)
-const readme = label("chip", "fork-readme", README.x, G, 62, README.T + 0.35)
+label("chip", "fork-readme", README.x, G, 62, README.T + 0.35)
 cues.push({ t: SYNCS[3].T + 0.35, name: "ready", options: { volume: 0.35 }, at: () => SYNCS[3].x + DX })
 
-// the two days, start to end, and the three changes that came through them
+// the two days, start to end, and the change the agent rebuilt on the first
 label("tag date", "Oct 10", HEAL, 0, -56, P + 0.4, { t1: Q })
 label("tag date", "Oct 12", LAST.x, 0, -56, P + 0.4, { t1: Q })
-for (const chip of [healed, context, readme]) chip.pulses.push(P + 1.5)
+healed.pulses.push(P + 1.5)
 
 // they ship their own: the update still lands, your version of it pauses, and an issue asks you to pick
 for (let cx = LAST.x + 40; cx < THEIRS - 20; cx += 40) pop("c", cx, 0, 6.5, trunk.when(cx))

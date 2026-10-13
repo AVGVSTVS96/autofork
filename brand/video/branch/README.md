@@ -18,7 +18,7 @@ One option for autofork's launch video: the git graph is the video. Their line i
 | 21–26 | It breaks | Back on the same frame: 9afde1c merges into yours, `window-title` turns red and dashed | Sometimes an update breaks your change. | Sets up the mechanism with the real failure |
 | 26–34 | Underneath | Cut to dark, zoomed on the node: the PATCH.md sentence, then the real Actions log of Oct 10 (healing window-title 22:59:45, the agent's own sentence, healed 23:01:11); the node turns ultramarine | An agent rebuilds it from what you asked for. | The "magic underneath" beat, over the music's breakdown |
 | 34–42 | Every update | Back to light, the camera rides the five real syncs (74dfbb6, ed0f7b9, d45d1a1, abc80c8, 8f25cf9), one per bar; `context-usage` joins at abc80c8, `fork-readme` at the last rebuild | Every update after that arrives / with your changes in it. | The promise, in the ride, on the lift |
-| 42–48 | Proof | Pull back over Oct 10 to Oct 12: one dot per upstream commit, every merge, the 3 chips pulse | My T3 Code fork took 156 commits in its first two days. / It kept all 3 changes. | The facts.json line, as the graph it describes |
+| 42–48 | Proof | Pull back over Oct 10 to Oct 12: one dot per upstream commit, every merge, the rebuilt `window-title` chip pulses | My T3 Code fork took 156 commits in its first two days. / One change broke on day one and the agent rebuilt it. | The facts.json line, as the graph it describes |
 | 48–54 | They catch up | Their line ships context usage; the update still lands, your `context-usage` arrives dashed and paused, and the issue the engine opens hangs under it | If they ship their own version, / yours pauses until you pick. | The trust line from the launch post |
 | 54–58 | Headline | The site's hero on the graph: "Make it yours." on their line, "Keep their updates." on yours | | The headline lands on the branch |
 | 58–62 | End | Wordmark on the take's last chord, autofork.dev | Runs on the ChatGPT or Claude plan you already pay for. | The button, rings out |
@@ -57,6 +57,6 @@ Take A2 from `../music` ("autofork branch A", Suno v6, crisp minimal electronic)
 
 - Releases: `gh release list -R pingdotgg/t3code` (v0.0.42 Sep 16 to v0.0.45 Oct 2, the last full release).
 - The fork point 9503155 (Oct 6) and the first sync, `upstream 9503155da67a → 9afde1c6dbe0`: Actions run 38093414658, which also holds the agent's words and the times shown.
-- Commits behind: `gh api repos/pingdotgg/t3code/compare/9503155...9afde1c` (383, drawn as dots, never stated). 156 and 3 come from `copy/facts.json`.
+- Commits behind: `gh api repos/pingdotgg/t3code/compare/9503155...9afde1c` (383, drawn as dots, never stated). 156 and the one heal come from `copy/facts.json`.
 - Syncs: the fork's `autopatch: sync` and `autofork: sync` commits; `context-usage` was added Oct 12 06:56 just before the abc80c8 sync, and `fork-readme` was built by the agent in the Oct 12 23:06 sync.
 - The pause is the product's behavior, not an event yet: T3 Code hasn't shipped context usage. The issue title is the one the engine opens.
