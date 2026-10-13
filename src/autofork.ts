@@ -459,9 +459,25 @@ function setup(root: string, upstream: string, args: string[]) {
   if (drift.length) say(`Your branch already changes ${drift.length} file${drift.length === 1 ? "" : "s"}. Save them as a patch: write ${DIR}/<id>/PATCH.md, then autofork save <id>`);
 }
 
+function describe(root: string, upstream: string) {
+  const parent = githubRepo(upstream)?.toLowerCase();
+  if (!parent) return;
+  const api = (...args: string[]) => {
+    const result = run("gh", ["api", ...args], root);
+    return result.ok ? JSON.parse(result.out.toString()) : undefined;
+  };
+  const repo = run("gh", ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"], root).out.toString().trim();
+  const fork = repo ? api(`repos/${repo}`) : undefined;
+  if (fork?.parent?.full_name.toLowerCase() !== parent) return;
+  const owner = api(`users/${fork.owner.login}`);
+  const who = (owner?.type === "User" ? owner.name?.trim().split(/\s+/)[0] : owner?.name?.trim()) || fork.owner.login;
+  api("-X", "PATCH", `repos/${repo}`, "-f", `description=${[`${who}'s autofork`, fork.parent.description].filter(Boolean).join(" · ")}`);
+}
+
 async function init(root: string, args: string[]) {
   if (!args[0]) throw new Failure("usage: autofork init <owner/repo | git url> [--follow <releases | branch>] [--verify <command>]");
   setup(root, args[0], args);
+  describe(root, args[0]);
   say("Add a CLAUDE_CODE_OAUTH_TOKEN secret (claude setup-token), commit, and push.");
 }
 
@@ -471,6 +487,7 @@ async function fork(cwd: string, args: string[]) {
   if (!run("gh", ["repo", "fork", upstream, "--clone", "--default-branch-only"], cwd).ok) throw new Failure("gh couldn't fork it. Is the GitHub CLI installed and logged in?");
   const root = join(cwd, upstream.split("/")[1]);
   setup(root, upstream, args);
+  describe(root, upstream);
   const repo = run("gh", ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"], root).out.toString().trim();
   run("gh", ["api", "-X", "PUT", `repos/${repo}/actions/permissions`, "-F", "enabled=true"], root);
   run("gh", ["repo", "edit", repo, "--enable-issues"], root);
