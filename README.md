@@ -45,6 +45,20 @@ button's tooltip.
 Once T3 Code shows context usage all the time by default, this patch is done.
 ```
 
+A patch can also be a whole fork you've taken over. [hex-voice](https://github.com/AVGVSTVS96/hex-voice/tree/main/.autofork/hex-voice) started as David Mokos's Expo voice app template and is mine to maintain now. Its one patch holds every change, and its `PATCH.md` says what to take if upstream ever moves:
+
+```md
+If upstream ever updates, treat it as a new fork rather than the line this one
+follows: bring in anything clearly valuable, judged by what these
+customizations show this app cares about, like fixes, Expo and dependency
+updates, and better audio, call handling or Persona animations. Leave out
+what only serves the template's server, tools or web app.
+
+Where upstream's opinions differ from ours, weigh ours more heavily: keep
+hex-voice's behavior and design, and take upstream's change only where it
+doesn't undo them.
+```
+
 ## Updates
 
 When upstream publishes a release, the workflow rebuilds your fork on it. Patches that still apply go in with git. When one doesn't, an agent rebuilds it from its `PATCH.md`, your `verify` command checks the build, and the result is pushed as a signed commit.
