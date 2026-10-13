@@ -3,7 +3,7 @@ const [live, out] = process.argv.slice(2)
 const read = (name: string) =>
   readFileSync(`${live}/${name}.html`, "utf8")
     .replace(/https:\/\/avatars\.githubusercontent\.com\/u\/122117267[^"]*|https:\/\/avatars\.githubusercontent\.com\/AVGVSTVS96[^"]*/g, "/repos/avgvstvs96.png")
-    .replace(/https:\/\/avatars\.githubusercontent\.com\/[^"]*/g, "/repos/pingdotgg.png")
+    .replace(/https:\/\/avatars\.githubusercontent\.com\/[^"]*/g, "/repos/t3code.svg")
     .replace(/^<div id="root">|<\/div>$/g, "")
 
 const element = (html: string, open: string) => {

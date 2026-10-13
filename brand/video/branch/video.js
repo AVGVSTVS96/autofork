@@ -124,7 +124,7 @@ const label = (cls, text, ax, ay, off, t0, extra = {}) => {
 }
 
 // their line: T3 Code's real releases, commits between them
-label("lane", "T3 Code", -1150, 0, 0, -10, { icon: "img/t3code.png" })
+label("lane", "T3 Code", -1150, 0, 0, -10, { icon: "img/t3code.svg" })
 for (const [rx, tag] of RELEASES) {
   pop("ring", rx, 0, 13, trunk.when(rx))
   label("tag", tag, rx, 0, -56, trunk.when(rx))

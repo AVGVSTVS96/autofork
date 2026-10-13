@@ -39,7 +39,7 @@ const SCENES = [
     id: "ask", s: 0, e: 7,
     states: [[0, "hero"]],
     apply(lt, doc) {
-      composer(doc, lt, "T3 Code", "t3code.png", "but always show context usage", b(1.5))
+      composer(doc, lt, "T3 Code", "t3code.svg", "but always show context usage", b(1.5))
       press(doc.querySelector(".ask button"), lt, b(5.75))
     },
     cam: [
