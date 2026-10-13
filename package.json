@@ -1,6 +1,6 @@
 {
   "name": "autofork",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Name an open source app and what you'd change. Every new release arrives with your changes already in it.",
   "type": "module",
   "license": "MIT",
