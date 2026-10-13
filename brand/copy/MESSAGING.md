@@ -61,13 +61,13 @@ The site ships the same day as the product. These lines describe the product Bas
 
 - **Title:** autofork: make it yours, keep their updates
 - **Description:** Name an open source app and what you'd change. Every new release arrives with your changes already in it.
-- **Site:** https://autofork.com (autofork.dev too)
+- **Site:** https://autofork.dev (autofork.com later, once it's pointed; it isn't yet)
 - **GitHub repo description:** Make it yours, keep their updates. Your fork gets every release; when one breaks a change, an agent rebuilds it.
 
 ## OG image (1200×630)
 
 - **Big:** Make it yours. / Keep their updates.
-- **Small:** autofork.com
+- **Small:** autofork.dev
 - **Alt:** autofork: Make it yours. Keep their updates.
 
 Nothing else. Keep the bottom fifth clear for X's title bar.

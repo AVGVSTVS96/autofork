@@ -14,7 +14,7 @@ but a fork with your changes falls behind every release they ship. so i made aut
 > every release, your changes go back on top. when one breaks, an agent rebuilds it from what you asked for
 > if they ship their own version of your change, yours pauses until you pick
 
-my t3 code fork took 156 upstream commits in its first 2 days and kept all 3 changes
+my t3 code fork took 156 upstream commits in its first 2 days. one change broke on day one and the agent rebuilt it
 
 link in replies
 ```
@@ -26,12 +26,12 @@ Why each line is safe to say:
 - "sign in with chatgpt or claude": both are live, and the agent runs in the user's own GitHub Actions. Actions are free on public repos (GitHub's docs).
 - "rebuilds it from what you asked for": the agent rebuilds a broken change from its `PATCH.md`, which holds the request in plain words.
 - "yours pauses until you pick": the engine stops applying it, the fork takes their version, and an issue opens (`context-usage: upstream does this now`). Deleting the folder keeps theirs; editing `PATCH.md` brings yours back.
-- "156" and "all 3": the T3 Code fork in `facts.json` (`upstreamCommitsAbsorbed`, `patches`, 0 heals), Oct 10 to Oct 12.
+- The last line is the T3 Code fork in `facts.json`. Its first sync (Oct 10, `85b3a1c`, "healed window-title") jumped 383 upstream commits and `window-title` no longer applied, so the agent rebuilt it from its `PATCH.md` (`heals: 1`). From that sync to the last one (`9afde1c` to `8f25cf9`, Oct 10 to Oct 12) upstream moved 156 commits (`upstreamCommitsAbsorbed`) and every change stayed on. The earlier "kept all 3 changes" was out: `context-usage` only went in on Oct 12 and rode through the last 3 of those 156 commits, and the fork holds 4 changes now (`app-name` landed Oct 13).
 
 ## First reply
 
 ```
-autofork.com
+autofork.dev
 
 rather run it yourself? the engine is open source: a cli and a github action that work with your own agent
 npx skills add AVGVSTVS96/autofork
@@ -39,12 +39,14 @@ npx skills add AVGVSTVS96/autofork
 
 ## The visual
 
+The recording and screenshots are in `launch-kit/`. `brand/launch-visual.png` is the old autopatch one; don't post it.
+
 An 8 to 15 second screen recording of the real site, phone legible: type `T3 Code, but always show context usage`, press Fork it, continue with Claude, the run's progress, then T3 Code with the context usage button in its composer. It has to be a real run. If there's no time for one, post the site's hero shot instead, never a mock.
 
 ## Before posting
 
-- [ ] Continue with ChatGPT and Continue with Claude both work end to end on autofork.com, and the fork lands in the user's GitHub. If one isn't live, the first greentext line changes first.
-- [ ] `node copy/facts.mjs` rerun right before posting; if 156 or 3 moved, update the post.
-- [ ] `npx skills add AVGVSTVS96/autofork` works (the repo rename is done).
+- [ ] Continue with ChatGPT and Continue with Claude both work end to end on autofork.dev, and the fork lands in the user's GitHub. If one isn't live, the first greentext line changes first.
+- [ ] `node copy/facts.mjs` rerun right before posting; if the T3 Code fork's 156 or its heal count moved, update the post.
+- [ ] `npx skills add AVGVSTVS96/autofork` works (checked Oct 13: finds the autofork skill).
 - [ ] Visual attached, link only in the reply.
 - [ ] No em dashes: `rg '\x{2014}' copy/` prints nothing.

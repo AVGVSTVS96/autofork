@@ -44,8 +44,8 @@ const count = (fork) => {
 
   const releases = api(`repos/${owner}/${fork.repo}/releases?per_page=100`)
   const healed = new Set([
-    ...syncs.filter((c) => /healed by/i.test(c.commit.message)).map((c) => sources[syncs.indexOf(c)]),
-    ...releases.filter((r) => /healed by/i.test(r.body ?? "")).map((r) => r.body.match(/Source: `(\w+)`/)?.[1]),
+    ...syncs.filter((c) => /\bhealed\b/i.test(c.commit.message)).map((c) => sources[syncs.indexOf(c)]),
+    ...releases.filter((r) => /\bhealed\b/i.test(r.body ?? "")).map((r) => r.body.match(/Source: `(\w+)`/)?.[1]),
   ])
 
   return {
@@ -90,7 +90,7 @@ const firstSync = perFork.map((fork) => fork.firstSync).sort()[0]
 const facts = {
   countedAt: new Date().toISOString(),
   owner,
-  site: "https://autofork.com",
+  site: "https://autofork.dev",
   repo: `https://github.com/${owner}/autofork`,
   action: `${owner}/autofork@v1`,
   engineToday: { repo: `https://github.com/${owner}/autopatch`, site: "https://autopatchmd.vercel.app" },
@@ -117,7 +117,7 @@ const facts = {
     syncRuns: "gh run list on the fork's sync workflow (autofork.yml and the earlier autopatch.yml for T3 Code, sync-upstream.yml for the older three), every conclusion. greenSyncRuns counts only success.",
     syncCommits: "Commits on the fork's default branch whose message starts with 'autofork: sync ' or 'autopatch: sync ' (T3 Code) or 'chore: sync patched fork to ' (the older three), one per upstream commit or release the fork was rebuilt on.",
     upstreamCommitsAbsorbed: "gh api compare on the upstream repo, from the first synced source commit to the latest one.",
-    heals: "Distinct upstream sources where a sync commit or patched release says patches were 'healed by <agent>' after git apply failed.",
+    heals: "Distinct upstream sources where a sync commit or patched release says a patch was healed (rebuilt by the agent) after git apply failed.",
     greenDays: "First sync run to the last successful one.",
     tool: "Read from the engine checkout (AUTOFORK_DIR, default ~/Developer/autofork): lines in src/*.ts, dependencies in package.json, the cron in the workflow init writes, commands from the usage text.",
     t3code: "gh api repos/pingdotgg/t3code at countedAt. Round down when quoting.",
