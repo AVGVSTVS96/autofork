@@ -85,3 +85,20 @@ Excluded: `vocals, voice, choir, vocal chops, dubstep, heavy drop, gong, cinemat
 |---|---|---|---|---|---|
 | C1.wav | 1:03.2 | 126.3 | 7.8s | first downbeat ~0.2s, 4 sparse bars, full from 7.8s, steady to 38.2s, stripped break 38.2–43.9s, lift 43.9–59.1s, short end to 63s | [link](https://suno.com/song/c76fafb8-e10e-4df0-8feb-9eb16ed73dbe) |
 | C2.wav | 1:01.5 | 125.7 | 16.5s (half-up at 7.0s) | starts at 0.12s, steps up at 7.0s, full from 16.5s, 1-bar break at 45.1s, full to 54.7s, fades 56–61s and stops at the file end | [link](https://suno.com/song/58c8849b-366e-4153-933b-fee4e8da81cc) |
+
+## Cinetic score takes (saves, no Suno)
+
+Rendered by cinetic's own engine (`scripts/audio/score.py` in Leon Lin's cinetic): tuned, deterministic, at exactly 126 BPM so every bar of the saves cut lands on the grid. Each is the length of the picture (40.7 s), -14 LUFS, and ends in digital silence. Re-render: `uv run --with numpy --with scipy --with pyloudnorm --with soundfile python3 <cinetic>/skills/cinetic/scripts/audio/score.py --cues cinetic/cues.json --score cinetic/score-a.json --out cinetic-saves-a.wav`. Not listened to; judged by the loudness map only. Previews muxed onto saves' video.mp4 are in `previews/` (untracked).
+
+| File | Key | What it does | Why it fits saves |
+|---|---|---|---|
+| cinetic-saves-a.wav | F major | 4 bars of breakdown with the clock tick (0-7.6 s), groove from 7.6 s, drive at 17.1 s on the wordmark's downbeat, groove to the end card, a soft resolve chord at 38.1 s | bar lines at 7.62, 17.14 and 38.10 s are exactly the storyboard's drop, name and end card |
+| cinetic-saves-b.wav | A dorian | same grid, four-on-the-floor from 7.6 s, brighter at 17.1 s, minor colour | darker and more tense under the X feed, a cooler read |
+
+## Suno takes still in the library, not exported
+
+Suno downloads were at 0 until 11/4 on Oct 13, so these exist only as clips in the library. Parameters for all four: v6, Max Mode on, weirdness 30-40, style influence 70-75, 52 s, exclude `vocals, voice, choir, vocal chops, marimba, ukulele, whistling, dubstep, trailer, cinematic boom, orchestral hits, EDM drop, lo-fi hip hop, stock corporate, big synth lead`.
+
+- "autofork saves felt" (126 BPM, D minor, warm felt piano and Rhodes stabs, dusty swung drums, no hook): [clip 1](https://suno.com/song/2570d7c5-0a2c-4961-9144-6d0fe0b23270), [clip 2](https://suno.com/song/26b9984f-918c-4cd6-b670-94976dfe8b1f)
+- "autofork saves pulse" (126 BPM, A minor, deep minimal melodic house, plucked arpeggio ostinato): [clip 1](https://suno.com/song/2a66d354-f47b-4c99-8c6f-dabd955020dd), [clip 2](https://suno.com/song/b905931d-c465-4374-a413-c4c9a64fda3e)
+- "phase" (minimalist phasing pulse) and "pocket" (live funk) did not appear in the library; resubmit with `.scratch/gen.mjs` if wanted.
