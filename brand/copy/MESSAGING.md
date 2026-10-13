@@ -69,8 +69,10 @@ The site ships the same day as the product. These lines describe the product Bas
 - **Big:** Make it yours. / Keep their updates.
 - **Small:** autofork.dev
 - **Alt:** autofork: Make it yours. Keep their updates.
+- **The composer**, once: T3 Code, always show context usage, Fork it.
+- **The T3 Code fork's card**, three true moments from `facts.json` and `launch.md`, newest on top: 4 changes on top, ready for their next release; every change kept, +156 commits, Oct 12; rebuilt by the agent, a change broke on day one, +383 commits, Oct 10.
 
-Nothing else. Keep the bottom fifth clear for X's title bar.
+No line appears twice (Bassim, Oct 13: "the open graph image repeats itself... that doesn't look all that good"). Keep the bottom fifth clear for X's title bar.
 
 ## What it isn't
 
