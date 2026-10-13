@@ -1,11 +1,13 @@
-@font-face { font-family: "Commit Mono"; src: url("../fonts/commit-mono-400.woff2") format("woff2"); font-weight: 400; }
-@font-face { font-family: "Commit Mono"; src: url("../fonts/commit-mono-700.woff2") format("woff2"); font-weight: 700; }
-:root { --bg: #ffffff; --ink: #101312; --sign-del: #d7402c; --sign-add: #1c9a50; --add-bg: #e1f5e7; }
-.dark { --bg: #0d1117; --ink: #e9ecea; --sign-add: #2db566; --add-bg: #10301d; }
+@font-face { font-family: "Host Grotesk"; src: url("../fonts/host-grotesk.woff2") format("woff2"); font-weight: 300 800; }
+:root { --bg: #FFFFFF; --ink: #0E0E12; --trunk: #CACAD2; --you: #3B2BFF; }
+.dark { --bg: #0D1117; --ink: #EEEEF2; --trunk: #34343D; --you: #8F84FF; }
 html, body { margin: 0; }
-body { width: 100vw; height: 100vh; background: var(--bg); align-items: flex-start; color: var(--ink); font-family: "Commit Mono", monospace; font-variant-ligatures: none; overflow: hidden; display: flex; flex-direction: column; justify-content: center; }
-.wm { height: 28px; margin: 0 0 26px 40px; display: block; }
-.ln { align-self: stretch; display: grid; grid-template-columns: 26px 1fr; column-gap: 14px; padding: 0 40px; white-space: nowrap; }
-.big { font-size: 46px; font-weight: 700; letter-spacing: -0.045em; line-height: 70px; }
-.big::before { font-weight: 400; text-align: center; content: " "; }
-.add { background: var(--add-bg); } .add::before { content: "+"; color: var(--sign-add); }
+body { width: 838px; height: 300px; background: var(--bg); color: var(--ink); font-family: "Host Grotesk", sans-serif; position: relative; overflow: hidden; }
+svg.g { position: absolute; inset: 0; }
+.trunk { stroke: var(--trunk); stroke-width: 3; fill: none; }
+.yours { stroke: var(--you); stroke-width: 3; fill: none; }
+.ring { fill: var(--bg); stroke: var(--trunk); stroke-width: 3; }
+.dot { fill: var(--you); }
+.wm { position: absolute; left: 96px; top: 34px; height: 32px; }
+h1 { position: absolute; left: 96px; top: 98px; margin: 0; font-size: 76px; line-height: .98; letter-spacing: -0.028em; font-weight: 800; }
+h1 span { display: block; } h1 .you { color: var(--you); }
