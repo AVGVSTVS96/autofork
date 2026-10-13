@@ -5,11 +5,11 @@ import { join } from "node:path"
 
 const owner = "AVGVSTVS96"
 
-const legacy = { workflow: "sync-upstream.yml", sync: "chore: sync patched fork to " }
-const engine = { workflow: "autopatch.yml", sync: "autopatch: sync " }
+const legacy = { workflows: ["sync-upstream.yml"], sync: /^chore: sync patched fork to / }
+const engine = { workflows: ["autofork.yml", "autopatch.yml"], sync: /^auto(?:fork|patch): sync / }
 
 const forks = [
-  { repo: "t3code", name: "T3 Code", upstream: "pingdotgg/t3code", patches: ".autopatch", ref: "main", ...engine },
+  { repo: "t3code", name: "T3 Code", upstream: "pingdotgg/t3code", patches: ".autofork", ref: "main", ...engine },
   { repo: "claude-plugins-official", name: "Claude Code plugins", upstream: "anthropics/claude-plugins-official", patches: "patches", ref: "main", ...legacy },
   { repo: "buzz", name: "buzz", upstream: "block/buzz", patches: "fork/patches", ref: "nightly-green-main", ...legacy },
   { repo: "herdr", name: "herdr", upstream: "herdrdev/herdr", patches: "patches", ref: "main", ...legacy },
@@ -25,12 +25,18 @@ const count = (fork) => {
     .filter((entry) => entry.type === "dir")
     .map((entry) => entry.name)
 
-  const runs = gh("run", "list", "-R", `${owner}/${fork.repo}`, "--workflow", fork.workflow, "--limit", "1000", "--json", "conclusion,createdAt")
+  const runs = fork.workflows.flatMap((workflow) => {
+    try {
+      return gh("run", "list", "-R", `${owner}/${fork.repo}`, "--workflow", workflow, "--limit", "1000", "--json", "conclusion,createdAt")
+    } catch {
+      return []
+    }
+  })
   const green = runs.filter((run) => run.conclusion === "success").map((run) => run.createdAt).sort()
   const firstRun = runs.map((run) => run.createdAt).sort()[0]
 
   const syncs = api(`repos/${owner}/${fork.repo}/commits?per_page=100`)
-    .filter((c) => c.commit.message.startsWith(fork.sync))
+    .filter((c) => fork.sync.test(c.commit.message))
   const sources = syncs.map((c) => c.commit.message.split("\n")[0].split(" ").at(-1))
   const absorbed = sources.length > 1
     ? gh("api", `repos/${fork.upstream}/compare/${sources.at(-1)}...${sources[0]}`).total_commits
@@ -84,11 +90,11 @@ const firstSync = perFork.map((fork) => fork.firstSync).sort()[0]
 const facts = {
   countedAt: new Date().toISOString(),
   owner,
-  site: "https://autofork.dev",
+  site: "https://autofork.com",
   repo: `https://github.com/${owner}/autofork`,
   action: `${owner}/autofork@v1`,
   engineToday: { repo: `https://github.com/${owner}/autopatch`, site: "https://autopatchmd.vercel.app" },
-  tool: tool(process.env.AUTOFORK_DIR ?? join(homedir(), "Developer/autopatch")),
+  tool: tool(process.env.AUTOFORK_DIR ?? join(homedir(), "Developer/autofork")),
   t3code: gh("api", "repos/pingdotgg/t3code", "--jq", "{stars: .stargazers_count, forks: .forks_count}"),
   lineage: {
     piPatcher: { repo: `https://github.com/${owner}/pi-patcher`, created: created("pi-patcher") },
@@ -107,13 +113,13 @@ const facts = {
     daysSinceFirstSync: daysBetween(firstSync, new Date().toISOString()),
   },
   how: {
-    patches: "Directories under each fork's patches folder (T3 Code: .autopatch; buzz: fork/patches on nightly-green-main), each a PATCH.md plus its .patch. Includes each fork's own README patch and herdr's auto-managed heal-overflow.",
-    syncRuns: "gh run list on the fork's sync workflow (autopatch.yml for T3 Code, sync-upstream.yml for the older three), every conclusion. greenSyncRuns counts only success.",
-    syncCommits: "Commits on the fork's default branch whose message starts with 'autopatch: sync ' (T3 Code) or 'chore: sync patched fork to ' (the older three), one per upstream commit or release the fork was rebuilt on.",
+    patches: "Directories under each fork's patches folder (T3 Code: .autofork; buzz: fork/patches on nightly-green-main), each a PATCH.md plus its .patch. Includes each fork's own README patch and herdr's auto-managed heal-overflow.",
+    syncRuns: "gh run list on the fork's sync workflow (autofork.yml and the earlier autopatch.yml for T3 Code, sync-upstream.yml for the older three), every conclusion. greenSyncRuns counts only success.",
+    syncCommits: "Commits on the fork's default branch whose message starts with 'autofork: sync ' or 'autopatch: sync ' (T3 Code) or 'chore: sync patched fork to ' (the older three), one per upstream commit or release the fork was rebuilt on.",
     upstreamCommitsAbsorbed: "gh api compare on the upstream repo, from the first synced source commit to the latest one.",
     heals: "Distinct upstream sources where a sync commit or patched release says patches were 'healed by <agent>' after git apply failed.",
     greenDays: "First sync run to the last successful one.",
-    tool: "Read from the engine checkout (AUTOFORK_DIR, default ~/Developer/autopatch until the rename): lines in src/*.ts, dependencies in package.json, the cron in the workflow init writes, commands from the usage text.",
+    tool: "Read from the engine checkout (AUTOFORK_DIR, default ~/Developer/autofork): lines in src/*.ts, dependencies in package.json, the cron in the workflow init writes, commands from the usage text.",
     t3code: "gh api repos/pingdotgg/t3code at countedAt. Round down when quoting.",
   },
 }
