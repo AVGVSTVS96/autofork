@@ -44,7 +44,15 @@ if [ "$(git rev-parse HEAD)" != "$head" ]; then
   trap 'git push --quiet "$remote" --delete "$scratch" || true; keep_codex_auth' EXIT
   signed="$(gh api "repos/$GITHUB_REPOSITORY/git/commits" \
     -f message="$(git log -1 --format=%B)" -f tree="$(git rev-parse 'HEAD^{tree}')" "${parents[@]}" --jq .sha)"
-  gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/heads/$GITHUB_REF_NAME" -f sha="$signed" > /dev/null
+  if ! moved="$(gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/heads/$GITHUB_REF_NAME" -f sha="$signed" 2>&1)"; then
+    if [ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$GITHUB_REF_NAME" --jq .object.sha)" = "$head" ]; then
+      echo "$moved" >&2
+      exit 1
+    fi
+    echo "$GITHUB_REF_NAME changed while this ran, so the next run syncs it instead"
+    echo "result=moved" >> "$GITHUB_OUTPUT"
+    exit 0
+  fi
   echo "pushed ${signed:0:12} to $GITHUB_REF_NAME, signed by GitHub"
 
   for doc in $(git diff --name-only --diff-filter=A "$head" HEAD -- '.autofork/*/UPSTREAM.md'); do

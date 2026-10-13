@@ -16,7 +16,7 @@ inputs:
     default: ""
 outputs:
   result:
-    description: synced, current, waiting, skipped, or failed
+    description: synced, current, waiting, skipped, moved, or failed
     value: ${{ steps.sync.outputs.result }}
 runs:
   using: composite
