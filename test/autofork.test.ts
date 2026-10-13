@@ -299,7 +299,7 @@ test("init follows releases when every release is named with a dash", () => {
   expect(autofork(mine, "init", "acme/desktop").log).toContain("acme/desktop's main branch, since it has no releases");
 });
 
-test("init works on the fork origin points to, not the upstream gh picks", () => {
+test("init turns on Actions and issues for the fork origin points to, not the upstream gh picks", () => {
   const bin = join(home, "bin");
   mkdirSync(bin, { recursive: true });
   writeFileSync(join(bin, "gh"), `#!/bin/sh
@@ -314,5 +314,8 @@ esac
   sh(home, `git clone -q ${join(github, "acme/app.git")} mine && git -C mine remote set-url origin git@github.com:me/app.git`);
   const { ok } = autoforkWith({ PATH: `${bin}:${process.env.PATH}` }, join(home, "mine"), "init", "acme/app");
   expect(ok).toBe(true);
-  expect(file(home, "gh.log")).toContain("api -X PATCH repos/me/app -f description=Ada's autofork · An app");
+  const calls = file(home, "gh.log");
+  expect(calls).toContain("api -X PUT repos/me/app/actions/permissions -F enabled=true");
+  expect(calls).toContain("repo edit me/app --enable-issues");
+  expect(calls).toContain("api -X PATCH repos/me/app -f description=Ada's autofork · An app");
 });

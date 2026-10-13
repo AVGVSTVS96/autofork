@@ -517,16 +517,17 @@ function origin(root: string) {
   return url.match(/github\.com[/:]([\w.-]+\/[\w.-]+?)(?:\.git)?$/)?.[1] ?? "";
 }
 
-function describe(root: string, upstream: string) {
-  const parent = githubRepo(upstream)?.toLowerCase();
-  if (!parent) return;
+function claim(root: string, upstream: string) {
   const api = (...args: string[]) => {
     const result = run("gh", ["api", ...args], root);
     return result.ok ? JSON.parse(result.out.toString()) : undefined;
   };
   const repo = origin(root);
   const fork = repo ? api(`repos/${repo}`) : undefined;
-  if (fork?.parent?.full_name.toLowerCase() !== parent) return;
+  if (!fork?.fork) return;
+  run("gh", ["api", "-X", "PUT", `repos/${repo}/actions/permissions`, "-F", "enabled=true"], root);
+  run("gh", ["repo", "edit", repo, "--enable-issues"], root);
+  if (fork.parent?.full_name.toLowerCase() !== githubRepo(upstream)?.toLowerCase()) return;
   const owner = api(`users/${fork.owner.login}`);
   const who = (owner?.type === "User" ? owner.name?.trim().split(/\s+/)[0] : owner?.name?.trim()) || fork.owner.login;
   api("-X", "PATCH", `repos/${repo}`, "-f", `description=${[`${who}'s autofork`, fork.parent.description].filter(Boolean).join(" · ")}`);
@@ -535,7 +536,7 @@ function describe(root: string, upstream: string) {
 async function init(root: string, args: string[]) {
   if (!args[0]) throw new Failure("usage: autofork init <owner/repo | git url> [--follow <releases | branch>] [--verify <command>]");
   await setup(root, args[0], args);
-  describe(root, args[0]);
+  claim(root, args[0]);
   say("Add a CLAUDE_CODE_OAUTH_TOKEN secret (claude setup-token), commit, and push.");
 }
 
@@ -545,10 +546,8 @@ async function fork(cwd: string, args: string[]) {
   if (!run("gh", ["repo", "fork", upstream, "--clone", "--default-branch-only"], cwd).ok) throw new Failure("gh couldn't fork it. Is the GitHub CLI installed and logged in?");
   const root = join(cwd, upstream.split("/")[1]);
   const readme = await setup(root, upstream, args);
-  describe(root, upstream);
+  claim(root, upstream);
   const repo = origin(root);
-  run("gh", ["api", "-X", "PUT", `repos/${repo}/actions/permissions`, "-F", "enabled=true"], root);
-  run("gh", ["repo", "edit", repo, "--enable-issues"], root);
   const token = process.env.CLAUDE_CODE_OAUTH_TOKEN;
   if (token) run("gh", ["secret", "set", "CLAUDE_CODE_OAUTH_TOKEN", "--repo", repo, "--body", token], root);
   git(root, "add", DIR, ".github/workflows/autofork.yml", ...(readme ? [readme] : []));
