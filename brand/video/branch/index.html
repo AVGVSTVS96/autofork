@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>autofork · branch</title>
+<link rel="stylesheet" href="video.css">
+</head>
+<body>
+<main id="stage" data-theme="light">
+
+<svg id="world" width="1920" height="1080"><g id="cam"></g></svg>
+
+<section class="scene" data-s="0" data-e="4">
+  <div class="cap">
+    <span class="m"><span data-in="-1">T3 Code won't merge big features.</span></span>
+    <p class="sub" data-in="-1" data-k="fade">“Big features will not be.” · T3 Code's README</p>
+  </div>
+</section>
+
+<section class="scene" data-s="4" data-e="8">
+  <div class="cap">
+    <span class="m"><span data-in=".5">Fork it to make it yours.</span></span>
+    <span class="m"><span data-in="2">It falls behind every release they ship.</span></span>
+  </div>
+</section>
+
+<section class="scene" data-s="8" data-e="10">
+  <div class="center"><p class="intro" data-in="0" data-k="fade" data-dur=".3" data-cue="tap volume=.5">Introducing</p></div>
+</section>
+
+<section class="scene" data-s="10" data-e="15">
+  <div class="center name">
+    <svg class="logo big" data-logo data-in="0" data-cue="success volume=1"></svg>
+    <p class="tagline" data-in="1.5"><span>Make it yours.</span> <span class="you">Keep their updates.</span></p>
+  </div>
+</section>
+
+<section class="scene" data-s="15" data-e="21">
+  <div class="center ask-scene">
+    <h2 class="m"><span data-in="-1">Name an app and what you'd change.</span></h2>
+    <div class="ask">
+      <span class="reach"></span>
+      <span class="badge"><img src="img/t3code.png" alt="">T3 Code</span>
+      <span class="field"><span class="typed" data-type="put the thread's name in the window title" data-at=".6"></span><i class="caret"></i></span>
+      <span class="go" data-press="2.5" data-cue="tap volume=.6">Fork it</span>
+    </div>
+    <p class="note" data-in="3" data-k="up">Runs on the ChatGPT or Claude plan you already pay for.</p>
+  </div>
+</section>
+
+<section class="scene" data-s="21" data-e="26">
+  <div class="cap">
+    <span class="m"><span data-in="1.5">Sometimes an update breaks your change.</span></span>
+  </div>
+</section>
+
+<section class="scene" data-s="26" data-e="34">
+  <div class="agent">
+    <div class="card" data-in="-1">
+      <p class="file">window-title/PATCH.md</p>
+      <p class="ask-text">The window title shows the thread you're looking at.</p>
+    </div>
+    <ol class="log">
+      <li data-in="1" data-cue="loading volume=.45"><img class="claude" src="img/claude.svg" alt=""><b>healing window-title</b><time>22:59:45</time></li>
+      <li data-in="2.5" class="said">I re-implemented the window-title patch on the current source, and the web typecheck passes.</li>
+      <li data-in="4" class="healed"><i></i><b>healed window-title</b><time>23:01:11</time></li>
+    </ol>
+  </div>
+  <div class="cap low">
+    <span class="m"><span data-in="-1">An agent rebuilds it from what you asked for.</span></span>
+  </div>
+</section>
+
+<section class="scene" data-s="34" data-e="42">
+  <div class="cap">
+    <span class="m"><span data-in=".5">Every update after that arrives</span></span>
+    <span class="m"><span data-in=".5">with your changes in it.</span></span>
+  </div>
+</section>
+
+<section class="scene" data-s="42" data-e="48">
+  <div class="cap">
+    <span class="m"><span data-in=".5">My T3 Code fork took 156 commits in its first two days.</span></span>
+    <span class="m"><span class="you" data-in="1.5" data-cue="ready volume=.5">It kept all 3 changes.</span></span>
+  </div>
+</section>
+
+<section class="scene" data-s="48" data-e="54">
+  <div class="cap lower">
+    <span class="m"><span data-in=".5">If they ship their own version,</span></span>
+    <span class="m"><span data-in="2">yours pauses until you pick.</span></span>
+  </div>
+</section>
+
+<section class="scene" data-s="54" data-e="58">
+  <svg class="hero-lines" width="1920" height="1080">
+    <path class="trunk" d="M-20 470H1940"/>
+    <path class="yours" data-draw=".5" data-dur=".55" pathLength="1" d="M250 470C335 470 335 690 420 690H1712"/>
+    <circle class="node" cx="1712" cy="690" r="15" data-pop="1.4" data-cue="tap volume=.5"/>
+  </svg>
+  <h1 class="hero">
+    <span class="m row1"><span data-in=".1">Make it yours.</span></span>
+    <span class="m row2"><span class="you" data-in="1">Keep their updates.</span></span>
+  </h1>
+</section>
+
+<section class="scene" data-s="58" data-e="62">
+  <div class="center name">
+    <svg class="logo big" data-logo data-in="0" data-cue="ready volume=.6"></svg>
+    <p class="url" data-in="1" data-k="up">autofork.dev</p>
+    <p class="plan" data-in="1.5" data-k="up">Runs on the ChatGPT or Claude plan you already pay for.</p>
+  </div>
+</section>
+
+<div class="rails">
+  <i class="v" style="left:var(--rail-x)"></i><i class="v" style="right:var(--rail-x)"></i>
+  <i class="h" style="top:var(--rail-y)"></i><i class="h" style="bottom:var(--rail-y)"></i>
+  <span class="wm" id="rail-wm"><svg class="logo" data-logo></svg></span>
+  <span class="rail-t tr" id="rail-tag">Make it yours. Keep their updates.</span>
+  <span class="rail-t bl" id="count">01 / 11</span>
+  <span class="rail-t br" id="rail-url">autofork.dev</span>
+</div>
+
+</main>
+<script src="node_modules/motion/dist/motion.js"></script>
+<script type="module" src="video.js"></script>
+<script type="module" src="sound.js"></script>
+</body>
+</html>

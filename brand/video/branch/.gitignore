@@ -1,0 +1,4 @@
+*.wav
+out/*
+!out/video.mp4
+!out/sheet.png
