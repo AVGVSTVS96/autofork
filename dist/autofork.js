@@ -86,22 +86,42 @@ function githubRepo(upstream) {
 function upstreamUrl(upstream) {
   return /^[\w.-]+\/[\w.-]+$/.test(upstream) ? `https://github.com/${upstream}.git` : upstream;
 }
-function fetchUpstream(root, config) {
+function github(path) {
+  const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
+  const headers = { accept: "application/vnd.github+json" };
+  if (token)
+    headers.authorization = `Bearer ${token}`;
+  return fetch(`https://api.github.com/${path}`, { headers });
+}
+async function fetchUpstream(root, config) {
   const url = upstreamUrl(config.upstream);
-  const ref = config.follow === "releases" ? latestRelease(root, url) : `refs/heads/${config.follow}`;
+  const ref = config.follow === "releases" ? await latestRelease(root, config.upstream) : `refs/heads/${config.follow}`;
+  if (!ref)
+    throw new Failure(`${url} has no releases. Follow a branch instead: set "follow" in ${DIR}/config.json`);
   git(root, "fetch", "--quiet", "--no-tags", url, `+${ref}:refs/autofork/upstream`, "+HEAD:refs/autofork/branch");
   return git(root, "rev-parse", "refs/autofork/upstream^{commit}");
 }
-function releases(root, url) {
-  const tags = git(root, "ls-remote", "--tags", "--refs", "--sort=-v:refname", url).split(`
-`);
-  return tags.map((line) => line.split("\t")[1]).filter((ref) => ref && !ref.includes("-"));
+async function publishedRelease(upstream) {
+  const repo = githubRepo(upstream);
+  if (!repo)
+    return;
+  try {
+    const response = await github(`repos/${repo}/releases/latest`);
+    if (response.ok)
+      return (await response.json()).tag_name;
+    if (response.status !== 404)
+      say(`can't read ${repo}'s latest release (${response.status}), using its newest version tag`);
+  } catch {
+    say(`can't reach GitHub for ${repo}'s latest release, using its newest version tag`);
+  }
 }
-function latestRelease(root, url) {
-  const release = releases(root, url)[0];
-  if (!release)
-    throw new Failure(`${url} has no release tags. Follow a branch instead: set "follow" in ${DIR}/config.json`);
-  return release;
+async function latestRelease(root, upstream) {
+  const published = await publishedRelease(upstream);
+  if (published)
+    return `refs/tags/${published}`;
+  const tags = git(root, "ls-remote", "--tags", "--refs", "--sort=-v:refname", upstreamUrl(upstream)).split(`
+`);
+  return tags.map((line) => line.split("\t")[1]).find((ref) => ref && !ref.includes("-"));
 }
 function baseline(root) {
   const synced = git(root, "log", "--first-parent", "-1", "--format=%s", "-E", "--grep=^auto(fork|patch): sync ", "HEAD").split(" ").at(-1);
@@ -118,13 +138,9 @@ async function newestGreen(root, config, base, tip) {
   const repo = githubRepo(config.upstream);
   if (config.green === false || config.follow === "releases" || !repo)
     return tip;
-  const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
-  const headers = { accept: "application/vnd.github+json" };
-  if (token)
-    headers.authorization = `Bearer ${token}`;
   for (const sha of git(root, "rev-list", "--first-parent", "--max-count=30", `${base}..${tip}`).split(`
 `).filter(Boolean)) {
-    const response = await fetch(`https://api.github.com/repos/${repo}/commits/${sha}/check-runs?per_page=100`, { headers });
+    const response = await github(`repos/${repo}/commits/${sha}/check-runs?per_page=100`);
     if (!response.ok) {
       say(`can't read upstream checks (${response.status}), using upstream's tip`);
       return tip;
@@ -321,7 +337,7 @@ async function sync(root, args) {
   config.patches.forEach((id) => intent(root, id));
   if (git(root, "status", "--porcelain"))
     throw new Failure("commit or stash your changes first");
-  const tip = fetchUpstream(root, config);
+  const tip = await fetchUpstream(root, config);
   const base = baseline(root);
   const source = newer(root, base, await newestGreen(root, config, base, tip));
   const key = `${short(source)}-${short(git(root, "rev-parse", "HEAD"))}`;
@@ -391,7 +407,7 @@ async function save(root, args) {
   intent(root, id);
   rmSync(upstreamDoc(root, id), { force: true });
   const config = readConfig(root);
-  fetchUpstream(root, config);
+  await fetchUpstream(root, config);
   const files = workingTree(root);
   const { base, rebuilt, drift } = check(root, config, files);
   if (!drift.length)
@@ -434,20 +450,20 @@ jobs:
         env:
           CLAUDE_CODE_OAUTH_TOKEN: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 `;
-function setup(root, upstream, args) {
+async function setup(root, upstream, args) {
   if (existsSync(configFile(root)))
     throw new Failure(`${DIR}/config.json already exists`);
   const url = upstreamUrl(upstream);
   const head = run("git", ["ls-remote", "--symref", url, "HEAD"], root).out.toString();
   const branch = head.match(/^ref: refs\/heads\/(\S+)\s+HEAD/m)?.[1] ?? "main";
-  const follow = flag(args, "--follow") ?? (releases(root, url).length ? "releases" : branch);
+  const follow = flag(args, "--follow") ?? (await latestRelease(root, upstream) ? "releases" : branch);
   const config = { upstream, follow, verify: flag(args, "--verify") };
   writeConfig(root, config);
   const workflow = join(root, ".github/workflows/autofork.yml");
   mkdirSync(join(root, ".github/workflows"), { recursive: true });
   if (!existsSync(workflow))
     writeFileSync(workflow, WORKFLOW);
-  fetchUpstream(root, config);
+  await fetchUpstream(root, config);
   const { base, drift } = check(root, { ...config, patches: [] }, workingTree(root));
   const readme = addNote(root, upstream, base, drift);
   const inherited = git(root, "ls-files", ".github/workflows").split(`
@@ -522,7 +538,7 @@ function describe(root, upstream) {
 async function init(root, args) {
   if (!args[0])
     throw new Failure("usage: autofork init <owner/repo | git url> [--follow <releases | branch>] [--verify <command>]");
-  setup(root, args[0], args);
+  await setup(root, args[0], args);
   describe(root, args[0]);
   say("Add a CLAUDE_CODE_OAUTH_TOKEN secret (claude setup-token), commit, and push.");
 }
@@ -533,7 +549,7 @@ async function fork(cwd, args) {
   if (!run("gh", ["repo", "fork", upstream, "--clone", "--default-branch-only"], cwd).ok)
     throw new Failure("gh couldn't fork it. Is the GitHub CLI installed and logged in?");
   const root = join(cwd, upstream.split("/")[1]);
-  const readme = setup(root, upstream, args);
+  const readme = await setup(root, upstream, args);
   describe(root, upstream);
   const repo = ownRepo(root);
   run("gh", ["api", "-X", "PUT", `repos/${repo}/actions/permissions`, "-F", "enabled=true"], root);
@@ -550,7 +566,7 @@ async function fork(cwd, args) {
 }
 async function status(root) {
   const config = readConfig(root);
-  fetchUpstream(root, config);
+  await fetchUpstream(root, config);
   const { base, drift } = check(root, config, workingTree(root));
   const behind = git(root, "rev-list", "--count", "--first-parent", `${base}..refs/autofork/upstream`);
   say(`${config.upstream} at ${short(base)}, ${behind} commit${behind === "1" ? "" : "s"} behind upstream`);

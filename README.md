@@ -96,7 +96,7 @@ Your agent then knows how to fork a repo and keep its changes as patches.
 | key | |
 | --- | --- |
 | `upstream` | `owner/repo`, or any git URL |
-| `follow` | `releases` (upstream's newest release tag, skipping pre-releases) or a branch. Default: `releases`, or the default branch if upstream has no releases |
+| `follow` | `releases` (the release GitHub marks as upstream's latest, or its newest version tag when it has no GitHub releases) or a branch. Default: `releases`, or the default branch if upstream has no releases |
 | `verify` | the command that checks a build |
 | `agent` | the command that rebuilds a patch, prompt on stdin. Default: Claude Code when `CLAUDE_CODE_OAUTH_TOKEN` is set, otherwise Codex when it's signed in (a `CODEX_AUTH` secret holding `~/.codex/auth.json`) |
 | `green` | when following a branch, `false` takes upstream's newest commit even when its checks failed |

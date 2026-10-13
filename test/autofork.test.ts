@@ -9,6 +9,15 @@ const home = mkdtempSync(join(tmpdir(), "autofork-test-"));
 const gitconfig = join(home, "gitconfig");
 writeFileSync(gitconfig, "[user]\n\tname = test\n\temail = test@example.com\n[commit]\n\tgpgsign = false\n[init]\n\tdefaultBranch = main\n[diff]\n\tnoprefix = true\n");
 const env = { ...process.env, GIT_CONFIG_GLOBAL: gitconfig, GIT_CONFIG_NOSYSTEM: "1", RUNNER_TEMP: home };
+const github = join(home, "github");
+writeFileSync(gitconfig, `[url "${github}/"]\n\tinsteadOf = https://github.com/\n`, { flag: "a" });
+const fakeApi = join(home, "fake-api.mjs");
+writeFileSync(fakeApi, `globalThis.fetch = async (url) => {
+  const latest = process.env.LATEST_RELEASE;
+  if (latest && String(url).endsWith("/releases/latest")) return new Response(JSON.stringify({ tag_name: latest }));
+  return new Response("{}", { status: 404 });
+};
+`);
 
 function sh(cwd: string, command: string) {
   const result = spawnSync("sh", ["-c", command], { cwd, env, encoding: "utf8" });
@@ -17,9 +26,13 @@ function sh(cwd: string, command: string) {
 }
 
 function autofork(cwd: string, ...args: string[]) {
+  return autoforkWith({}, cwd, ...args);
+}
+
+function autoforkWith(extra: NodeJS.ProcessEnv, cwd: string, ...args: string[]) {
   const outputs = join(home, "github-output");
   writeFileSync(outputs, "");
-  const result = spawnSync("node", [cli, ...args], { cwd, env: { ...env, GITHUB_OUTPUT: outputs }, encoding: "utf8" });
+  const result = spawnSync("node", ["--import", fakeApi, cli, ...args], { cwd, env: { ...env, ...extra, GITHUB_OUTPUT: outputs }, encoding: "utf8" });
   const output = Object.fromEntries(readFileSync(outputs, "utf8").split("\n").filter(Boolean).map((line) => line.split("=")));
   return { ok: result.status === 0, log: result.stderr, output };
 }
@@ -256,4 +269,31 @@ test("init puts a note under the README's title as a saved patch, which later sy
   expect(synced.log).not.toContain("building");
   expect(file(mine, "README.md")).toContain("> A personal fork of Demo");
   expect(file(mine, "README.md")).toContain("Run it with care.");
+});
+
+test("a fork on GitHub follows its latest release, not its highest tag", () => {
+  const app = join(github, "acme/app.git");
+  mkdirSync(app, { recursive: true });
+  sh(app, "git init -q && echo one > notes.txt && git add -A && git commit -qm one && git tag v9.0.0");
+  sh(app, "echo two > notes.txt && git commit -qam two && git tag desktop-v1.0.0 && echo three > notes.txt && git commit -qam three");
+  sh(home, `git clone -q ${app} app && git -C app reset -q --hard v9.0.0`);
+  const mine = join(home, "app");
+  expect(autofork(mine, "init", "acme/app").log).toContain("autofork follows acme/app's releases.");
+  sh(mine, "git add -A && git commit -qm 'track upstream'");
+  expect(autofork(mine, "sync").log).toContain("already up to date");
+  const released = autoforkWith({ LATEST_RELEASE: "desktop-v1.0.0" }, mine, "sync");
+  expect(released.ok).toBe(true);
+  expect(released.output.result).toBe("synced");
+  expect(file(mine, "notes.txt")).toBe("two\n");
+});
+
+test("init follows releases when every release is named with a dash", () => {
+  const app = join(github, "acme/desktop.git");
+  mkdirSync(app, { recursive: true });
+  sh(app, "git init -q && echo one > notes.txt && git add -A && git commit -qm one && git tag desktop-v1.0.0");
+  sh(home, `git clone -q ${app} desktop`);
+  const mine = join(home, "desktop");
+  expect(autoforkWith({ LATEST_RELEASE: "desktop-v1.0.0" }, mine, "init", "acme/desktop").log).toContain("autofork follows acme/desktop's releases.");
+  sh(mine, "rm -rf .autofork .github");
+  expect(autofork(mine, "init", "acme/desktop").log).toContain("acme/desktop's main branch, since it has no releases");
 });
