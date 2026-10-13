@@ -18,11 +18,11 @@ const grab = async (selector, name, scale, pad = 0, settle = 5000) => {
   console.log(name)
 }
 
-await page.goto("https://autofork.dev", { waitUntil: "networkidle0" })
+await page.goto("https://autofork.com", { waitUntil: "networkidle0" })
 await grab(".t3", "t3", 4)
 await grab(".story", "story", 2, 24, 12000)
 await grab(".gh", "gh", 2)
-await page.goto("https://autofork.dev/AVGVSTVS96/t3code", { waitUntil: "networkidle0" })
+await page.goto("https://autofork.com/AVGVSTVS96/t3code", { waitUntil: "networkidle0" })
 await grab(".fork-head", "fork-head", 2, 8)
 await grab(".card.run", "fork-run", 2)
 await browser.close()

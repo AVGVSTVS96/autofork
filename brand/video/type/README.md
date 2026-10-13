@@ -16,7 +16,7 @@ Beats are the music's (129.9 BPM, a beat is 0.46 s). Every cut is on a beat; the
 | 3.23 | 7–8 | Keep their updates. | the line whole, in ultramarine | the hero, read once in one piece |
 | 3.70 | 8–12 | Name an open source app | the composer's badge at 4.6× flies through herdr, Ghostty, Buzz, pi, cmux, tmux, UTM on eighth notes (motion-blurred while it moves) and lands on T3 Code | the app names as the hook, across the build-up |
 | 5.55 | 12–16 | and what you'd change. | the site's composer; "but always show context usage" types from the drop, then Fork it presses | the product's one action |
-| 7.41 | 16–18 | flash: your fork | autofork.dev/AVGVSTVS96/t3code: "Your t3code" and its last run, "The agent builds your change" | what Fork it gives you, real page |
+| 7.41 | 16–18 | flash: your fork | autofork.com/AVGVSTVS96/t3code: "Your t3code" and its last run, "The agent builds your change" | what Fork it gives you, real page |
 | 8.33 | 18–20 | flash: the change | T3 Code with the context button, pushing in on "my change" | the change living in the app |
 | 9.26 | 20–28 | Every release arrives with your changes. | their gray line and yours; five releases land a beat apart and each merges into yours, its pill turning ultramarine | the magic underneath, as the brand's git graph |
 | 12.96 | 28–30 | When a release breaks yours, | words on sixteenths | sets up the agent |
@@ -26,7 +26,7 @@ Beats are the music's (129.9 BPM, a beat is 0.46 s). Every cut is on a beat; the
 | 22.21 | 48–54 | 156 commits from T3 Code. One change broke on day one. The agent rebuilt it. | "My T3 Code fork, first 2 days" over 156, white on ultramarine, with a bright tone | the real number (`copy/facts.json`), slammed in as the music comes back |
 | 24.98 | 54–60 | Your GitHub. Your plan. | the fork's GitHub card, then Continue with ChatGPT / Continue with Claude | where it lives, who pays |
 | 27.69 | 60–64 | Introducing | | the song's break; the stop-down before the name |
-| 29.54 | 64–70 + 1 s | autofork | the wordmark lands with a chord as the groove returns, its gray line draws, the branch leaves it and lands on its node; the tagline and autofork.dev land on the song's last two stabs | the name, then a short ring-out |
+| 29.54 | 64–70 + 1 s | autofork | the wordmark lands with a chord as the groove returns, its gray line draws, the branch leaves it and lands on its node; the tagline and autofork.com land on the song's last two stabs | the name, then a short ring-out |
 
 Taken from his saves: the word-swap kinetic type in nikitabier's "perfect launch video"; Varcyyyy's Gumroad film (the field color snapping on the beat, objects arriving on every hit); leomeethewoo's Apple-style article (one key object in the center, space to breathe, 115-130 BPM for "kinetic, sophisticated", sparse sound); the onboarding clips (Hila, Farzad), where the line that's active goes dark and the rest stays gray, which is how the composer's two lines trade places.
 
@@ -39,7 +39,7 @@ The page is the video: `index.html` holds the scenes, `video.css` the brand's to
 ```sh
 s=~/.agents/skills/brand-it/scripts
 export TMPDIR=$PWD/.scratch
-bun tools/product.mjs                          # product/: the flashes, from autofork.dev
+bun tools/product.mjs                          # product/: the flashes, from autofork.com
 uv run --with librosa python tools/beats.py ../music/T5.wav   # the beat list in music.js
 bun $s/video.mjs . stills 0 9.3 22.3
 bun $s/video.mjs . audio                       # needs ../music/T5.wav (gitignored; Suno link in ../music/README.md)

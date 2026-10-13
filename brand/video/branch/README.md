@@ -21,7 +21,7 @@ One option for autofork's launch video: the git graph is the video. Their line i
 | 42–48 | Proof | Pull back over Oct 10 to Oct 12: one dot per upstream commit, every merge, the rebuilt `window-title` chip pulses | My T3 Code fork took 156 commits in its first two days. / One change broke on day one and the agent rebuilt it. | The facts.json line, as the graph it describes |
 | 48–54 | They catch up | Their line ships context usage; the update still lands, your `context-usage` arrives dashed and paused, and the issue the engine opens hangs under it | If they ship their own version, / yours pauses until you pick. | The trust line from the launch post |
 | 54–58 | Headline | The site's hero on the graph: "Make it yours." on their line, "Keep their updates." on yours | | The headline lands on the branch |
-| 58–62 | End | Wordmark on the take's last chord, autofork.dev | Runs on the ChatGPT or Claude plan you already pay for. | The button, rings out |
+| 58–62 | End | Wordmark on the take's last chord, autofork.com | Runs on the ChatGPT or Claude plan you already pay for. | The button, rings out |
 
 The header's wordmark and tagline stay hidden until the name has been introduced, and step aside for the headline and end cards.
 

@@ -2,7 +2,7 @@ import puppeteer from "puppeteer-core"
 import { writeFileSync, mkdirSync } from "node:fs"
 const out = process.argv[2]
 mkdirSync(out, { recursive: true })
-const base = "https://autofork.dev"
+const base = "https://autofork.com"
 const offsets = [0, 4, 6, 19, 23, 95, 134]
 let phase = 0
 let holdForks = true

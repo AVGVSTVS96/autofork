@@ -22,7 +22,7 @@ Cuts land on the music's beats (take C1, 126.2 BPM, a beat every 0.475 s).
 | 22.8 | graph | their line with releases; each merges into yours | "Every release arrives with your change already in it." |
 | 25.7 | heal | a release doesn't fit; the real PATCH.md line; the agent rebuilds it; the next release merges clean | the magic underneath |
 | 30.4 | proof | "156 commits from T3 Code. One change broke on day one. The agent rebuilt it." over the fork's composer with the context button | the real numbers from `copy/facts.json` (156 commits, 1 heal) |
-| 36.1 | end | the wordmark, autofork.dev, the take's closing chord | where to go |
+| 36.1 | end | the wordmark, autofork.com, the take's closing chord | where to go |
 
 The feed is X's timeline column (Oct 2026), rebuilt from x.com's own markup: its icon paths, sizes and colors, real text, real counts (fetched Oct 13 from x.com and fxtwitter, in `data/posts.jsonl`), real images and avatars. Each post is shown whole; one phrase gets autofork's ultramarine as the camera lands on it. The camera snaps post to post on the beat, like a flick through the feed.
 
@@ -79,7 +79,7 @@ Every post is shown as it is on X, with the author's name, avatar and media:
 - Theo, [@theo](https://x.com/theo/status/2098769191226740966), [and](https://x.com/theo/status/2099709776896954603) [again](https://x.com/theo/status/2099710945429987722); the image in his kanban post is from JJ Eaton's (@jayleaton) video
 - bassim, [@avgvstvs96](https://x.com/avgvstvs96/status/2108047388304871934), quoting [his Oct 6 post](https://x.com/avgvstvs96/status/2107421377334800815)
 
-The sounds are CC0 recordings from Freesound and [Kenney](https://kenney.nl); see `sfx/CREDITS.md`. Affiliate badges are Photon's and 37signals' own avatars. The emoji is [Twemoji](https://github.com/jdecked/twemoji) (CC-BY 4.0), as X draws it. X's icons are X's. The X posts are set in [Inter](https://rsms.me/inter/) (OFL) standing in for X's Chirp, which isn't free to ship. The T3 Code shot is the T3 Code UI transcribed on autofork.dev.
+The sounds are CC0 recordings from Freesound and [Kenney](https://kenney.nl); see `sfx/CREDITS.md`. Affiliate badges are Photon's and 37signals' own avatars. The emoji is [Twemoji](https://github.com/jdecked/twemoji) (CC-BY 4.0), as X draws it. X's icons are X's. The X posts are set in [Inter](https://rsms.me/inter/) (OFL) standing in for X's Chirp, which isn't free to ship. The T3 Code shot is the T3 Code UI transcribed on autofork.com.
 
 ## Not verified
 
