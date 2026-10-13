@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>autofork · direction B · the branch</title>
 <link rel="stylesheet" href="shared.css">
+<script>
+  const heads = { 1: ["Fork anything.", "Still get every update."], 2: ["Fork anything.", "Never fall behind."], 3: ["Fork anything.", "Keep getting updates."], 4: ["Make it yours.", "Keep their updates."] }
+  addEventListener("DOMContentLoaded", () => {
+    const h = heads[new URLSearchParams(location.search).get("h")]
+    if (h) { document.querySelector("h1 .from").textContent = h[0]; document.querySelector("h1 .you").textContent = h[1] }
+  })
+</script>
 <script>document.documentElement.dataset.font = new URLSearchParams(location.search).get("font") ?? "host"</script>
 <style>
   @font-face { font-family: "Geist"; src: url("../fonts/candidates/cand-geist.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
@@ -54,7 +61,7 @@
   html[data-font=inter] h1 { font-variation-settings: "opsz" 32; }
   h1 span { display: block; }
   h1 .you { color: var(--you); }
-  .sub { margin: 30px 0 32px; font-size: 22px; line-height: 1.4; color: var(--ink-2); max-width: 40ch; letter-spacing: -0.01em; text-wrap: balance; }
+  .sub { margin: 30px 0 32px; font-size: 22px; line-height: 1.4; color: var(--ink-2); max-width: 44ch; letter-spacing: -0.01em; text-wrap: balance; }
 
   .ask { display: flex; align-items: center; max-width: 720px; height: 68px; padding: 0 8px 0 22px; background: var(--panel); border: 1.5px solid var(--you); border-radius: 16px; }
   .ask .field { flex: 1; font-size: 19px; color: var(--ink-3); white-space: nowrap; overflow: hidden; letter-spacing: -0.01em; }
@@ -78,15 +85,15 @@
       <div class="links"><a>How it works</a><a>GitHub</a><a>Sign in</a></div>
     </nav>
     <main>
-      <h1><span class="from">Fork anything.</span><span class="you">Keep your changes.</span></h1>
-      <p class="sub">Name an open source app and what you'd change. Your fork keeps up with every release.</p>
+      <h1><span class="from">Fork anything.</span><span class="you">Still get every update.</span></h1>
+      <p class="sub">Name an open source app and what you'd change. Every new release arrives with your changes already in it.</p>
       <form class="ask" onsubmit="return false">
         <span class="field"><b>T3 Code</b>, but always show context usage<i></i></span>
         <button>Fork it</button>
       </form>
       <div class="signin">
         <a class="btn"><span data-logo="openai"></span>Sign in with ChatGPT</a>
-        <a class="btn"><span data-logo="claude"></span>Claude <span class="soon">· coming soon</span><span class="inv">Get an invite</span></a>
+        <a class="btn"><span data-logo="claude"></span>Sign in with Claude</a>
       </div>
       <p class="note">Runs on the ChatGPT or Claude plan you already pay for.</p>
     </main>
