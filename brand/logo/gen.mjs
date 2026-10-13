@@ -82,6 +82,8 @@ const iconSet = (dir, { big, bigTone, small, smallTone }) => {
 
 // 4 · auto over fork in ultramarine, picked Oct 13; the rails at 32 and 16.
 iconSet(here, { big: stack, bigTone: "blue", small: rails, smallTone: "blue" })
+// GitHub draws an app's logo at 55% of its round badge, so this one fills the tile and the badge takes the tile's color.
+writeFileSync(`${here}/github-app.svg`, tileSvg(32, stack({ rx: 0, zoom: 1.25 }), paint(tones.blue.light)))
 // 3 · auto over fork on paper, handing off to the branch; Bassim, Oct 13: "keep 3 in our back pocket, different colors fit well still."
 iconSet(`${here}/alt`, { big: stack, bigTone: "paper", small: branch, smallTone: "trunk" })
 

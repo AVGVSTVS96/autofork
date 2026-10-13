@@ -58,7 +58,7 @@ export const branch = (n, { rx = 7.5 * (n / 32), id } = {}) => {
 
 // auto over fork: the wordmark stacked into a square, its underline drawn by the wordmark's rule:
 // flush with the ink at both ends, yours peeling off under the f of fork to a node flush with the k.
-export const stack = ({ rx = 7.5, id } = {}) => {
+export const stack = ({ rx = 7.5, id, zoom = 1 } = {}) => {
   const size = 11.6
   const a = set("auto", size, 0, 0), b = set("fork", size, 0, 0)
   const stem = (140 / font.unitsPerEm) * size
@@ -73,10 +73,11 @@ export const stack = ({ rx = 7.5, id } = {}) => {
   const start = Math.min(auto.x1, fork.x1), endX = fork.x2 - r
   const p0 = fork.parts[0].x1 + w * 0.6, p1 = p0 + drop * 1.25
   return clipped(32, rx,
+    (zoom === 1 ? "" : `<g transform="translate(16 16) scale(${zoom}) translate(-16 -16)">`) +
     `<path class="ink" d="${auto.d}${fork.d}"/>` +
     line("you", w, `M${f(p0)} ${f(y1)}${peelX(p0, y1, p1, y2)}H${f(endX)}`) +
     line("app", w, `M${f(start)} ${f(y1)}H${f(fork.x2)}`) +
-    dot("node", endX, y2, r), id)
+    dot("node", endX, y2, r) + (zoom === 1 ? "" : "</g>"), id)
 }
 
 export const tones = {

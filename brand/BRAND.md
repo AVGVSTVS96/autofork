@@ -47,7 +47,8 @@ Rule: **ultramarine is yours, gray is theirs.** Ink is for words. In dark, the u
 **Icon, 4 · auto over fork in ultramarine** (picked Oct 13: "icon pick 4 works"). The name stacked in the tile where there's room; at 32 and 16 it hands off to the rails, which have their own 16px drawing.
 
 - `logo/icon.svg`, `icon-dark.svg`: rounded tile, for sheets and docs.
-- `logo/app-icon.svg` → `app-icon.png` (1024, GitHub App and avatars), `site/public/apple-touch-icon.png` (180) and `icon-512.png`, all full bleed; iOS and GitHub round them.
+- `logo/github-app.svg` → `github-app.png` (1024): the GitHub App logo. GitHub draws it at 55% of a round badge, so the mark fills the tile and the badge color is `#3B2BFF`.
+- `logo/app-icon.svg` → `app-icon.png` (1024), `site/public/apple-touch-icon.png` (180) and `icon-512.png`, all full bleed; iOS and GitHub round them.
 - `logo/mark.svg`, `mark-dark.svg`, `mark-16.svg`, `mark-16-dark.svg`: the rails.
 - `logo/favicon.svg`: the rails, picking the 16px drawing when drawn at 24px or less, and following the system theme.
 
