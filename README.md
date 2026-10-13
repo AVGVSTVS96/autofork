@@ -1,9 +1,9 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/header-dark.png">
-  <img alt="autofork: Fork anything. Keep your changes." src="assets/header-light.png">
+  <img alt="autofork: Make it yours. Keep their updates." src="assets/header-light.png">
 </picture>
 
-Fork anything and keep your changes. autofork keeps your fork on top of upstream, and when upstream breaks one of your changes, an agent rebuilds it.
+autofork keeps your fork on top of upstream, and when upstream breaks one of your changes, an agent rebuilds it.
 
 ```sh
 npx github:AVGVSTVS96/autofork fork pingdotgg/t3code
