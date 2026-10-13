@@ -4,7 +4,7 @@ The source of truth for how the site, OG image, README and launch post talk abou
 
 ## The idea in one sentence
 
-Pick any open source app and say what you'd change. autofork makes it your fork, and your fork still gets every release they ship.
+Name an open source app and what you'd change. autofork makes it your fork, and every new release arrives with your changes already in it.
 
 The new part isn't forking: a fork always keeps your changes. It's that a changed fork keeps getting the original's updates. Bassim: "it's a novel thing to be able to fork anything and still get updates from upstream."
 
@@ -19,7 +19,7 @@ autofork, one word, lowercase, even at the start of a sentence. One name for eve
 ## Hero
 
 - **Headline:** Make it yours. / Keep their updates. (Bassim picked it, Oct 12: "Four is the perfect start for now. that looks awesome." Two rows on the branch, mono.)
-- **Sub line:** Pick any open source app and say what to change. Your fork still gets every release. (16 words)
+- **Sub line:** Name an open source app and what you'd change. Every new release arrives with your changes already in it. (Approved by Bassim with the headline, as on the sheet. Use it word for word.)
 - **The action:** one input, prefilled as a placeholder: `T3 Code, but always show context usage`. Button: **Fork it**.
 - **Sign-in, right under it:** **Continue with ChatGPT** and **Continue with Claude**, side by side, both live.
 - **One small line under the buttons:** Runs on the ChatGPT or Claude plan you already pay for.
@@ -85,7 +85,7 @@ The site ships the same day as the product. These lines describe the product Bas
 ## Meta
 
 - **Title:** autofork: make it yours, keep their updates
-- **Description:** Pick any open source app and say what to change. autofork makes your fork, and it still gets every release.
+- **Description:** Name an open source app and what you'd change. Every new release arrives with your changes already in it.
 - **Site:** https://autofork.com (autofork.dev too)
 - **GitHub repo description:** Make it yours, keep their updates. Your fork gets every release; when one breaks a change, an agent rebuilds it.
 
