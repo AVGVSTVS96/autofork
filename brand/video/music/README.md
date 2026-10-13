@@ -102,3 +102,15 @@ Suno downloads were at 0 until 11/4 on Oct 13, so these exist only as clips in t
 - "autofork saves felt" (126 BPM, D minor, warm felt piano and Rhodes stabs, dusty swung drums, no hook): [clip 1](https://suno.com/song/2570d7c5-0a2c-4961-9144-6d0fe0b23270), [clip 2](https://suno.com/song/26b9984f-918c-4cd6-b670-94976dfe8b1f)
 - "autofork saves pulse" (126 BPM, A minor, deep minimal melodic house, plucked arpeggio ostinato): [clip 1](https://suno.com/song/2a66d354-f47b-4c99-8c6f-dabd955020dd), [clip 2](https://suno.com/song/b905931d-c465-4374-a413-c4c9a64fda3e)
 - "phase" (minimalist phasing pulse) and "pocket" (live funk) did not appear in the library; resubmit with `.scratch/gen.mjs` if wanted.
+
+## Lyria 3.5 takes (Google, via the Gemini API, saves)
+
+Generated with `lyria-3.5` through `GEMINI_API_KEY` (`lyria/gen.py <model> <name> "<prompt>"`, the prompt template is `lyria/T.sh`: timestamped sections like `[0:07 - 0:15] Groove: ...`, "instrumental only", BPM and key). Lyria ignores the length and tempo asked for (it returned 63-160 s at 120-136 BPM), so `lyria/cut.py <name> <drop guess s> <out.wav>` re-times each: it fits the beat grid, snaps to the drop, time-stretches (rubberband, pitch kept) to 126.2 BPM, and joins 4 bars before the drop, 15 bars after, and the ending, so the drop lands at 7.6 s and the ending at 36.1 s on the saves cut. Source MP3s are in `lyria/`. Previews on the saves cut are in `previews/`. Not listened to; checked by loudness map and beat-grid residuals only.
+
+| Preview | Source / prompt | Notes |
+|---|---|---|
+| saves-lyria-deep.mp4 | L3: minimal melodic techno / deep house, A minor, plucked arpeggio ostinato, rolling sub, 128 BPM measured (8 ms beat jitter) | steadiest grid, clean drop at 7.6 s, one-bar dip near 22 s |
+| saves-lyria-frenchtouch.mp4 | L1: dry French-touch house, F minor, plucked riff, rubbery bass, filtered stabs, 127.9 BPM measured (21 ms jitter) | drop at 7.6 s, a breakdown at 27-30 s |
+| saves-lyria-minimal.mp4 | N1: minimal melodic techno, A minor, 126 BPM measured (12 ms jitter) | drop at 7.6 s, short dips near 24 s and 27-33 s |
+
+Rejected: L2, M1, M2, M4 (tempo drifts 60+ ms or no usable drop), L4, L5 (no intro/drop structure), N2 (blocked by Lyria's safety filter), N3 (tempo tracker found 95 BPM), M3 (160 s, no intro).
