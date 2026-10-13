@@ -499,7 +499,8 @@ async function status(root) {
   ${drift.join(`
   `)}`);
 }
-var USAGE = `autofork: fork anything and keep your changes
+var USAGE = `autofork: Make it yours. Keep their updates.
+Name an open source app and what you'd change. Every new release arrives with your changes already in it.
 
 Usage:
   autofork fork <owner/repo>    fork it on GitHub, set it up and push
