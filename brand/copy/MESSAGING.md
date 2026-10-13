@@ -36,7 +36,7 @@ Bassim, Oct 13: "too many sections on the page... a lot of reading... We could c
    Footnote: An example on T3 Code. If they ship exactly what you asked for, yours pauses and you decide.
 
 2. **Mine, today.**
-   Line: My T3 Code fork took 156 commits from T3 Code in its first two days and kept all 3 changes. (`facts.json`.)
+   Line: My T3 Code fork took 156 commits from T3 Code in its first two days. One change broke on day one and the agent rebuilt it. (`facts.json`.)
    Visual: T3 Code transcribed from its source (apps/web), threads you can switch, and my context-usage button in the composer, which toggles compact-before-send like the real one. Under it, the four other forks as rows with their icons.
 
 3. **Yours.**
