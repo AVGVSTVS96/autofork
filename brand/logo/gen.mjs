@@ -1,106 +1,75 @@
 import opentype from "opentype.js"
-import { mkdirSync, writeFileSync } from "node:fs"
+import { copyFileSync, mkdirSync, writeFileSync } from "node:fs"
 
-const out = import.meta.dirname
+const here = import.meta.dirname
 const site = new URL("../../site/public/", import.meta.url).pathname
 mkdirSync(site, { recursive: true })
 
-const mono = opentype.loadSync(new URL("ttf/CommitMono-700-Regular.ttf", import.meta.url).pathname)
-const SIZE = 100
-const em = (units) => (units / mono.unitsPerEm) * SIZE
+const font = opentype.loadSync(`${here}/../fonts/src/Host-800.ttf`)
+const S = 100
+const u = (n) => (n / font.unitsPerEm) * S
+const f = (n) => +n.toFixed(2)
+const STEM = u(140)
+const CAP = u(font.tables.os2.sCapHeight)
+const TRACK = -0.025 * S
 
 const C = {
-  light: { ink: "#101312", del: "#D7402C", add: "#1C9A50", on: "#FFFFFF" },
-  dark: { ink: "#E9ECEA", del: "#EC5A45", add: "#2DB566", on: "#0B0D0C" },
+  light: { ink: "#0E0E12", you: "#3B2BFF", tile: "#3B2BFF", railApp: "#9C93FF", railYou: "#FFFFFF" },
+  dark: { ink: "#EEEEF2", you: "#8F84FF", tile: "#8F84FF", railApp: "#4B42B8", railYou: "#0C0C0F" },
 }
 
-const text = (str, x, y, size = SIZE, spacing = 0) => {
+const set = (str, x, y = S) => {
   let cx = x
   const parts = []
-  for (const ch of str) {
-    const g = mono.charToGlyph(ch)
-    parts.push(g.getPath(cx, y, size).toPathData(2))
-    cx += (g.advanceWidth / mono.unitsPerEm) * size + spacing
-  }
-  return { d: parts.join(""), end: cx }
+  const glyphs = font.stringToGlyphs(str)
+  glyphs.forEach((g, i) => {
+    parts.push({ ch: str[i], x: cx, g, d: g.getPath(cx, y, S).toPathData(2) })
+    cx += u(g.advanceWidth) + TRACK
+    if (glyphs[i + 1]) cx += u(font.getKerningValue(g, glyphs[i + 1]))
+  })
+  const last = parts.at(-1)
+  return { d: parts.map((p) => p.d).join(""), ink: last.x + u(last.g.getBoundingBox().x2), parts }
+}
+const svg = (box, body, style = "") => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${box.map(f).join(" ")}" role="img" aria-label="autofork">${style}${body}</svg>\n`
+
+// A lane change with flat tangents at both ends, so a line peels off instead of turning.
+const peel = (x1, y1, x2, y2) => `C${f((x1 + x2) / 2)} ${f(y1)} ${f((x1 + x2) / 2)} ${f(y2)} ${f(x2)} ${f(y2)}`
+
+// The wordmark: autofork on the app's line. Under the f, your line peels off and runs beside it to a node flush with the k.
+const wordmark = (c) => {
+  const word = set("autofork", 0)
+  const fx = word.parts.find((p) => p.ch === "f").x + u(font.charToGlyph("f").getBoundingBox().x1)
+  const w = STEM * 0.5, y1 = S + 14, y2 = y1 + w * 2.1, r = w * 1.05
+  const endX = word.ink - r
+  const paint = (cls, attr, color) => (c ? `${attr}="${color}"` : `class="${cls}"`)
+  const body =
+    `<path ${paint("ink", "fill", c?.ink)} d="${word.d}"/>` +
+    `<path ${paint("app", "stroke", c?.ink)} fill="none" stroke-width="${f(w)}" d="M0 ${f(y1)}H${f(word.ink)}"/>` +
+    `<path ${paint("you", "stroke", c?.you)} fill="none" stroke-width="${f(w)}" d="M${f(fx - 6)} ${f(y1)}${peel(fx - 6, y1, fx + 12, y2)}H${f(endX)}"/>` +
+    `<circle ${paint("node", "fill", c?.you)} cx="${f(endX)}" cy="${f(y2)}" r="${f(r)}"/>`
+  return svg([-1, S - CAP - 2, word.ink + 3, CAP + 2 + y2 + r - S + 3], body)
 }
 
-const svg = (w, h, body, label, style = "") =>
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${+w.toFixed(1)} ${+h.toFixed(1)}" role="img" aria-label="${label}">${style}${body}</svg>\n`
-
-const f = (n) => +n.toFixed(2)
-
-// The hunk: the smallest diff there is. A removed row over an added row, the order a diff reads in.
-const hunk = (x, y, s, c) => {
-  const u = s / 32
-  const r = (rx, ry, w, h, fill) => `<rect x="${f(x + rx * u)}" y="${f(y + ry * u)}" width="${f(w * u)}" height="${f(h * u)}" fill="${fill}"/>`
-  return [
-    r(0, 0, 32, 15, c.del),
-    r(0, 17, 32, 15, c.add),
-    r(9, 5.5, 14, 4, c.on),
-    r(9, 22.5, 14, 4, c.on),
-    r(14, 17.5, 4, 14, c.on),
-  ].join("")
+// The icon: the rails in a tile. The app's line runs through; yours leaves it at the ring and runs beside it.
+const rails = (c, k = 1, inset = 0) => {
+  const w = 3.4 * k
+  const X = (n) => f(inset + n * k), Y = X
+  return (
+    `<rect class="tile" fill="${c.tile}" x="${X(0)}" y="${Y(0)}" width="${f(32 * k)}" height="${f(32 * k)}" rx="${inset ? 0 : f(7.5 * k)}"/>` +
+    `<path class="rail-app" fill="none" stroke="${c.railApp}" stroke-width="${f(w)}" d="M${X(11)} ${Y(0)}V${Y(32)}"/>` +
+    `<path class="rail-you" fill="none" stroke="${c.railYou}" stroke-width="${f(w)}" d="M${X(11)} ${Y(10)}C${X(11)} ${Y(16)} ${X(21)} ${Y(14)} ${X(21)} ${Y(20)}V${Y(32)}"/>` +
+    `<circle class="ring" fill="${c.tile}" stroke="${c.railYou}" stroke-width="${f(w * 0.9)}" cx="${X(11)}" cy="${Y(9)}" r="${f(3.6 * k)}"/>`
+  )
 }
 
-// B: the ∓ sign alone, minus over plus, no box
-const minusPlus = (x, y, s, c) => {
-  const u = s / 32
-  const r = (rx, ry, w, h, fill) => `<rect x="${f(x + rx * u)}" y="${f(y + ry * u)}" width="${f(w * u)}" height="${f(h * u)}" fill="${fill}"/>`
-  return [r(3, 1, 26, 5.5, c.del), r(3, 18.5, 26, 5.5, c.add), r(13.25, 10, 5.5, 22, c.add)].join("")
-}
+writeFileSync(`${here}/autofork.svg`, wordmark(C.light))
+writeFileSync(`${here}/autofork-dark.svg`, wordmark(C.dark))
+writeFileSync(`${here}/autofork-classes.svg`, wordmark())
+writeFileSync(`${here}/mark.svg`, svg([0, 0, 32, 32], rails(C.light)))
+writeFileSync(`${here}/mark-dark.svg`, svg([0, 0, 32, 32], rails(C.dark)))
 
-// C: the stack: patches laid on an upstream line, the top one healed
-const stack = (x, y, s, c) => {
-  const u = s / 32
-  const r = (rx, ry, w, h, fill) => `<rect x="${f(x + rx * u)}" y="${f(y + ry * u)}" width="${f(w * u)}" height="${f(h * u)}" fill="${fill}"/>`
-  return [r(0, 28, 32, 4, c.ink), r(2, 20, 22, 6, c.add), r(8, 12, 22, 6, c.add), r(4, 4, 20, 6, c.del)].join("")
-}
-
-const xh = em(mono.tables.os2.sxHeight)
-const cap = em(mono.tables.os2.sCapHeight)
-const desc = em(-mono.tables.os2.sTypoDescender)
-const base = 100
-const pad = 4
-const word = (x) => text("autopatch", x, base, SIZE, -2)
-
-const lockup = (markFn, c, markSize = cap) => {
-  const top = base - markSize
-  const gap = markSize * 0.36
-  const w = word(pad + markSize + gap)
-  return {
-    body: `${markFn(pad, top, markSize, c)}<path fill="${c.ink}" d="${w.d}"/>`,
-    w: w.end + pad,
-    h: base + desc * 0.55,
-  }
-}
-
-for (const [name, fn] of [["a-hunk", hunk], ["b-minus-plus", minusPlus], ["c-stack", stack]]) {
-  const l = lockup(fn, C.light)
-  writeFileSync(`${out}/explore-${name}.svg`, svg(l.w, l.h, l.body, "autopatch"))
-}
-
-const light = lockup(minusPlus, C.light)
-const dark = lockup(minusPlus, C.dark)
-writeFileSync(`${out}/autopatch.svg`, svg(light.w, light.h, light.body, "autopatch"))
-writeFileSync(`${out}/autopatch-dark.svg`, svg(dark.w, dark.h, dark.body, "autopatch"))
-const monoBody = lockup(minusPlus, { ink: "currentColor", del: "currentColor", add: "currentColor" })
-writeFileSync(`${out}/autopatch-mono.svg`, svg(monoBody.w, monoBody.h, monoBody.body, "autopatch"))
-
-writeFileSync(`${out}/mark.svg`, svg(32, 32, minusPlus(0, 0, 32, C.light), "autopatch"))
-writeFileSync(`${out}/mark-dark.svg`, svg(32, 32, minusPlus(0, 0, 32, C.dark), "autopatch"))
-
-const themed = `<style>.d{fill:${C.light.del}}.a{fill:${C.light.add}}@media (prefers-color-scheme:dark){.d{fill:${C.dark.del}}.a{fill:${C.dark.add}}}</style>`
-const favBody = `<rect class="d" x="1" y="1" width="14" height="3"/><rect class="a" x="1" y="9" width="14" height="3"/><rect class="a" x="6.5" y="5.5" width="3" height="10.5"/>`
-const favicon = svg(16, 16, favBody, "autopatch", themed)
-const tile = (bg, c) => svg(180, 180, `<rect width="180" height="180" fill="${bg}"/>${minusPlus(42, 46, 96, c)}`, "autopatch")
-writeFileSync(`${out}/app-icon.svg`, tile(C.light.ink, C.dark))
-writeFileSync(`${out}/favicon.svg`, favicon)
-writeFileSync(`${site}/favicon.svg`, favicon)
-
-const wordOnly = text("autopatch", 0, base, SIZE, -2)
-writeFileSync(
-  `${out}/wordmark-paths.json`,
-  JSON.stringify({ w: f(light.w), h: f(light.h), word: word(pad + cap + cap * 0.36).d, mark: { x: pad, y: base - cap, s: f(cap) }, plainWordEnd: f(wordOnly.end) }),
-)
-console.log("wrote", out, { w: light.w.toFixed(1), h: light.h.toFixed(1), xh, cap })
+const themed = `<style>@media (prefers-color-scheme: dark){.tile{fill:${C.dark.tile}}.rail-app{stroke:${C.dark.railApp}}.rail-you{stroke:${C.dark.railYou}}.ring{fill:${C.dark.tile};stroke:${C.dark.railYou}}}</style>`
+writeFileSync(`${here}/favicon.svg`, svg([0, 0, 32, 32], rails(C.light), themed))
+writeFileSync(`${here}/app-icon.svg`, svg([0, 0, 32, 32], rails(C.light, 1, 0.001).replace(/rx="[^"]*"/, 'rx="0"')))
+copyFileSync(`${here}/favicon.svg`, `${site}/favicon.svg`)
+console.log("autofork.svg autofork-dark.svg autofork-classes.svg mark.svg mark-dark.svg favicon.svg app-icon.svg")
