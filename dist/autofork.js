@@ -306,8 +306,7 @@ function workingTree(root) {
   rmSync(index, { force: true });
   return tree;
 }
-function check(root, config, against) {
-  const base = baseline(root);
+function check(root, config, against, base = baseline(root)) {
   const rebuilt = build(root, config, base, {});
   try {
     const drift = git(root, "diff-tree", "-r", "--name-only", rebuilt.steps.at(-1), against, "--", ...SOURCE);
@@ -323,13 +322,7 @@ async function sync(root, args) {
   if (git(root, "status", "--porcelain"))
     throw new Failure("commit or stash your changes first");
   const tip = fetchUpstream(root, config);
-  const { base, drift } = check(root, config, "HEAD");
-  if (drift.length) {
-    throw new Failure(`these files differ from what your patches build, so a sync would drop them:
-  ${drift.join(`
-  `)}
-Save them as a patch first: write ${DIR}/<id>/PATCH.md, then run autofork save <id>`);
-  }
+  const base = baseline(root);
   const source = newer(root, base, await newestGreen(root, config, base, tip));
   const key = `${short(source)}-${short(git(root, "rev-parse", "HEAD"))}`;
   output({ key });
@@ -340,6 +333,13 @@ Save them as a patch first: write ${DIR}/<id>/PATCH.md, then run autofork save <
   if (base === source && config.patches.every((id) => !isEmpty(patchFile(root, id)))) {
     say(`already up to date with ${config.upstream} at ${short(source)}`);
     return output({ result: "current" });
+  }
+  const { drift } = check(root, config, "HEAD", base);
+  if (drift.length) {
+    throw new Failure(`these files differ from what your patches build, so a sync would drop them:
+  ${drift.join(`
+  `)}
+Save them as a patch first: write ${DIR}/<id>/PATCH.md, then run autofork save <id>`);
   }
   const moved = base === source ? short(source) : `${short(base)} → ${short(source)}`;
   say(`upstream ${moved}, ${config.patches.length} patch${config.patches.length === 1 ? "" : "es"}`);

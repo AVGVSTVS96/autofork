@@ -28,7 +28,7 @@ It follows upstream's releases, or its default branch if it has none. `--follow 
 3. Run `npx github:AVGVSTVS96/autofork save <id>`.
 4. Commit everything and push.
 
-Every source change must belong to a patch: a sync refuses to run while the fork has changes no patch holds, and `autofork status` lists them. To change an existing patch, edit the code, update its `PATCH.md` if the intent changed, and `save` the same id.
+Every source change must belong to a patch: once upstream moves, a sync refuses to rebuild while the fork has changes no patch holds, and `autofork status` lists them. To change an existing patch, edit the code, update its `PATCH.md` if the intent changed, and `save` the same id.
 
 A patch can also be just a `PATCH.md`. Push it and the next sync has an agent build it.
 

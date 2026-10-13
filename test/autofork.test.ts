@@ -17,8 +17,11 @@ function sh(cwd: string, command: string) {
 }
 
 function autofork(cwd: string, ...args: string[]) {
-  const result = spawnSync("node", [cli, ...args], { cwd, env, encoding: "utf8" });
-  return { ok: result.status === 0, log: result.stderr };
+  const outputs = join(home, "github-output");
+  writeFileSync(outputs, "");
+  const result = spawnSync("node", [cli, ...args], { cwd, env: { ...env, GITHUB_OUTPUT: outputs }, encoding: "utf8" });
+  const output = Object.fromEntries(readFileSync(outputs, "utf8").split("\n").filter(Boolean).map((line) => line.split("=")));
+  return { ok: result.status === 0, log: result.stderr, output };
 }
 
 const upstream = join(home, "upstream");
@@ -110,12 +113,26 @@ test("a drifted patch is healed from its PATCH.md", () => {
   expect(autofork(fork, "sync").log).toContain("already up to date");
 });
 
-test("sync refuses to drop changes no patch holds", () => {
+test("changes no patch holds wait quietly until upstream moves", () => {
   write(fork, "notes.txt", "mine\n");
   sh(fork, "git commit -qam 'stray change'");
-  const { ok, log } = autofork(fork, "sync");
+  const head = sh(fork, "git rev-parse HEAD");
+  const idle = autofork(fork, "sync");
+  expect(idle.ok).toBe(true);
+  expect(idle.output.result).toBe("current");
+  expect(sh(fork, "git rev-parse HEAD")).toBe(head);
+});
+
+test("once upstream moves, sync refuses to drop changes no patch holds, and fails only once", () => {
+  write(upstream, "license.txt", "MIT\n");
+  sh(upstream, "git add -A && git commit -qm license");
+  const { ok, log, output } = autofork(fork, "sync");
   expect(ok).toBe(false);
   expect(log).toContain("notes.txt");
+  expect(output.key).toBeTruthy();
+  const again = autofork(fork, "sync", "--skip", output.key);
+  expect(again.ok).toBe(true);
+  expect(again.output.result).toBe("skipped");
   sh(fork, "git reset -q --hard HEAD~1");
 });
 

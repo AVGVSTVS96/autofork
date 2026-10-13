@@ -67,6 +67,8 @@ When upstream ships its own version of one of your patches, autofork stops apply
 
 The agent only runs when a release breaks a patch. Between releases, the workflow's hourly check is git only and ends in seconds. A failed rebuild isn't retried until upstream or your fork changes; running the workflow by hand always retries.
 
+Commit straight to your fork and the workflow leaves it alone until upstream moves. A rebuild would drop changes no patch holds, so then it stops once and lists them: save them as a patch and push, and the next run syncs.
+
 To follow a branch instead, set `"follow": "main"`. Every upstream commit then gets the same treatment.
 
 ## Agents
