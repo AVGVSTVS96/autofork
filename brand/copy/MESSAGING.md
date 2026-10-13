@@ -20,7 +20,7 @@ autofork, one word, lowercase, even at the start of a sentence. One name for eve
 
 - **Headline:** Make it yours. / Keep their updates. (Bassim picked it, Oct 12: "Four is the perfect start for now. that looks awesome." Two rows on the branch, mono.)
 - **Sub line:** Name an open source app and what you'd change. Every new release arrives with your changes already in it. (Approved by Bassim with the headline, as on the sheet. Use it word for word.)
-- **The action:** one input, prefilled as a placeholder: `T3 Code, but always show context usage`. Button: **Fork it**.
+- **The action:** one rounded composer that types out examples: the app as a badge (like T3 Code's composer chips) that rolls through apps people fork (T3 Code, herdr, Ghostty, Buzz, pi, cmux, tmux, UTM) and lands on one, then the change types out. T3 Code and "always show context usage" come first. Focusing it stops the typing and leaves that example as the placeholder. Button: **Fork it**.
 - **Sign-in, right under it:** **Continue with ChatGPT** and **Continue with Claude**, side by side, both live.
 - **One small line under the buttons:** Runs on the ChatGPT or Claude plan you already pay for.
 
@@ -28,47 +28,22 @@ Nothing else above the fold. No command, no diagram, no second example.
 
 ## Sections
 
-Bassim, Oct 12: "There's far too much text overall. Do less, in general", "Show only one example for that first part, and show the others further down the page", "users shouldn't come away thinking it's complicated. It should still feel rich, with good visualizations."
+Bassim, Oct 13: "too many sections on the page... a lot of reading... We could close it down, make it cleaner, simpler, still have really nice, beautiful, rich visualizations." Five blocks, each a headline, at most one line, and one moving visual. A git graph runs down the left edge the whole way: their line with commits and releases, yours branching off at the headline, each release merging into yours, every section hanging off yours. It grows as you scroll.
 
-Each section is a headline, at most one short line, and one visual. Each gets its own layout.
+1. **It keeps what you meant.**
+   Line: Your change is saved as what you asked for, not only as code. When they rewrite things or ship something new, the agent rebuilds yours on top of theirs.
+   Visual: "always show context usage" and its PATCH.md intent, then three T3 Code releases that play in turn: it goes back on as is; they redo the composer and the agent rebuilds yours into it; they add a usage meter and yours builds on it. This is the intent line Bassim wants weighed most: whatever T3 Code ships, the patch knows what you meant and takes the good from theirs.
+   Footnote: An example on T3 Code. If they ship exactly what you asked for, yours pauses and you decide.
 
-1. **Watch it change.**
-   Line: The agent forks it into your GitHub and makes the change. You follow along here.
-   Visual: T3 Code as it looks today, the run's progress beside it, and the context usage button appearing in the composer. Progress, not a chat: there's no back-and-forth with the agent today.
+2. **Mine, today.**
+   Line: My T3 Code fork took 156 commits from T3 Code in its first two days and kept all 3 changes. (`facts.json`.)
+   Visual: T3 Code transcribed from its source (apps/web), threads you can switch, and my context-usage button in the composer, which toggles compact-before-send like the real one. Under it, the four other forks as rows with their icons.
 
-2. **Every release, your changes go back on top.**
-   Line: When a release breaks one, the agent rebuilds it from what you asked for.
-   Visual: three T3 Code releases on one track. Release 1: both changes go on. Release 2: one breaks and is rebuilt. Release 3: T3 Code ships context usage itself, so that change pauses and an issue opens on the fork: `context-usage: upstream does this now`.
-   Footnote, small: My T3 Code fork took 156 upstream commits in its first two days and kept all 3 changes. (`facts.json`: the T3 Code fork's `upstreamCommitsAbsorbed` and `patches`; read them, don't type them.)
-
-3. **What you asked for is the patch.**
-   Line: Each change is kept in plain words next to its code, so it can be rebuilt on code that doesn't exist yet.
-   Visual: the request ("always show context usage") becoming `PATCH.md`'s first sentence and a diffstat. First sentence only, never the whole file.
-
-4. **When they catch up, you decide.**
-   Line: If they ship their own version of your change, yours pauses and you get an issue. Keep theirs or bring yours back.
-   Visual: the real issue on the fork, title `context-usage: upstream does this now`, with its two choices.
-   Small, under it: Alerts on autofork are coming soon. For now it's a GitHub notification.
-
-5. **Yours.**
+3. **Yours.**
    Line: The fork lives in your GitHub and runs in your own GitHub Actions, on your own plan. Free on public forks.
-   Visual: the fork's GitHub header ("forked from pingdotgg/t3code") and the two sign-in buttons as they really look.
+   Visual: the fork's GitHub header, then "Rather run it yourself? The engine is open source." and `npx skills add AVGVSTVS96/autofork`.
 
-6. **More forks.**
-   Line: none.
-   Visual: four requests as rows, each with its app's icon, from forks Bassim runs (real PATCH.md, rewritten as what someone would type):
-   - herdr, but every pane shows its ID on its border
-   - Claude Code's Telegram plugin, but every forum topic is its own session
-   - Buzz, but I can connect an agent that runs somewhere else
-   - T3 Code, but the window title shows the thread I'm on
-
-7. **Rather run it yourself?**
-   Line: The engine is open source. Use it with your own agent and your own GitHub Actions.
-   Visual: `npx skills add AVGVSTVS96/autofork` and a link to the repo. Commands, config and schedules live in the README, not here.
-
-8. **How it got here.** A five-dot line, labels only, no adjectives:
-   pi-patcher (May) · PATCH.md (June) · herdr (July) · my forks (October) · autofork (October).
-   Bassim: "a timeline is cool, but don't make it sound cringe." No "the one I rely on most", no story.
+4. **How it got here.** The lineage as a graph, labels only: pi-patcher (May) and PATCH.md (June) on the main line, experimental forks branching off it (herdr July, Claude Code plugins Oct 4, Buzz Oct 6, T3 Code Oct 10), merging back into autofork (October).
 
 Footer: autofork · GitHub · MIT.
 
