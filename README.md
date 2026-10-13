@@ -105,6 +105,12 @@ Options for fork and init:
   --verify <command>            the command that checks a build
 ```
 
+## Roadmap
+
+First batch of updates after launch:
+
+- An option to re-check every change against what you asked for on each new release, not only when a release breaks it. Today a change is only revisited when it stops applying.
+
 ## History
 
 - **May 2026:** [pi-patcher](https://github.com/AVGVSTVS96/pi-patcher) keeps patches to the [pi](https://github.com/earendil-works/pi-coding-agent) coding agent working across updates. Proof of concept.
