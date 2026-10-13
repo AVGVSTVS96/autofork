@@ -34,11 +34,12 @@ export TMPDIR=$PWD/.scratch
 ./music.sh                          # music.m4a from ../music/C1.wav
 bun $s/video.mjs . stills 0 8 13    # single moments
 bun $s/video.mjs . sheet 2          # contact sheet
-bun $s/video.mjs . audio            # out/soundtrack.wav: the music plus cues, -14 LUFS
+git clone https://github.com/Bodila51/opus-sound-layer ~/.cache/sound-layer   # once, MIT; needs uv
+SOUND_LAYER=~/.cache/sound-layer bun sfx.mjs   # out/soundtrack.wav: the music plus cues, -14 LUFS
 bun $s/video.mjs . video            # out/saves.mp4 (copied to out/video.mp4)
 ```
 
-- `index.html` holds the scenes (`data-s`/`data-e` seconds), `posts.js` the posts and the X post drawing, `video.js` the clock (springs baked to CSS `linear()`, the feed camera, typing), `sound.js` the cues and the mix.
+- `index.html` holds the scenes (`data-s`/`data-e` seconds), `posts.js` the posts and the X post drawing, `video.js` the clock (springs baked to CSS `linear()`, the feed camera, typing), `sound.js` the music's break filter, `sfx.mjs` the cue sheet read off the page's own timing (`audio/cues.json`) and the mix.
 - Every `.a` element animates at its scene's start plus `--d`; `seek(t)` pauses every animation at `t`, so any frame renders on its own.
 - The feed camera takes `data-stops`: `[time, post id, scale, "top" | "center"]`; its last stop is `#next`, the "Introducing" card at the end of the column.
 
@@ -51,7 +52,23 @@ Suno take C1 from `../music/README.md` (crafty mallet pop-house, F major, [Suno]
 - under "Introducing" (15.2 to 16.2 s) it plays on through a low-pass filter (`sound.js`): the downbeat lands full with the flick, the filter closes over half a beat, holds, and opens over the last half beat so the full groove returns with the wordmark. The break runs from the feed's last camera stop to the feed scene's end and its ramps are quarters of it, so retiming to another take means moving those two times;
 - at 32.3 s it jumps onto its last two bars, so the closing chord lands on the end card at 36.1 s.
 
-Cues (Web Audio, all in F major to match, low-cut, panned to their element, one shared room): a riser under "Introducing", a bell chord on the wordmark, key ticks while the composer types, a tap on Fork it, a soft pluck for the fork landing, plucks for the merges, a muted clash when a release doesn't fit, a two-note chime when the agent rebuilds it, a pluck on the proof, a ringing chord on the end card (the take's own chord stops short). Nothing on the feed's snaps; the music carries those.
+Cues are real CC0 recordings (`sfx/`, every one listed in `sfx/CREDITS.md`), placed by [opus-sound-layer](https://github.com/Bodila51/opus-sound-layer) from the page's own timing, never by hand: each swish sits on the feed camera's peak speed (stop time plus the snap spring's `visual/5.8`, which `qa.py` matches to the picture's motion peak to the frame), the wordmark's lines on the draw spring's peak, the keys on the typing clock (every fourth letter), the rest on their elements' `--d`. The mixer solves each sound's gain against the music under it, runs everything through one short room and masters to -14 LUFS.
+
+| time | cue | sound |
+| --- | --- | --- |
+| 2.9, 4.8, 7.7, 10.1, 12.4 | the feed's snaps | cloth swishes |
+| 15.3 | the flick onto "Introducing" | a soft swoosh |
+| 16.2 | the wordmark | a reverse swell into a low wood hit and boom |
+| 16.4, 16.8, 17.1 | the two lines draw, the node lands | swishes, a bubble pop |
+| 19.4 to 20.5 | composer typing | six keyboard recordings in turn |
+| 20.9 | Fork it | a mouse click |
+| 21.4 | the fork lands | a wood tap |
+| 23.9, 24.9, 29.1, 31.4 | releases merging, the proof | pops |
+| 26.4 | a release doesn't fit | a dull metal clank |
+| 28.0 | the agent rebuilds it | a soft interface confirm |
+| 36.1 | the end card | a thump and boom with a long bell ring |
+
+`qa.py` on the encoded mp4 (`audio/qa.png` shows every cue on the spectrogram): sync, loudness (-14.0 LUFS) and true peak (-2.0 dBTP, under -1 after AAC at 320k) pass, as does every cue's audibility and no silence; the two heroes (wordmark, end card) lift their 125-250 Hz body 2.7 and 2.4 dB where it asks for 3, and the soft pops and clicks warn that the picture barely moves under them. Nobody has listened to it yet.
 
 ## Credits
 
@@ -62,7 +79,7 @@ Every post is shown as it is on X, with the author's name, avatar and media:
 - Theo, [@theo](https://x.com/theo/status/2098769191226740966), [and](https://x.com/theo/status/2099709776896954603) [again](https://x.com/theo/status/2099710945429987722); the image in his kanban post is from JJ Eaton's (@jayleaton) video
 - bassim, [@avgvstvs96](https://x.com/avgvstvs96/status/2108047388304871934), quoting [his Oct 6 post](https://x.com/avgvstvs96/status/2107421377334800815)
 
-Affiliate badges are Photon's and 37signals' own avatars. The emoji is [Twemoji](https://github.com/jdecked/twemoji) (CC-BY 4.0), as X draws it. X's icons are X's. The X posts are set in [Inter](https://rsms.me/inter/) (OFL) standing in for X's Chirp, which isn't free to ship. The T3 Code shot is the T3 Code UI transcribed on autofork.dev.
+The sounds are CC0 recordings from Freesound and [Kenney](https://kenney.nl); see `sfx/CREDITS.md`. Affiliate badges are Photon's and 37signals' own avatars. The emoji is [Twemoji](https://github.com/jdecked/twemoji) (CC-BY 4.0), as X draws it. X's icons are X's. The X posts are set in [Inter](https://rsms.me/inter/) (OFL) standing in for X's Chirp, which isn't free to ship. The T3 Code shot is the T3 Code UI transcribed on autofork.dev.
 
 ## Not verified
 
