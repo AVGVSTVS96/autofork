@@ -50,6 +50,8 @@ npx skills add AVGVSTVS96/autofork
 what would you change? reply with an app and one sentence, i'll fork the best ones
 
 autofork.com
+
+music in 1/: Tech Live by Kevin MacLeod (incompetech.com), CC BY 4.0
 ```
 
 Why each line is safe to say:
