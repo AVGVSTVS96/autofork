@@ -577,8 +577,8 @@ async function status(root: string) {
   if (drift.length) say(`not in any patch yet:\n  ${drift.join("\n  ")}`);
 }
 
-const USAGE = `autofork: Fork any open-source app and never rebase it again.
-Personal forks of open-source apps that update themselves.
+const USAGE = `autofork: Customized forks that maintain themselves.
+Personal forks of open-source apps that auto-track upstream.
 
 Usage:
   autofork fork <owner/repo>    fork it on GitHub, set it up and push
