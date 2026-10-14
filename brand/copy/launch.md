@@ -1,6 +1,6 @@
 # autofork launch
 
-The launch is an 8-tweet X thread, each tweet with its video or image, the link in the last one. The pitch is the site's: "Fork any open-source app and never rebase it again." over "Personal forks of open-source apps that update themselves." (`copy/MESSAGING.md`). Bassim's voice: lowercase, problem first, greentext. Every number comes from `copy/facts.json`.
+The launch is an 8-tweet X thread, each tweet with its video or image, the link in the last one. The pitch is the site's: "Customized forks that maintain themselves." over "Every release, your changes are reapplied intelligently. When they ship the same feature, autofork stops applying yours." (`copy/MESSAGING.md`). Bassim's voice: lowercase, problem first, greentext. Every number comes from `copy/facts.json`.
 
 ## The thread
 
@@ -10,9 +10,9 @@ The type video (6/) and the demo video (2/) use the same music track. Swap one b
 1/ [video: video/saves/out/video.mp4]
 t3 code's readme says big features won't be merged. it also says they want you to have everything you need to fork it
 
-but a fork with your changes falls behind every release they ship
+but keep a fork with your changes and you're rebasing it on every release they ship
 
-so i made autofork. fork any open-source app and never rebase it again
+so i made autofork: customized forks that maintain themselves
 
 2/ [video: video/demo/out/video.mp4]
 > name an open source app and what you'd change. sign in with chatgpt or claude

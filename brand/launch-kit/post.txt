@@ -1,6 +1,6 @@
 t3 code's readme says big features won't be merged. it also says you should have everything you need to fork it
 
-but keep a fork with your changes and you're rebasing it on every release they ship. so i made autofork: fork any open-source app and never rebase it again
+but keep a fork with your changes and you're rebasing it on every release they ship. so i made autofork: customized forks that maintain themselves
 
 > name an app and what you'd change. sign in with chatgpt or claude and an agent builds it into your fork
 > your change is saved in plain words. every release it goes back on top, and when one breaks, the agent rebuilds it from your words
