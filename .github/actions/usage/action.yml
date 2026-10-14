@@ -4,6 +4,9 @@ inputs:
   execution-file:
     description: Claude Code Action execution_file output, when available
     default: ''
+  execution-files:
+    description: Additional native JSON result files, one path per line
+    default: ''
   account-id:
     description: Optional verified account label, without email or credential data
     default: unverified-repository-secret
@@ -14,6 +17,7 @@ runs:
       shell: bash
       env:
         TOKENHUB_EXECUTION_FILE: ${{ inputs.execution-file }}
+        TOKENHUB_EXECUTION_FILES: ${{ inputs.execution-files }}
         TOKENHUB_ACCOUNT_ID: ${{ inputs.account-id }}
       run: node "$GITHUB_ACTION_PATH/capture.cjs"
     - name: Save accounting artifact

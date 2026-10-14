@@ -3,6 +3,7 @@ const path = require('node:path');
 const os = require('node:os');
 const crypto = require('node:crypto');
 const events = new Map();
+const costs = new Map();
 const diagnostics = [];
 const repo = process.env.GITHUB_REPOSITORY || 'local';
 const run = process.env.GITHUB_RUN_ID || 'manual';
@@ -51,28 +52,65 @@ for (const root of roots) for (const file of files(path.join(root, 'projects')))
     try { record(JSON.parse(line)); } catch { diagnostics.push('An incomplete transcript record was skipped'); }
   }
 }
-const execution = process.env.TOKENHUB_EXECUTION_FILE;
-if (!events.size && execution && fs.existsSync(execution)) {
-  try {
-    const rows = JSON.parse(fs.readFileSync(execution, 'utf8'));
-    const result = rows.findLast(r => r.type === 'result' && r.modelUsage);
-    if (result) for (const [model, usage] of Object.entries(result.modelUsage)) {
-      const id = `github:${repo}:${run}:${attempt}:${job}:${model}`;
+const executionFiles = [...new Set([process.env.TOKENHUB_EXECUTION_FILE || '',
+  ...(process.env.TOKENHUB_EXECUTION_FILES || '').split('\n')].map(f => f.trim()).filter(Boolean))];
+// Transcript counters already cover native results from this job. Avoid counting both representations.
+if (!events.size) {
+  const results = new Map();
+  for (const file of executionFiles) {
+    if (!fs.existsSync(file)) continue;
+    try {
+      const raw = fs.readFileSync(file, 'utf8');
+      let rows;
+      try { const parsed = JSON.parse(raw); rows = Array.isArray(parsed) ? parsed : [parsed]; }
+      catch { rows = raw.split('\n').filter(l => l.trim()).map(l => JSON.parse(l)); }
+      const finals = rows.filter(r => r.type === 'result' && r.modelUsage);
+      const anonymous = finals.filter(r => !r.session_id);
+      if (new Set(anonymous.map(r => JSON.stringify(r.modelUsage))).size > 1) {
+        diagnostics.push('Multiple anonymous result sessions could not be safely combined');
+        continue;
+      }
+      for (const result of finals) {
+        const key = result.session_id || file;
+        results.set(key, result); // Native results are cumulative within a session.
+      }
+    } catch { diagnostics.push('Execution accounting could not be read'); }
+  }
+  for (const [session, result] of results) {
+    const sid = crypto.createHash('sha256').update(session).digest('hex');
+    let missing = false;
+    let measured = 0;
+    for (const [model, usage] of Object.entries(result.modelUsage)) {
+      const fields = ['inputTokens', 'outputTokens', 'cacheReadInputTokens', 'cacheCreationInputTokens'];
+      if (!usage || !fields.every(f => Number.isSafeInteger(usage[f]) && usage[f] >= 0)) {
+        missing = true;
+        continue;
+      }
+      const id = `github:${repo}:${run}:${attempt}:${job}:${sid}:${model}`;
+      const reported = Number.isFinite(usage.costUSD) && usage.costUSD >= 0;
+      measured++;
       events.set(id, {id, timestamp: capture, harness:'claude', model, project:`github:${repo}`,
-        repository:`https://github.com/${repo}`, sessionId:`github:${run}:${attempt}:${job}`,
+        repository:`https://github.com/${repo}`, sessionId:`github:${run}:${attempt}:${job}:${sid}`,
         sessionTitle:`${process.env.GITHUB_WORKFLOW || job} #${run}`, projectName:repo,
-        inputTokens:count(usage.inputTokens),outputTokens:count(usage.outputTokens),
-        cacheReadTokens:count(usage.cacheReadInputTokens),cacheWriteTokens:count(usage.cacheCreationInputTokens),
-        reasoningTokens:0,costUsd:typeof usage.costUSD==='number'?usage.costUSD:0,
-        costKnown:typeof usage.costUSD==='number',...(typeof usage.costUSD==='number'?{reportedCostUsd:usage.costUSD}:{}),
+        inputTokens:usage.inputTokens,outputTokens:usage.outputTokens,
+        cacheReadTokens:usage.cacheReadInputTokens,cacheWriteTokens:usage.cacheCreationInputTokens,
+        reasoningTokens:0,costUsd:reported?usage.costUSD:0, costKnown:reported,
+        ...(reported?{reportedCostUsd:usage.costUSD}:{}),
       });
     }
-  } catch { diagnostics.push('Execution accounting could not be read'); }
+    if (missing) {
+      diagnostics.push('Final token counters were omitted');
+      if (!measured && Number.isFinite(result.total_cost_usd) && result.total_cost_usd >= 0)
+        costs.set(sid, {id:sid, costUSD:result.total_cost_usd, models:Object.keys(result.modelUsage)});
+    }
+  }
 }
 const out = process.env.TOKENHUB_USAGE_FILE || path.join(process.env.RUNNER_TEMP || os.tmpdir(), 'claude-usage.json');
 const document = {version:1, repository:repo, runId:run, attempt, job, capturedAt:capture,
   account:process.env.TOKENHUB_ACCOUNT_ID || 'unverified-repository-secret',
-  coverage:events.size?'measured':'no-accounting-records', fileCount,
-  diagnostics:[...new Set(diagnostics)], events:[...events.values()]};
+  workflowName:process.env.GITHUB_WORKFLOW || job,
+  workflowPath:(process.env.GITHUB_WORKFLOW_REF || '').split('@')[0].replace(`${repo}/`, ''),
+  coverage:events.size?'measured':costs.size?'cost-only':'no-accounting-records', fileCount,
+  diagnostics:[...new Set(diagnostics)], events:[...events.values()], costs:[...costs.values()]};
 fs.writeFileSync(out, JSON.stringify(document), {mode:0o600});
 console.log(`Saved ${events.size} accounting records; prompts, replies and credentials were excluded.`);
