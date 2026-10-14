@@ -17,12 +17,12 @@ Cuts land on the music's beats (Tech Live, sped to 126.2 BPM, a beat every 0.475
 | 10.0 | feed | Theo: "would be easier to maintain your fork on top of" | the ask autofork answers |
 | 12.4 | feed | bassim: "i can fork and customize anything, the agents will autonomously track upstream and re-implement my changes", quoting his Oct 6 post | his words, the thesis |
 | 15.2 | intro | the camera flicks once more, off the end of the feed onto "Introducing" on the same white, for two beats; the music dips under a low-pass filter and a riser | the beat before the name, in the feed's own motion |
-| 16.2 | name | the wordmark draws its branch; "Make it yours. / Keep their updates." | the name and the hero line, on the music's return |
+| 16.2 | name | the wordmark draws its branch; "Fork any open-source app / and never rebase it again." | the name and the headline, on the music's return: the answer to Theo's "maintain your fork" one card earlier |
 | 19.0 | ask | the composer: T3 Code, types "always show context usage", Fork it; "you / t3code, forked from pingdotgg/t3code" | the whole product in one action |
-| 22.8 | graph | their line with releases; each merges into yours | "Every release arrives with your change already in it." |
+| 22.8 | graph | their line with releases; each merges into yours | "Each new release, your change goes back on top." |
 | 25.7 | heal | a release doesn't fit; the real PATCH.md line; the agent rebuilds it; the next release merges clean | the magic underneath |
-| 30.4 | proof | "156 commits from T3 Code. One change broke on day one. The agent rebuilt it." over the fork's composer with the context button | the real numbers from `copy/facts.json` (156 commits, 1 heal) |
-| 36.1 | end | the wordmark, autofork.com, the music fading out | where to go |
+| 30.4 | proof | "156 commits from T3 Code. One change broke, the agent rebuilt it. I never rebased it." over the fork's composer with the context button | the real numbers from `copy/facts.json` (156 commits, 1 heal), and the headline paid off |
+| 36.1 | end | the wordmark, "Personal forks of open-source apps that update themselves.", autofork.com, the music fading out | what it is, and where to go |
 
 The feed is X's timeline column (Oct 2026), rebuilt from x.com's own markup: its icon paths, sizes and colors, real text, real counts (fetched Oct 13 from x.com and fxtwitter, in `data/posts.jsonl`), real images and avatars. Each post is shown whole; one phrase gets autofork's ultramarine as the camera lands on it. The camera snaps post to post on the beat, like a flick through the feed.
 

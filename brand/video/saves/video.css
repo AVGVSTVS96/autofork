@@ -88,7 +88,7 @@ svg { display: block; }
 .mark .node { fill: var(--you); transform-box: fill-box; transform-origin: center; }
 .mark path.app, .mark path.you { stroke-dasharray: var(--len); }
 
-.hero { position: absolute; left: 0; right: 0; top: 520px; text-align: center; font: 800 132px/1 var(--sans); letter-spacing: -.035em; }
+.hero { position: absolute; left: 0; right: 0; top: 580px; text-align: center; font: 800 100px/1.04 var(--sans); letter-spacing: -.035em; }
 .hero .you { color: var(--you); }
 
 .rail { position: absolute; font: 400 22px/1 var(--mono); color: var(--ink-3); }
@@ -139,4 +139,5 @@ h2.cap { top: 120px; font-size: 78px; }
 .crop { position: absolute; left: 160px; top: 520px; width: 1600px; height: 320px; overflow: hidden; }
 .crop img { position: absolute; width: 2523px; left: -734px; top: -941px; }
 
+.def { position: absolute; left: 0; right: 0; top: 540px; text-align: center; font: 700 60px/1.15 var(--sans); letter-spacing: -.025em; color: var(--ink); }
 .url { position: absolute; left: 0; right: 0; top: 690px; text-align: center; font: 400 72px/1 var(--mono); color: var(--ink-2); }
