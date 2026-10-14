@@ -95,33 +95,35 @@ function github(path) {
 }
 async function fetchUpstream(root, config) {
   const url = upstreamUrl(config.upstream);
-  const ref = config.follow === "releases" ? await latestRelease(root, config.upstream) : `refs/heads/${config.follow}`;
+  const ref = followsReleases(config.follow) ? await latestRelease(root, config.upstream, config.follow === "prereleases") : `refs/heads/${config.follow}`;
   if (!ref)
     throw new Failure(`${url} has no releases. Follow a branch instead: set "follow" in ${DIR}/config.json`);
   git(root, "fetch", "--quiet", "--no-tags", url, `+${ref}:refs/autofork/upstream`, "+HEAD:refs/autofork/branch");
   return git(root, "rev-parse", "refs/autofork/upstream^{commit}");
 }
-async function publishedRelease(upstream) {
+var followsReleases = (follow) => follow === "releases" || follow === "prereleases";
+var newestPublished = (releases) => releases.filter((release) => !release.draft).sort((a, b) => b.published_at.localeCompare(a.published_at))[0]?.tag_name;
+async function publishedRelease(upstream, pre) {
   const repo = githubRepo(upstream);
   if (!repo)
     return;
   try {
-    const response = await github(`repos/${repo}/releases/latest`);
+    const response = await github(pre ? `repos/${repo}/releases?per_page=30` : `repos/${repo}/releases/latest`);
     if (response.ok)
-      return (await response.json()).tag_name;
+      return pre ? newestPublished(await response.json()) : (await response.json()).tag_name;
     if (response.status !== 404)
-      say(`can't read ${repo}'s latest release (${response.status}), using its newest version tag`);
+      say(`can't read ${repo}'s releases (${response.status}), using its newest version tag`);
   } catch {
-    say(`can't reach GitHub for ${repo}'s latest release, using its newest version tag`);
+    say(`can't reach GitHub for ${repo}'s releases, using its newest version tag`);
   }
 }
-async function latestRelease(root, upstream) {
-  const published = await publishedRelease(upstream);
+async function latestRelease(root, upstream, pre = false) {
+  const published = await publishedRelease(upstream, pre);
   if (published)
     return `refs/tags/${published}`;
   const tags = git(root, "ls-remote", "--tags", "--refs", "--sort=-v:refname", upstreamUrl(upstream)).split(`
 `);
-  return tags.map((line) => line.split("\t")[1]).find((ref) => ref && !ref.includes("-"));
+  return tags.map((line) => line.split("\t")[1]).find((ref) => ref && (pre || !ref.includes("-")));
 }
 function baseline(root) {
   const synced = git(root, "log", "--first-parent", "-1", "--format=%s", "-E", "--grep=^auto(fork|patch): sync ", "HEAD").split(" ").at(-1);
@@ -136,7 +138,7 @@ function newer(root, base, candidate) {
 }
 async function newestGreen(root, config, base, tip) {
   const repo = githubRepo(config.upstream);
-  if (config.green === false || config.follow === "releases" || !repo)
+  if (config.green === false || followsReleases(config.follow) || !repo)
     return tip;
   for (const sha of git(root, "rev-list", "--first-parent", "--max-count=30", `${base}..${tip}`).split(`
 `).filter(Boolean)) {
@@ -471,7 +473,7 @@ async function setup(root, upstream, args) {
   const readme = addNote(root, upstream, base, drift);
   const inherited = git(root, "ls-files", ".github/workflows").split(`
 `).filter((file) => file && !file.endsWith("/autofork.yml"));
-  say(follow === "releases" ? `autofork follows ${upstream}'s releases.` : `autofork follows ${upstream}'s ${follow} branch${flag(args, "--follow") ? "" : ", since it has no releases"}.`);
+  say(followsReleases(follow) ? `autofork follows ${upstream}'s ${follow}.` : `autofork follows ${upstream}'s ${follow} branch${flag(args, "--follow") ? "" : ", since it has no releases"}.`);
   if (inherited.length)
     say(`Your fork has ${inherited.length} workflow${inherited.length === 1 ? "" : "s"} copied from upstream, and they run here too. Delete the ones you don't want; upstream's new ones never get copied in.`);
   if (readme)
@@ -540,7 +542,7 @@ function claim(root, upstream) {
 }
 async function init(root, args) {
   if (!args[0])
-    throw new Failure("usage: autofork init <owner/repo | git url> [--follow <releases | branch>] [--verify <command>]");
+    throw new Failure("usage: autofork init <owner/repo | git url> [--follow <releases | prereleases | branch>] [--verify <command>]");
   await setup(root, args[0], args);
   claim(root, args[0]);
   say("Add a CLAUDE_CODE_OAUTH_TOKEN secret (claude setup-token), commit, and push.");
@@ -548,7 +550,7 @@ async function init(root, args) {
 async function fork(cwd, args) {
   const upstream = args[0];
   if (!/^[\w.-]+\/[\w.-]+$/.test(upstream ?? ""))
-    throw new Failure("usage: autofork fork <owner/repo> [--follow <releases | branch>] [--verify <command>]");
+    throw new Failure("usage: autofork fork <owner/repo> [--follow <releases | prereleases | branch>] [--verify <command>]");
   if (!run("gh", ["repo", "fork", upstream, "--clone", "--default-branch-only"], cwd).ok)
     throw new Failure("gh couldn't fork it. Is the GitHub CLI installed and logged in?");
   const root = join(cwd, upstream.split("/")[1]);
@@ -591,8 +593,9 @@ Usage:
   autofork sync                 rebuild on upstream; an agent heals what no longer applies
 
 Options for fork and init:
-  --follow <releases | branch>  what to keep up with (default: releases, or the
-                                default branch if upstream has none)
+  --follow <what>               releases, prereleases (newest release, nightlies
+                                and betas too) or a branch. Default: releases,
+                                or the default branch if upstream has none
   --verify <command>            the command that checks a build
 
 A patch is .autofork/<id>/PATCH.md, saying what the change does and why, next

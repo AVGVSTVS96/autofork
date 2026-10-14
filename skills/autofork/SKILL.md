@@ -19,7 +19,7 @@ A fork with an `.autofork/` folder is upstream plus patches. A workflow rebuilds
 npx github:AVGVSTVS96/autofork fork owner/repo --verify "<command that checks a build>"
 ```
 
-It follows upstream's releases, or its default branch if it has none. `--follow <branch>` picks a branch. It needs `gh` logged in. If `CLAUDE_CODE_OAUTH_TOKEN` is set, it also adds that secret; otherwise tell the user to run `claude setup-token` and `gh secret set CLAUDE_CODE_OAUTH_TOKEN`. In a fork that's already cloned, use `init owner/repo` instead.
+It follows upstream's releases, or its default branch if it has none. `--follow <branch>` picks a branch; `--follow prereleases` takes nightlies and betas too. It needs `gh` logged in. If `CLAUDE_CODE_OAUTH_TOKEN` is set, it also adds that secret; otherwise tell the user to run `claude setup-token` and `gh secret set CLAUDE_CODE_OAUTH_TOKEN`. In a fork that's already cloned, use `init owner/repo` instead.
 
 ## Change a fork
 

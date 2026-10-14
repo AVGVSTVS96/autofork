@@ -15,6 +15,7 @@ const fakeApi = join(home, "fake-api.mjs");
 writeFileSync(fakeApi, `globalThis.fetch = async (url) => {
   const latest = process.env.LATEST_RELEASE;
   if (latest && String(url).endsWith("/releases/latest")) return new Response(JSON.stringify({ tag_name: latest }));
+  if (process.env.RELEASES && String(url).includes("/releases?")) return new Response(process.env.RELEASES);
   return new Response("{}", { status: 404 });
 };
 `);
@@ -297,6 +298,26 @@ test("init follows releases when every release is named with a dash", () => {
   expect(autoforkWith({ LATEST_RELEASE: "desktop-v1.0.0" }, mine, "init", "acme/desktop").log).toContain("autofork follows acme/desktop's releases.");
   sh(mine, "rm -rf .autofork .github");
   expect(autofork(mine, "init", "acme/desktop").log).toContain("acme/desktop's main branch, since it has no releases");
+});
+
+test("a fork following prereleases takes upstream's newest published release, nightlies included", () => {
+  const app = join(github, "acme/nightly.git");
+  mkdirSync(app, { recursive: true });
+  sh(app, "git init -q && echo one > notes.txt && git add -A && git commit -qm one && git tag v1.0.0");
+  sh(app, "echo two > notes.txt && git commit -qam two && git tag v1.1.0-nightly.1 && echo three > notes.txt && git commit -qam three && git tag v1.1.0-nightly.2");
+  sh(home, `git clone -q ${app} nightly && git -C nightly reset -q --hard v1.0.0`);
+  const mine = join(home, "nightly");
+  expect(autofork(mine, "init", "acme/nightly", "--follow", "prereleases").log).toContain("autofork follows acme/nightly's prereleases.");
+  sh(mine, "git add -A && git commit -qm 'track upstream'");
+  const releases = JSON.stringify([
+    { tag_name: "v1.1.0-nightly.2", draft: true, published_at: null },
+    { tag_name: "v1.0.0", draft: false, published_at: "2026-01-01T00:00:00Z" },
+    { tag_name: "v1.1.0-nightly.1", draft: false, published_at: "2026-01-02T00:00:00Z" },
+  ]);
+  expect(autoforkWith({ RELEASES: releases }, mine, "sync").output.result).toBe("synced");
+  expect(file(mine, "notes.txt")).toBe("two\n");
+  expect(autofork(mine, "sync").output.result).toBe("synced");
+  expect(file(mine, "notes.txt")).toBe("three\n");
 });
 
 test("init turns on Actions and issues for the fork origin points to, not the upstream gh picks", () => {
