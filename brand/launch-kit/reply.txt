@@ -2,3 +2,5 @@ autofork.com
 
 rather run it yourself? the engine is open source: a cli and a github action that work with your own agent
 npx skills add AVGVSTVS96/autofork
+
+Music: Tech Live by Kevin MacLeod (incompetech.com), CC BY 4.0

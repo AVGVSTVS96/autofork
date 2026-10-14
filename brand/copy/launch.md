@@ -1,41 +1,66 @@
 # autofork launch
 
-The X post, its link reply and the visual. The pitch is the site's: "Fork any open-source app and never rebase it again." over "Personal forks of open-source apps that update themselves." (`copy/MESSAGING.md`). Bassim's voice: lowercase, problem first, greentext, link in the first reply. Every number comes from `copy/facts.json`. The post scored 0 ("no tells") in delvish.
+The launch is an 8-tweet X thread, each tweet with its video or image, the link in the last one. The pitch is the site's: "Fork any open-source app and never rebase it again." over "Personal forks of open-source apps that update themselves." (`copy/MESSAGING.md`). Bassim's voice: lowercase, problem first, greentext. Every number comes from `copy/facts.json`.
 
-## The post
+## The thread
+
+The type video (6/) and the demo video (2/) use the same music track. Swap one before posting, or keep it on purpose.
 
 ```
-t3 code's readme says big features won't be merged. it also says you should have everything you need to fork it
+1/ [video: video/saves/out/video.mp4]
+t3 code's readme says big features won't be merged. it also says they want you to have everything you need to fork it
 
-but keep a fork with your changes and you're rebasing it on every release they ship. so i made autofork: fork any open-source app and never rebase it again
+but a fork with your changes falls behind every release they ship
 
-> name an app and what you'd change. sign in with chatgpt or claude and an agent builds it into your fork
-> your change is saved in plain words. every release it goes back on top, and when one breaks, the agent rebuilds it from your words
-> your fork lives in your github and runs in its own github actions on your plan, free on public repos
-> if they ship their own version of your change, yours pauses until you pick
+so i made autofork. fork any open-source app and never rebase it again
 
-my t3 code fork took 156 upstream commits in its first 2 days and i never rebased it. one change broke on day one and the agent rebuilt it
+2/ [video: video/demo/out/video.mp4]
+> name an open source app and what you'd change. sign in with chatgpt or claude
+> it runs codex or claude code on the plan you already pay for, no api key
+> your fork lives in your github and runs in your own github actions, free on public repos
+> every release, your changes go back on top
 
-link in replies
+3/ [image: PATCH.md on GitHub, or films/autofork film]
+when a release breaks your change, an agent rebuilds it from what you asked for
+
+your change is saved as a PATCH.md in plain words, not a diff. so it survives their refactors
+
+if they ship their own version of your change, yours pauses until you pick
+
+4/ [video: video/branch/out/video.mp4]
+my t3 code fork took 156 upstream commits in its first 2 days
+
+one change broke on day one and the agent rebuilt it from what i asked for
+
+5/ [image: needs a retake. launch-kit/screenshots/home-1440-light.png still has the old t3 icon. better: hex-voice on a phone]
+it's not a t3 code trick
+
+> hex-voice, the iphone app i call my assistant from, is a fork of an expo template i took over. it's on autofork too
+> before autofork, an older version of the same idea ran my forks of herdr (315 upstream commits since july), buzz (58 commits, 7 changes on top) and claude code's plugins
+
+6/ [video: video/type/out/video.mp4]
+coming soon: autofork runs and watches your forks for you, and tells you when one needs you to pick
+
+7/ [image: github.com/AVGVSTVS96/autofork]
+rather run it yourself? the engine is open source: a cli and a github action, one file, zero dependencies, works with your own agent
+
+npx skills add AVGVSTVS96/autofork
+
+8/
+what would you change? reply with an app and one sentence, i'll fork the best ones
+
+autofork.com
 ```
 
 Why each line is safe to say:
 
-- Line one is T3 Code's README: "Big features will not be." and "we want you to have everything you need to fork and build the editor that you want." A stranger who uses T3 Code (27k stars) gets it without knowing Bassim.
-- Line two is the reason it exists, in Bassim's terms: a fork always keeps your changes; what it costs is a rebase every time they ship. It ends on the site's headline, word for word.
-- "sign in with chatgpt or claude and an agent builds it into your fork": both are live (with GitHub sign-in for the fork itself), and the agent runs in the fork's own GitHub Actions. Actions are free on public repos (GitHub's docs).
-- "saved in plain words ... goes back on top ... rebuilds it from your words": each change is a `PATCH.md` (the request in plain words) plus its diff. On a release the diff goes on with git; only when it no longer applies does the agent rebuild it from the `PATCH.md`.
-- "yours pauses until you pick": the engine stops applying it, the fork takes their version, and an issue opens (`context-usage: upstream does this now`). Deleting the folder keeps theirs; editing `PATCH.md` brings yours back.
-- The last line is the T3 Code fork in `facts.json`. "i never rebased it": every sync commit on the fork (`syncCommits`) is autofork's own. Its first sync (Oct 10, `85b3a1c`, "healed window-title") jumped 383 upstream commits and `window-title` no longer applied, so the agent rebuilt it from its `PATCH.md` (`heals: 1`). From that sync to the last one (`9afde1c` to `8f25cf9`, Oct 10 to Oct 12) upstream moved 156 commits (`upstreamCommitsAbsorbed`) and every change stayed on. The earlier "kept all 3 changes" was out: `context-usage` only went in on Oct 12 and rode through the last 3 of those 156 commits, and the fork holds 4 changes now (`app-name` landed Oct 13).
-
-## First reply
-
-```
-autofork.com
-
-rather run it yourself? the engine is open source: a cli and a github action that work with your own agent
-npx skills add AVGVSTVS96/autofork
-```
+- 1/ is T3 Code's README: "Big features will not be." and "we want you to have everything you need to fork and build the editor that you want." A stranger who uses T3 Code (27k stars) gets it without knowing Bassim. It ends on the site's headline, word for word.
+- 2/ "it runs codex or claude code on the plan you already pay for": both sign-ins are live, and the agent runs in the fork's own GitHub Actions. Said plainly so nobody wonders if it gets their account banned. Actions are free on public repos (GitHub's docs).
+- 3/ each change is a `PATCH.md` (the request in plain words) plus its diff. On a release the diff goes on with git; only when it no longer applies does the agent rebuild it from the `PATCH.md`. "yours pauses until you pick": the engine stops applying it, the fork takes their version, and an issue opens (`context-usage: upstream does this now`). Deleting the folder keeps theirs; editing `PATCH.md` brings yours back.
+- 4/ is the T3 Code fork in `facts.json`. Its first sync (Oct 10, `85b3a1c`, "healed window-title") jumped 383 upstream commits and `window-title` no longer applied, so the agent rebuilt it from its `PATCH.md` (`heals: 1`). From that sync to the last one (`9afde1c` to `8f25cf9`, Oct 10 to Oct 12) upstream moved 156 commits (`upstreamCommitsAbsorbed`) and every change stayed on.
+- 5/ hex-voice (AVGVSTVS96/hex-voice, a fork of an Expo template Bassim took over) is on autofork. herdr, buzz and Claude Code's plugins are not: they run the older sync-upstream setup autofork grew out of, so the tweet says "before autofork". Don't call them autofork forks or say they're green (herdr has failed since Sep 16, the plugins fork since Oct 11 on a flaky test). The image needs a retake: `launch-kit/screenshots/home-1440-light.png` still has the old T3 Code icon.
+- 6/ is the one "coming soon" `MESSAGING.md` allows: the managed platform. The living-examples job only rewrites the example text on the site from open feature requests; it doesn't fork or build anything, so the thread doesn't mention it.
+- 7/ `npx skills add AVGVSTVS96/autofork` works (checked Oct 13).
 
 ## The visual
 
@@ -50,7 +75,7 @@ An 8 to 15 second screen recording of the real site, phone legible: type `T3 Cod
 ## Before posting
 
 - [x] Continue with ChatGPT and Continue with Claude both work end to end on autofork.dev (Claude: AVGVSTVS96/Spoon-Knife, built in 27 s; ChatGPT: AVGVSTVS96/fzf, built in 1m 41s, both Oct 13), and the fork lands in the user's GitHub. Since the switch to autofork.com (autofork.dev now 308s to it, GitHub App callback autofork.com first), GitHub sign-in works there end to end and both agent sign-ins start there (Oct 13). If one isn't live, the first greentext line changes first.
-- [ ] `node copy/facts.mjs` rerun right before posting; if the T3 Code fork's 156 or its heal count moved, update the post.
+- [ ] `node copy/facts.mjs` rerun right before posting; if the T3 Code fork's 156 or its heal count moved, update 4/.
 - [x] `npx skills add AVGVSTVS96/autofork` works (checked Oct 13: finds the autofork skill).
-- [ ] Visual attached (`launch-kit/autofork-fork-clip.mp4`), link only in the reply.
+- [ ] Each tweet has its video or image attached, 5/ retaken, and the link only in 8/.
 - [ ] No em dashes: `rg '\x{2014}' copy/` prints nothing.
