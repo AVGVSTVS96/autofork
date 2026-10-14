@@ -1,7 +1,7 @@
 {
   "name": "autofork",
   "version": "0.1.2",
-  "description": "Name an open source app and what you'd change. Every new release arrives with your changes already in it.",
+  "description": "Fork any open-source app and never rebase it again. Your changes go back on top of every release, and an agent rebuilds any that break.",
   "type": "module",
   "license": "MIT",
   "homepage": "https://autofork.com",

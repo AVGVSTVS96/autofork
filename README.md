@@ -1,9 +1,11 @@
 <a href="https://autofork.com"><picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/header-dark.png">
-  <img alt="autofork: Make it yours. Keep their updates." src="assets/header-light.png">
+  <img alt="autofork: Fork any open-source app and never rebase it again." src="assets/header-light.png">
 </picture></a>
 
-autofork keeps your fork on top of upstream, and when upstream breaks one of your changes, an agent rebuilds it. Fork something at [autofork.com](https://autofork.com), or from a terminal:
+Personal forks of open-source apps that update themselves. Each change you make is saved in plain words, in a `PATCH.md`. On every upstream release your changes go back on top, and when one no longer applies, an agent rebuilds it from what you wrote, in your fork's own GitHub Actions, on your Claude or ChatGPT plan.
+
+Fork something at [autofork.com](https://autofork.com), or from a terminal:
 
 ```sh
 npx github:AVGVSTVS96/autofork fork pingdotgg/t3code
@@ -105,8 +107,8 @@ Your agent then knows how to fork a repo and keep its changes as patches.
 
 ```
 $ npx github:AVGVSTVS96/autofork --help
-autofork: Make it yours. Keep their updates.
-Name an open source app and what you'd change. Every new release arrives with your changes already in it.
+autofork: Fork any open-source app and never rebase it again.
+Personal forks of open-source apps that update themselves.
 
 Usage:
   autofork fork <owner/repo>    fork it on GitHub, set it up and push
