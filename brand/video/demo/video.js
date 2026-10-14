@@ -101,8 +101,8 @@ const SCENES = [
   },
   {
     id: "still", s: 50, e: 55,
-    states: [[0, "t3"]],
-    cam: [{ t: 0, at: ".ctx-wrap", z: 3.9, dx: -23, dy: -52 }],
+    states: [[0, "kept"]],
+    cam: [{ t: 0, at: ".changes", z: 2.05, dy: 0 }],
   },
   {
     id: "kept", s: 55, e: 61,
@@ -209,6 +209,7 @@ const seek = t => {
   }
   document.body.classList.toggle("final", scene.id === "end")
   document.getElementById("count").textContent = `${String(index + 1).padStart(2, "0")} / ${SCENES.length}`
+  document.getElementById("tag").style.visibility = index === 0 ? "hidden" : "visible"
   if (scene.frame) {
     scene.cam && camera(scene, lt)
     scene.apply?.(lt, scene.frame.contentWindow.show(stateAt(scene, lt)))
