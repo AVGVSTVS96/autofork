@@ -1,0 +1,25 @@
+name: Capture Claude usage
+description: Publish accounting counters from native Claude Code without conversation content
+inputs:
+  execution-file:
+    description: Claude Code Action execution_file output, when available
+    default: ''
+  account-id:
+    description: Optional verified account label, without email or credential data
+    default: unverified-repository-secret
+runs:
+  using: composite
+  steps:
+    - name: Extract accounting counters
+      shell: bash
+      env:
+        TOKENHUB_EXECUTION_FILE: ${{ inputs.execution-file }}
+        TOKENHUB_ACCOUNT_ID: ${{ inputs.account-id }}
+      run: node "$GITHUB_ACTION_PATH/capture.cjs"
+    - name: Save accounting artifact
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: claude-usage-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
+        path: ${{ runner.temp }}/claude-usage.json
+        retention-days: 30
+        if-no-files-found: error
