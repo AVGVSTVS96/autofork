@@ -44,3 +44,12 @@ The launch thread attaches type to tweet 6, which is about living examples ("com
 ## Done when
 
 Stills at 0, 2.4, 3.4, 10.5, 23.9, 31.7, 33 and a 1 s sheet show each word whole and centered; the strobe words don't clip at 440 px ("rebase" is wider than "their"; scale it to fit the frame with the same margins as "updates."); re-encoded on the same soundtrack.
+
+## Update, Oct 13 8pm: Bassim's new pitch
+
+Bassim replaced Simon's pair ("too heavy on the never rebased") with **Customized forks / that maintain themselves.** over **Every release, your changes are reapplied intelligently. When they ship the same feature, autofork stops applying yours.** (`copy/MESSAGING.md`, c4bf412). "Rebase" stays only in "I never rebased it"; "upstream" is never autofork's own words on screen. Same timing, look and soundtrack; the reviewer re-checked every beat whose meaning changed (all pass).
+
+- Poster (beats 0–4): **Customized forks** with the branch drawing under it.
+- Strobe (beats 4–7): **that** / **maintain** / **themselves.** (the last two at 300 px), then **that maintain themselves.** whole. The "rebase" stamp is gone.
+- End tagline and rail: the headline.
+- Kept: "I never rebased it." in the proof.

@@ -43,6 +43,7 @@ h1 .w { white-space: pre; }
 
 .scene.blue { background: var(--you); color: #fff; }
 .word h1 { font-size: 440px; letter-spacing: -0.035em; }
+.word h1.fit { font-size: 300px; }
 .hero h1 { font-size: 150px; letter-spacing: -0.04em; }
 .hero .line-wrap { display: grid; justify-items: center; }
 .under { width: 1200px; height: 60px; margin-top: 18px; overflow: visible; }
