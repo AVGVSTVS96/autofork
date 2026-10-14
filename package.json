@@ -1,6 +1,6 @@
 {
   "name": "autofork",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Fork any open-source app and never rebase it again. Your changes go back on top of every release, and an agent rebuilds any that break.",
   "type": "module",
   "license": "MIT",
