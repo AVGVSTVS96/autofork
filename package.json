@@ -4,6 +4,7 @@
   "description": "Name an open source app and what you'd change. Every new release arrives with your changes already in it.",
   "type": "module",
   "license": "MIT",
+  "homepage": "https://autofork.com",
   "repository": "github:AVGVSTVS96/autofork",
   "bin": {
     "autofork": "dist/autofork.js"

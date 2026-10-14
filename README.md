@@ -1,9 +1,9 @@
-<picture>
+<a href="https://autofork.com"><picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/header-dark.png">
   <img alt="autofork: Make it yours. Keep their updates." src="assets/header-light.png">
-</picture>
+</picture></a>
 
-autofork keeps your fork on top of upstream, and when upstream breaks one of your changes, an agent rebuilds it.
+autofork keeps your fork on top of upstream, and when upstream breaks one of your changes, an agent rebuilds it. Fork something at [autofork.com](https://autofork.com), or from a terminal:
 
 ```sh
 npx github:AVGVSTVS96/autofork fork pingdotgg/t3code
