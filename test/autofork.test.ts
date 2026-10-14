@@ -231,3 +231,29 @@ test("a fork ahead of upstream's newest release stays where it is", () => {
   expect(log).toContain("already up to date");
   expect(file(fork, "notes.txt")).toBe("five\n");
 });
+
+test("init puts a note under the README's title as a saved patch, which later syncs apply without the agent", () => {
+  const origin = join(home, "demo");
+  const mine = join(home, "demo-fork");
+  mkdirSync(origin);
+  sh(origin, "git init -q");
+  write(origin, "README.md", "# Demo\n\nDemo does things.\n\n## Install\n\nRun it.\n");
+  sh(origin, "git add -A && git commit -qm init");
+  sh(home, `git clone -q ${origin} demo-fork`);
+  const { ok, log } = autofork(mine, "init", origin);
+  expect(ok).toBe(true);
+  expect(log).toContain("README.md now says this is a personal fork");
+  expect(file(mine, "README.md")).toBe(
+    "# Demo\n\n> A personal fork of Demo that updates itself with [autofork](https://autofork.com). Its changes, each described in plain words, are in [`.autofork/`](.autofork).\n\nDemo does things.\n\n## Install\n\nRun it.\n",
+  );
+  expect(file(mine, ".autofork/fork-readme/PATCH.md")).toContain("delete this folder");
+  write(mine, ".autofork/config.json", `${JSON.stringify({ ...JSON.parse(file(mine, ".autofork/config.json")), agent: "exit 1" }, null, 2)}\n`);
+  sh(mine, "git add -A && git commit -qm 'track upstream'");
+  write(origin, "README.md", "# Demo\n\nDemo does things.\n\n## Install\n\nRun it with care.\n");
+  sh(origin, "git commit -qam install");
+  const synced = autofork(mine, "sync");
+  expect(synced.ok).toBe(true);
+  expect(synced.log).not.toContain("building");
+  expect(file(mine, "README.md")).toContain("> A personal fork of Demo");
+  expect(file(mine, "README.md")).toContain("Run it with care.");
+});

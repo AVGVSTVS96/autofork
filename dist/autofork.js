@@ -448,14 +448,55 @@ function setup(root, upstream, args) {
   if (!existsSync(workflow))
     writeFileSync(workflow, WORKFLOW);
   fetchUpstream(root, config);
-  const { drift } = check(root, { ...config, patches: [] }, workingTree(root));
+  const { base, drift } = check(root, { ...config, patches: [] }, workingTree(root));
+  const readme = addNote(root, upstream, base, drift);
   const inherited = git(root, "ls-files", ".github/workflows").split(`
 `).filter((file) => file && !file.endsWith("/autofork.yml"));
   say(follow === "releases" ? `autofork follows ${upstream}'s releases.` : `autofork follows ${upstream}'s ${follow} branch${flag(args, "--follow") ? "" : ", since it has no releases"}.`);
   if (inherited.length)
     say(`Your fork has ${inherited.length} workflow${inherited.length === 1 ? "" : "s"} copied from upstream, and they run here too. Delete the ones you don't want; upstream's new ones never get copied in.`);
+  if (readme)
+    say(`${readme} now says this is a personal fork kept current by autofork. To drop that line, delete it and ${DIR}/${NOTE}/.`);
   if (drift.length)
     say(`Your branch already changes ${drift.length} file${drift.length === 1 ? "" : "s"}. Save them as a patch: write ${DIR}/<id>/PATCH.md, then autofork save <id>`);
+  return readme;
+}
+var NOTE = "fork-readme";
+var appName = (upstream) => basename(upstream).replace(/\.git$/, "");
+function withNote(readme, upstream) {
+  if (!readme.trim() || readme.includes("autofork.com"))
+    return;
+  const repo = githubRepo(upstream);
+  const link = repo ? `https://github.com/${repo}` : /^https?:\/\//.test(upstream) ? upstream.replace(/\.git$/, "") : undefined;
+  const eol = readme.includes(`\r
+`) ? `\r
+` : `
+`;
+  const lines = readme.split(eol);
+  const titled = /^\uFEFF?#\s/.test(lines[0]);
+  const name = titled && lines[0].match(/^\uFEFF?#\s+([^[\]<>`*_!]+?)[\s#]*$/)?.[1] || appName(upstream);
+  const note = `> A personal fork of ${link ? `[${name}](${link})` : name} that updates itself with [autofork](https://autofork.com). Its changes, each described in plain words, are in [\`${DIR}/\`](${DIR}).`;
+  const at = titled ? 1 : 0;
+  const block = titled ? ["", note, ...lines[1]?.trim() ? [""] : []] : [note, ""];
+  return [...lines.slice(0, at), ...block, ...lines.slice(at)].join(eol);
+}
+var noteDoc = (name) => `One line under the README's title says this is a personal fork of ${name} that updates itself with autofork, linking ${name}, https://autofork.com and this fork's \`${DIR}/\` folder. The rest of the README stays as upstream wrote it.
+
+To drop the line, delete it from the README and delete this folder, in the same commit.
+`;
+function addNote(root, upstream, base, drift) {
+  const readme = git(root, "ls-tree", "--name-only", base).split(`
+`).find((file) => /^readme\.md$/i.test(file));
+  if (!readme || drift.includes(readme) || existsSync(join(root, DIR, NOTE)))
+    return;
+  const text = withNote(readFileSync(join(root, readme), "utf8"), upstream);
+  if (!text)
+    return;
+  writeFileSync(join(root, readme), text);
+  mkdirSync(join(root, DIR, NOTE), { recursive: true });
+  writeFileSync(patchFile(root, NOTE), gitBytes(root, "diff", "--no-ext-diff", "--no-color", "--binary", "--full-index", "--src-prefix=a/", "--dst-prefix=b/", base, "--", readme));
+  writeFileSync(patchDoc(root, NOTE), noteDoc(appName(upstream)));
+  return readme;
 }
 function ownRepo(root) {
   const origin = run("git", ["remote", "get-url", "origin"], root);
@@ -492,7 +533,7 @@ async function fork(cwd, args) {
   if (!run("gh", ["repo", "fork", upstream, "--clone", "--default-branch-only"], cwd).ok)
     throw new Failure("gh couldn't fork it. Is the GitHub CLI installed and logged in?");
   const root = join(cwd, upstream.split("/")[1]);
-  setup(root, upstream, args);
+  const readme = setup(root, upstream, args);
   describe(root, upstream);
   const repo = ownRepo(root);
   run("gh", ["api", "-X", "PUT", `repos/${repo}/actions/permissions`, "-F", "enabled=true"], root);
@@ -500,7 +541,7 @@ async function fork(cwd, args) {
   const token = process.env.CLAUDE_CODE_OAUTH_TOKEN;
   if (token)
     run("gh", ["secret", "set", "CLAUDE_CODE_OAUTH_TOKEN", "--repo", repo, "--body", token], root);
-  git(root, "add", DIR, ".github/workflows/autofork.yml");
+  git(root, "add", DIR, ".github/workflows/autofork.yml", ...readme ? [readme] : []);
   git(root, "commit", "--quiet", "-m", `autofork: follow ${upstream}`);
   git(root, "push", "--quiet");
   say(`${repo} now keeps itself current with ${upstream}. It's cloned in ./${basename(root)}.`);

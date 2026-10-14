@@ -11,7 +11,7 @@ Fork something at [autofork.com](https://autofork.com), or from a terminal:
 npx github:AVGVSTVS96/autofork fork pingdotgg/t3code
 ```
 
-That forks the repo, clones it and adds the autofork workflow. Set `CLAUDE_CODE_OAUTH_TOKEN` first (`claude setup-token` prints one) and it adds that secret too. Already have a fork? Run `init owner/repo` inside it.
+That forks the repo, clones it and adds the autofork workflow, plus one line under your README's title saying it's a personal fork that updates itself with autofork. That line is a patch like any other, `.autofork/fork-readme`; to drop it, delete the line and the folder. Set `CLAUDE_CODE_OAUTH_TOKEN` first (`claude setup-token` prints one) and it adds that secret too. Already have a fork? Run `init owner/repo` inside it.
 
 ## Patches
 
