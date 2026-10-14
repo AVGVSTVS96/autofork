@@ -46,17 +46,17 @@ Nothing else above the fold. No command, no diagram, no second example.
 
 Bassim, Oct 13: "too many sections on the page... a lot of reading... We could close it down, make it cleaner, simpler, still have really nice, beautiful, rich visualizations." Five blocks, each a headline, at most one line, and one moving visual. A git graph runs down the left edge the whole way: their line with commits and releases, yours branching off at the headline, each release merging into yours, every section hanging off yours. It grows as you scroll.
 
-1. **It keeps what you meant.**
-   Line: Your change is saved as what you asked for, not only as code. When they rewrite things or ship something new, the agent rebuilds yours on top of theirs.
+1. **Your change is kept in plain words.**
+   Line: Each new release, your changes go back on top. When one no longer fits their new code, an agent rebuilds it from your words.
    Visual: "always show context usage" and its PATCH.md intent, then three T3 Code releases that play in turn: it goes back on as is; they redo the composer and the agent rebuilds yours into it; they add a usage meter and yours builds on it. This is the intent line Bassim wants weighed most: whatever T3 Code ships, the patch knows what you meant and takes the good from theirs.
    Footnote: An example on T3 Code. If they ship exactly what you asked for, yours pauses and you decide.
 
-2. **Mine, today.**
-   Line: My T3 Code fork took 156 commits from T3 Code in its first two days. One change broke on day one and the agent rebuilt it. (`facts.json`.)
+2. **My forks, today.**
+   Line: My T3 Code fork took 156 commits from T3 Code in its first two days, and I never rebased it. One change broke on day one and the agent rebuilt it. (`facts.json`; every sync commit on the fork is autofork's.)
    Visual: T3 Code transcribed from its source (apps/web), threads you can switch, and my context-usage button in the composer, which toggles compact-before-send like the real one. Under it, the four other forks as rows with their icons.
 
-3. **Yours.**
-   Line: The fork lives in your GitHub and runs in your own GitHub Actions, on your own plan. Free on public forks.
+3. **It runs in your GitHub.**
+   Line: Your fork lives in your GitHub account and updates itself in its own GitHub Actions, on the ChatGPT or Claude plan you already pay for. Free on public forks.
    Visual: the fork's GitHub header, then "Rather run it yourself? The engine is open source." and `npx skills add AVGVSTVS96/autofork`.
 
 4. **How it got here.** The lineage as a graph, labels only: pi-patcher (May) and PATCH.md (June) on the main line, experimental forks branching off it (herdr July, Claude Code plugins Oct 4, Buzz Oct 6, T3 Code Oct 10), merging back into autofork (October).
@@ -75,35 +75,39 @@ The site ships the same day as the product. These lines describe the product Bas
 
 ## Meta
 
-- **Title:** autofork: make it yours, keep their updates
-- **Description:** Name an open source app and what you'd change. Every new release arrives with your changes already in it.
+- **Title:** autofork: fork any open-source app and never rebase it again
+- **Description:** Personal forks of open-source apps that update themselves. Each new release, your changes go back on top, and an agent rebuilds any that break.
 - **Site:** https://autofork.com (autofork.dev redirects to it)
-- **GitHub repo description:** Make it yours, keep their updates. Your fork gets every release; when one breaks a change, an agent rebuilds it.
+- **GitHub repo description (autofork):** Fork any open-source app and never rebase it again. Personal forks that update themselves: your changes go back on top of every release, and an agent rebuilds any that break.
+- **GitHub repo description (autofork-app):** The app behind autofork.com: name an open-source app and what you'd change, and get a personal fork that updates itself.
+- **npm and package.json description:** Fork any open-source app and never rebase it again. Your changes go back on top of every release, and an agent rebuilds any that break.
 
 ## OG image (1200×630)
 
-- **Big:** Make it yours. / Keep their updates.
+- **Big:** Fork any open-source app / and never rebase it again. Four rows, balanced; the second sentence half in your color.
+- **Under it:** Personal forks of open-source apps that update themselves.
 - **Small:** autofork.com
-- **Alt:** autofork: Make it yours. Keep their updates.
-- **The composer**, once: T3 Code, always show context usage, Fork it.
+- **Alt:** autofork: Fork any open-source app and never rebase it again. Personal forks of open-source apps that update themselves.
 - **The T3 Code fork's card**, three true moments from `facts.json` and `launch.md`, newest on top: 4 changes on top, ready for their next release; every change kept, +156 commits, Oct 12; rebuilt by the agent, a change broke on day one, +383 commits, Oct 10.
+
+The composer left the image when the pitch got longer: the headline and its sub line need the room, and the card already shows a fork taking releases. The same file renders the GitHub social preview at 1280×640.
 
 No line appears twice (Bassim, Oct 13: "the open graph image repeats itself... that doesn't look all that good"). Keep the bottom fifth clear for X's title bar.
 
 ## What it isn't
 
 - **Not nightly, not a schedule.** It follows the app's releases by default (skipping pre-releases); a branch is an option. The hourly check is git only. Never write "every night" or "nightly". Bassim: "It should just be based on full fucking releases."
-- **Not hands-off forever.** If a rebuilt change fails the fork's checks, nothing lands. Never "maintains itself", "zero maintenance", "never breaks".
+- **Not hands-off forever.** If a rebuilt change fails the fork's checks, nothing lands. "Update themselves" is the sub line and true: the fork takes each release on its own. Beyond it, never "maintains itself", "zero maintenance", "never breaks".
 - **Not an agent on every release.** Changes that still fit go on with git. The agent runs only when one breaks.
 - **Not API billing.** It runs on the plan the user already has. Bassim: "Nobody should ever be using Claude models with API prices."
 - **Not hands-off when they catch up.** When the original ships its own version of a change, autofork pauses it and asks. It never quietly picks for you.
-- **Not for hackers first.** No CLI above section 7.
+- **Not for hackers first.** No CLI above section 3.
 
 ## Words
 
 Plain words, like a person who built it. Short sentences, real numbers.
 
-- On the site, for everyone: fork, change, release, update, rebuild, your GitHub, your plan. The original's makers are "they" ("their updates", "they ship"), or the app's name. Not "upstream" on the page, except in footnotes and the real issue title. "Patch" appears once, in section 3, where it's the real file.
+- On the site, for everyone: fork, change, release, update, rebuild, your GitHub, your plan. "Rebase" appears in the headline and the proof line ("I never rebased it"), nowhere else on the page. "Open-source" takes its hyphen before a noun, and never breaks across lines. The original's makers are "they" ("their updates", "they ship"), or the app's name. Not "upstream" on the page, except in footnotes and the real issue title. "Patch" appears once, in section 3, where it's the real file.
 - `PATCH.md`, `heal`, `verify`, `follow`, `.autofork/` belong in the README and section 6, not above it.
 - Only the managed platform is "coming soon". Not "waitlist" on the page.
 - The user picks: "your fork", "what you'd change". Never a role we hand them.

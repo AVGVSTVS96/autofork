@@ -9,5 +9,5 @@ svg.g { position: absolute; inset: 0; }
 .ring { fill: var(--bg); stroke: var(--trunk); stroke-width: 3; }
 .dot { fill: var(--you); }
 .wm { position: absolute; left: 96px; top: 34px; height: 32px; }
-h1 { position: absolute; left: 96px; top: 98px; margin: 0; font-size: 76px; line-height: .98; letter-spacing: -0.028em; font-weight: 800; }
+h1 { position: absolute; left: 96px; top: 104px; margin: 0; font-size: 60px; line-height: 1; white-space: nowrap; letter-spacing: -0.028em; font-weight: 800; }
 h1 span { display: block; } h1 .you { color: var(--you); }

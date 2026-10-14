@@ -1,20 +1,20 @@
 # autofork launch
 
-The X post, its link reply and the visual. Bassim's voice: lowercase, problem first, greentext, link in the first reply. Every number comes from `copy/facts.json`. The post scored 0 ("no tells") in delvish.
+The X post, its link reply and the visual. The pitch is the site's: "Fork any open-source app and never rebase it again." over "Personal forks of open-source apps that update themselves." (`copy/MESSAGING.md`). Bassim's voice: lowercase, problem first, greentext, link in the first reply. Every number comes from `copy/facts.json`. The post scored 0 ("no tells") in delvish.
 
 ## The post
 
 ```
 t3 code's readme says big features won't be merged. it also says you should have everything you need to fork it
 
-but a fork with your changes falls behind every release they ship. so i made autofork
+but keep a fork with your changes and you're rebasing it on every release they ship. so i made autofork: fork any open-source app and never rebase it again
 
-> name an open source app and what you'd change. sign in with chatgpt or claude and your plan does the work
-> your fork lives in your github and runs in your own github actions, free on public repos
-> every release, your changes go back on top. when one breaks, an agent rebuilds it from what you asked for
+> name an app and what you'd change. sign in with chatgpt or claude and an agent builds it into your fork
+> your change is saved in plain words. every release it goes back on top, and when one breaks, the agent rebuilds it from your words
+> your fork lives in your github and runs in its own github actions on your plan, free on public repos
 > if they ship their own version of your change, yours pauses until you pick
 
-my t3 code fork took 156 upstream commits in its first 2 days. one change broke on day one and the agent rebuilt it
+my t3 code fork took 156 upstream commits in its first 2 days and i never rebased it. one change broke on day one and the agent rebuilt it
 
 link in replies
 ```
@@ -22,11 +22,11 @@ link in replies
 Why each line is safe to say:
 
 - Line one is T3 Code's README: "Big features will not be." and "we want you to have everything you need to fork and build the editor that you want." A stranger who uses T3 Code (27k stars) gets it without knowing Bassim.
-- Line two is the reason it exists, in Bassim's terms: a fork always keeps your changes; what it loses is their updates.
-- "sign in with chatgpt or claude": both are live, and the agent runs in the user's own GitHub Actions. Actions are free on public repos (GitHub's docs).
-- "rebuilds it from what you asked for": the agent rebuilds a broken change from its `PATCH.md`, which holds the request in plain words.
+- Line two is the reason it exists, in Bassim's terms: a fork always keeps your changes; what it costs is a rebase every time they ship. It ends on the site's headline, word for word.
+- "sign in with chatgpt or claude and an agent builds it into your fork": both are live (with GitHub sign-in for the fork itself), and the agent runs in the fork's own GitHub Actions. Actions are free on public repos (GitHub's docs).
+- "saved in plain words ... goes back on top ... rebuilds it from your words": each change is a `PATCH.md` (the request in plain words) plus its diff. On a release the diff goes on with git; only when it no longer applies does the agent rebuild it from the `PATCH.md`.
 - "yours pauses until you pick": the engine stops applying it, the fork takes their version, and an issue opens (`context-usage: upstream does this now`). Deleting the folder keeps theirs; editing `PATCH.md` brings yours back.
-- The last line is the T3 Code fork in `facts.json`. Its first sync (Oct 10, `85b3a1c`, "healed window-title") jumped 383 upstream commits and `window-title` no longer applied, so the agent rebuilt it from its `PATCH.md` (`heals: 1`). From that sync to the last one (`9afde1c` to `8f25cf9`, Oct 10 to Oct 12) upstream moved 156 commits (`upstreamCommitsAbsorbed`) and every change stayed on. The earlier "kept all 3 changes" was out: `context-usage` only went in on Oct 12 and rode through the last 3 of those 156 commits, and the fork holds 4 changes now (`app-name` landed Oct 13).
+- The last line is the T3 Code fork in `facts.json`. "i never rebased it": every sync commit on the fork (`syncCommits`) is autofork's own. Its first sync (Oct 10, `85b3a1c`, "healed window-title") jumped 383 upstream commits and `window-title` no longer applied, so the agent rebuilt it from its `PATCH.md` (`heals: 1`). From that sync to the last one (`9afde1c` to `8f25cf9`, Oct 10 to Oct 12) upstream moved 156 commits (`upstreamCommitsAbsorbed`) and every change stayed on. The earlier "kept all 3 changes" was out: `context-usage` only went in on Oct 12 and rode through the last 3 of those 156 commits, and the fork holds 4 changes now (`app-name` landed Oct 13).
 
 ## First reply
 
