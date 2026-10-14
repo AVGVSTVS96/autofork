@@ -45,3 +45,12 @@ Every scene's time, the camera, the graph, and the soundtrack (`out/soundtrack.w
 ## Done when
 
 Stills at 3.5, 7.5, 13.5, 24, 30, 40, 47.5, 57.5 and a 1 s sheet: every caption whole, inside the rails, not over the graph's labels; the 54–58 rows fit between the rails at 104 px; a pair around the 10 and 54 cuts shows no pop; re-encoded on the same soundtrack.
+
+## Update, Oct 13 8pm: Bassim's new pitch
+
+Bassim replaced Simon's pair ("too heavy on the never rebased") with **Customized forks / that maintain themselves.** over **Every release, your changes are reapplied intelligently. When they ship the same feature, autofork stops applying yours.** (`copy/MESSAGING.md`, c4bf412). "Rebase" stays only in "I never rebased it"; "upstream" is never autofork's own words on screen. Same timing, look and soundtrack; the reviewer re-checked every beat whose meaning changed (all pass).
+
+- 4–8: **So you fork it.** / **Then it falls behind every time they ship.** The rebase pain line is cut.
+- 10–15 name card and 54–58 headline card: **Customized forks / that maintain themselves.** (headline card at 112 px). Rail: the headline, hidden from 54 s.
+- 48–54: the engine's issue chip reads **issue opened: context-usage**, so "upstream" isn't on screen.
+- Kept: "I never rebased it." in the proof.

@@ -11,16 +11,16 @@ One option for autofork's launch video: the git graph is the video. Their line i
 | Time | Scene | On screen | Caption | Why |
 |---|---|---|---|---|
 | 0–4 | Their line | Gray trunk labeled T3 Code, drawing in its real releases v0.0.42 to v0.0.45 | T3 Code won't merge big features. · “Big features will not be.” T3 Code's README | Opens on the real problem, the launch post's first line |
-| 4–8 | The fork | The camera glides to 9503155 (Oct 6), where yours peels off carrying `window-title`; the trunk runs on to Oct 10 while yours sits still | So you fork it. / Now you rebase it every time they ship. | The problem as one picture: the gap between Oct 6 and Oct 10, named in the headline's word |
+| 4–8 | The fork | The camera glides to 9503155 (Oct 6), where yours peels off carrying `window-title`; the trunk runs on to Oct 10 while yours sits still | So you fork it. / Then it falls behind every time they ship. | The problem as one picture: the gap between Oct 6 and Oct 10 |
 | 8–10 | Introducing | Plain field; the music stops for the last beat | Introducing | His ask: a held card before the name |
-| 10–15 | Name | The wordmark; its two lines draw on the drop | Personal forks of open-source apps / that update themselves. | The name, and what it is in one sentence |
+| 10–15 | Name | The wordmark; its two lines draw on the drop | Customized forks / that maintain themselves. | The name, and what it is in one sentence |
 | 15–21 | Ask | The site's composer: T3 Code badge, "put the thread's name in the window title" typed, Fork it pressed | Name an app and what you'd change. · Runs on the ChatGPT or Claude plan you already pay for. | The surface is one sentence, and it's the change the rest of the film follows |
 | 21–26 | It breaks | Back on the same frame: 9afde1c merges into yours, `window-title` turns red and dashed | Sometimes an update breaks your change. | Sets up the mechanism with the real failure |
 | 26–34 | Underneath | Cut to dark, zoomed on the node: the PATCH.md sentence, then the real Actions log of Oct 10 (healing window-title 22:59:45, the agent's own sentence, healed 23:01:11); the node turns ultramarine | An agent rebuilds it from what you asked for. | The "magic underneath" beat, over the music's breakdown |
 | 34–42 | Every update | Back to light, the camera rides the five real syncs (74dfbb6, ed0f7b9, d45d1a1, abc80c8, 8f25cf9), one per bar; `context-usage` joins at abc80c8, `fork-readme` at the last rebuild | Each time they ship, / your changes go back on top. | The promise, in the ride, on the lift |
 | 42–48 | Proof | Pull back over Oct 10 to Oct 12: one dot per upstream commit, every merge, the rebuilt `window-title` chip pulses | My T3 Code fork took 156 commits in its first two days. / One change broke and the agent rebuilt it. / I never rebased it. | The facts.json line, as the graph it describes, and the 4–8 setup paid off |
 | 48–54 | They catch up | Their line ships context usage; the update still lands, your `context-usage` arrives dashed and paused, and the issue the engine opens hangs under it | If they ship their own version, / yours pauses until you pick. | The trust line from the launch post |
-| 54–58 | Headline | The site's hero on the graph: "Fork any open-source app" on their line, "and never rebase it again." on yours | | The headline lands on the branch |
+| 54–58 | Headline | The site's hero on the graph: "Customized forks" on their line, "that maintain themselves." on yours | | The headline lands on the branch |
 | 58–62 | End | Wordmark on the take's last chord, autofork.com | Runs on the ChatGPT or Claude plan you already pay for. | The button, rings out |
 
 The header's wordmark and tagline stay hidden until the name has been introduced; the wordmark steps aside for the headline card, and the tagline (the headline itself) for the headline and end cards.

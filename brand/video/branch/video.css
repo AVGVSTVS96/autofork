@@ -112,9 +112,9 @@ body { background: #000; overflow: hidden; }
 .hero-lines { position: absolute; inset: 0; }
 .hero-lines .trunk, .hero-lines .yours { stroke-width: 12; }
 .hero-lines .node { stroke-width: 7; }
-.hero { position: absolute; left: 440px; top: 0; font: 800 104px/1 var(--sans); letter-spacing: -.035em; }
-.hero .row1 { position: absolute; top: 346px; white-space: nowrap; }
-.hero .row2 { position: absolute; top: 566px; white-space: nowrap; }
+.hero { position: absolute; left: 500px; top: 0; font: 800 112px/1 var(--sans); letter-spacing: -.035em; }
+.hero .row1 { position: absolute; top: 338px; white-space: nowrap; }
+.hero .row2 { position: absolute; top: 558px; white-space: nowrap; }
 
 /* rails */
 .rails { position: absolute; inset: 0; pointer-events: none; }
