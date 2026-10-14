@@ -43,6 +43,7 @@ h1 .w { white-space: pre; }
 
 .scene.blue { background: var(--you); color: #fff; }
 .word h1 { font-size: 440px; letter-spacing: -0.035em; }
+.hero h1 { font-size: 150px; letter-spacing: -0.04em; }
 .hero .line-wrap { display: grid; justify-items: center; }
 .under { width: 1200px; height: 60px; margin-top: 18px; overflow: visible; }
 .under path, .git path, .wordmark path.app, .wordmark path.you { fill: none; stroke-linecap: round; }
@@ -104,5 +105,5 @@ body.blink .typer:not(.typing) .caret { opacity: 0; }
 .wordmark .ink { fill: var(--ink); transform-box: fill-box; transform-origin: center; }
 .wordmark .app { stroke: var(--trunk); stroke-width: 7; }
 .wordmark .you { stroke: var(--you); stroke-width: 7; }
-.end .tagline { margin-top: 70px; font-size: 64px; font-weight: 800; letter-spacing: -0.03em; }
+.end .tagline { margin-top: 70px; font-size: 64px; line-height: 1.1; text-align: center; font-weight: 800; letter-spacing: -0.03em; }
 .end .site { margin-top: 30px; font: 400 60px var(--mono); color: var(--ink-2); }
