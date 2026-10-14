@@ -37,3 +37,11 @@ The heal scene breaks "always show context usage"; on the real day one it was `w
 ## Done when
 
 Stills at 16.5, 18.9, 25, 33, 38.5 and a 2 s sheet show every line whole and inside the frame; a pair around the 16.16 and 36.1 cuts shows no pop; the mp4 is re-encoded on the same soundtrack.
+
+## Update, Oct 13 8pm: Bassim's new pitch
+
+Bassim replaced Simon's pair ("too heavy on the never rebased") with **Customized forks / that maintain themselves.** over **Every release, your changes are reapplied intelligently. When they ship the same feature, autofork stops applying yours.** (`copy/MESSAGING.md`, c4bf412). "Rebase" stays only in "I never rebased it"; "upstream" is never autofork's own words on screen. Same timing, look and soundtrack; the reviewer re-checked every beat whose meaning changed (all pass).
+
+- 16.16 name card: **Customized forks / that maintain themselves.** (116 px), one card after Theo's "would be easier to maintain your fork on top of".
+- 36.1 end card: the wordmark, **Customized forks / that maintain themselves.** (68 px), autofork.com. The 19-word sub line is too long for a 2.7 s card.
+- Kept: "I never rebased it." in the proof, and Bassim's real Oct 7 post in the feed (it says "track upstream"; it's his tweet, quoted as his).
