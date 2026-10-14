@@ -9,4 +9,6 @@ but keep a fork with your changes and you're rebasing it on every release they s
 
 my t3 code fork took 156 upstream commits in its first 2 days and i never rebased it. one change broke on day one and the agent rebuilt it
 
+hex-voice, the iphone app i call my assistant from, is a fork of an expo template i took over. it's on autofork too
+
 link in replies
