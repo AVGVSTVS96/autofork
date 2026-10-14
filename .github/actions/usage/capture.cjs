@@ -33,7 +33,10 @@ function record(row) {
   }
   add(usage, message.model);
   let advisor = 0;
-  for (const u of usage.iterations || []) if (u.type === 'advisor_message' && u.model) add(u, u.model, `:advisor:${advisor++}`);
+  for (const u of usage.iterations || []) if (u.type === 'advisor_message') {
+    const slot = advisor++;
+    if (u.model) add(u, u.model, `:advisor:${slot}`);
+  }
 }
 function files(dir) {
   if (!fs.existsSync(dir)) return [];
