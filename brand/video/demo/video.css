@@ -46,7 +46,7 @@ body { width: 1920px; height: 1080px; position: relative; color: var(--ink); fon
 .end { align-items: flex-start; }
 .end .mark { height: 170px; }
 .end .mark svg { height: 100%; width: auto; display: block; }
-.end h1 { margin: 72px 0 0; font-size: 108px; line-height: .98; letter-spacing: -0.03em; font-weight: 800; }
+.end h1 { margin: 72px 0 0; font-size: 120px; line-height: .98; letter-spacing: -0.03em; font-weight: 800; }
 .end h1 span { display: block; }
 .end h1 .you { color: var(--you); }
 .end .url { margin: 64px 0 0; font: 400 52px/1 var(--mono); color: var(--ink-2); }

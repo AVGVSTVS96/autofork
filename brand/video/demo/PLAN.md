@@ -35,3 +35,14 @@ Every scene's beat, the camera, the captured UI states and the soundtrack (`out/
 ## Done when
 
 Stills at 0, 1.5, 24, 36, 38.5 and a 2 s sheet: the hero at t=0 shows both lines whole and the composer in place (the h1 is a different length now, so check the camera's push still frames `.ask`); the end card's longer headline fits inside the frame at its size; re-encoded on the same soundtrack.
+
+## Update, Oct 13 8pm: Bassim's new pitch
+
+Bassim replaced Simon's pair ("too heavy on the never rebased") with **Customized forks / that maintain themselves.** over **Every release, your changes are reapplied intelligently. When they ship the same feature, autofork stops applying yours.** (`copy/MESSAGING.md`, c4bf412). "Rebase" stays only in "I never rebased it"; "upstream" is never autofork's own words on screen. Same timing, look and soundtrack; the reviewer re-checked every beat whose meaning changed (all pass).
+
+- t=0: autofork.com's hero as it now ships: **Customized forks / that maintain themselves.** over **Every release, your changes are reapplied intelligently. When they ship the same feature, autofork stops applying yours.**
+- End card: the headline. Rail: the headline, hidden on the hero and the end card so no frame shows it twice.
+- Kept: "Every change still on top. I never rebased it."
+
+- 28.2–33.3: the second example is hex-voice instead of xtool (Bassim wants it second after T3 Code everywhere): the composer types expo-gpt-live (David Mokos's avatar), "but call my own assistant instead", then the fork's real `.autofork/hex-voice/PATCH.md` on GitHub, framed on its first paragraph, where the ask lives ("Calls go to hex's voice plugin over Tailscale instead of the template's own OpenAI server"). Caption: **Any open source app.** Here's my hex-voice. Same beats.
+- The 156 is cited from `copy/facts.json`'s `proof` (9afde1c..8f25cf9), not the fork's running total (now 215).

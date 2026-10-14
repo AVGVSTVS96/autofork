@@ -112,12 +112,12 @@ const SCENES = [
   {
     id: "xtool", s: 61, e: 66,
     states: [[0, "hero"]],
-    apply(lt, doc) { composer(doc, lt, "xtool", "xtool.png", "but free teams keep their App Groups", b(0.5)) },
+    apply(lt, doc) { composer(doc, lt, "expo-gpt-live", "expo-gpt-live.png", "but call my own assistant instead", b(0.5)) },
     cam: [{ t: 0, at: ".ask", z: 2.85, left: 166, dy: 48 }],
   },
   {
     id: "xfork", s: 66, e: 72,
-    cam: [{ t: 0, at: { x: 600, y: 272 }, z: 2.6 }, { t: b(2), at: { x: 670, y: 498 }, z: 2.25, d: 0.5 }],
+    cam: [{ t: 0, at: { x: 665, y: 415 }, z: 2.25 }, { t: b(2), at: { x: 665, y: 490 }, z: 2.25, d: 0.5 }],
   },
   {
     id: "end", s: 72, e: 84,
@@ -209,7 +209,7 @@ const seek = t => {
   }
   document.body.classList.toggle("final", scene.id === "end")
   document.getElementById("count").textContent = `${String(index + 1).padStart(2, "0")} / ${SCENES.length}`
-  document.getElementById("tag").style.visibility = index === 0 ? "hidden" : "visible"
+  document.getElementById("tag").style.visibility = index === 0 || scene.id === "end" ? "hidden" : "visible"
   if (scene.frame) {
     scene.cam && camera(scene, lt)
     scene.apply?.(lt, scene.frame.contentWindow.show(stateAt(scene, lt)))
