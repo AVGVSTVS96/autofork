@@ -306,7 +306,8 @@ export function seek(t) {
   count.textContent = `${pad(index + 1)} / ${pad(scenes.length)}`
   stage.dataset.theme = DARK_SCENES.has(index) ? "dark" : "light"
   world.classList.toggle("on", WORLD_SCENES.has(index))
-  rails.wm.style.opacity = rails.tag.style.opacity = t >= 15 && index !== 10 ? 1 : 0
+  rails.wm.style.opacity = t >= 15 && index !== 10 ? 1 : 0
+  rails.tag.style.opacity = t >= 15 && index < 10 ? 1 : 0
   rails.url.style.opacity = index === 11 ? 0 : 1
 
   const { cx, cy, z } = camAt(t)
