@@ -80,7 +80,7 @@ The site ships the same day as the product. These lines describe the product Bas
 - **Description:** Every release, your changes are reapplied intelligently. When they ship the same feature, autofork stops applying yours.
 - **Site:** https://autofork.com (autofork.dev redirects to it)
 - **GitHub repo description (autofork):** Customized forks that maintain themselves. Personal forks of open-source apps auto-track upstream: every release, your changes are reapplied, and an agent rebuilds any that break.
-- **GitHub repo description (autofork-app):** The app behind autofork.com: name an open-source app and what you'd change, and get a personal fork that updates itself.
+- **GitHub repo description (autofork-app):** The app behind autofork.com: name an open-source app and what you'd change, and get a customized fork that maintains itself.
 - **npm and package.json description:** the same as the autofork repo description.
 
 ## OG image (1200×630)
