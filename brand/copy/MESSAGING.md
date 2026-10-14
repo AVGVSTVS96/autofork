@@ -2,15 +2,31 @@
 
 The source of truth for how the site, OG image, README and launch post talk about autofork. Numbers come from `copy/facts.json` (`node copy/facts.mjs`), never typed by hand. When the product and this file disagree, the product wins and this file follows.
 
-## The idea in one sentence
+## The pitch
 
-Name an open source app and what you'd change. autofork makes it your fork, and every new release arrives with your changes already in it.
+- **Headline:** Fork any open-source app and never rebase it again.
+- **Sub line:** Personal forks of open-source apps that update themselves.
 
-The new part isn't forking: a fork always keeps your changes. It's that a changed fork keeps getting the original's updates. Bassim: "it's a novel thing to be able to fork anything and still get updates from upstream."
+Both are Simon's (Oct 13), picked by Bassim as the pair: the headline on top, the sub line right under it. Use them word for word, together, everywhere the pitch leads: the site's hero, the link preview, the OG image, the README, the repo descriptions. They replace "Make it yours. / Keep their updates." and its sub line, which Simon found hard to understand; neither appears anymore.
+
+## The key lines
+
+Say these in this order when there's room for more than the pitch. Each one is true in the product today.
+
+1. **What you do:** Name an app and what you'd change. autofork forks it into your GitHub and an agent builds your change.
+2. **What happens on every release:** Your change is saved in plain words, in a `PATCH.md`. Each new release, your changes go back on top, and when one no longer fits, an agent rebuilds it from what you wrote.
+3. **Where it runs:** In your fork's own GitHub Actions, on the ChatGPT or Claude plan you already pay for. Free on public forks.
+4. **Proof:** My T3 Code fork took 156 commits from T3 Code in its first two days, and I never rebased it. One change broke on day one and the agent rebuilt it. (`facts.json`)
+
+The one-sentence version: Fork any open-source app and never rebase it again: autofork keeps your changes on top of every new release, and an agent rebuilds any that break.
+
+## Why this pitch
+
+The new part isn't forking: a fork always keeps your changes. It's that a changed fork keeps getting the original's updates without you rebasing it. Bassim: "it's a novel thing to be able to fork anything and still get updates from upstream."
 
 Bassim's words, verbatim, for the launch and the about line: "i can fork and customize anything, the agents will autonomously track upstream and re-implement my changes."
 
-Who it's for, his words: "anybody who knows some open source repo exists." Not hackers. Hackers get one clear line near the bottom.
+Who it's for: anyone who's wished an open-source app worked a little differently, and anyone who's kept a fork and paid for it in rebases. "Rebase" is the one developer word in the pitch, on purpose: it names the pain a forker already knows, and the sub line says the rest in plain words for everyone else.
 
 ## Name
 
@@ -18,8 +34,8 @@ autofork, one word, lowercase, even at the start of a sentence. One name for eve
 
 ## Hero
 
-- **Headline:** Make it yours. / Keep their updates. (Bassim picked it, Oct 12: "Four is the perfect start for now. that looks awesome." Two rows on the branch, mono.)
-- **Sub line:** Name an open source app and what you'd change. Every new release arrives with your changes already in it. (Approved by Bassim with the headline, as on the sheet. Use it word for word.)
+- **Headline:** Fork any open-source app / and never rebase it again. Two rows: the first on their line, the second in your color on the branch.
+- **Sub line:** Personal forks of open-source apps that update themselves.
 - **The action:** one rounded composer that types out examples: the app as a badge (like T3 Code's composer chips) that rolls through apps people fork (T3 Code, herdr, Ghostty, Buzz, pi, cmux, tmux, UTM) and lands on one, then the change types out. T3 Code and "always show context usage" come first. Focusing it stops the typing and leaves that example as the placeholder. Button: **Fork it**.
 - **Sign-in, right under it:** **Continue with ChatGPT** and **Continue with Claude**, side by side, both live.
 - **One small line under the buttons:** Runs on the ChatGPT or Claude plan you already pay for.
