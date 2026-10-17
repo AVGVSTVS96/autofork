@@ -62,4 +62,18 @@ if [ "$(git rev-parse HEAD)" != "$head" ]; then
       echo "::warning::upstream has $id now and autofork paused it, but couldn't open an issue about it: turn on the fork's issues and give the workflow issues: write"
     fi
   done
+
+  workflows="$(git log -1 --format=%B | sed -n 's/^upstream changed \(.*\) since \(.*\)$/- `\1`, changed since \2/p')"
+  title="upstream changed workflows this fork copied"
+  if [ -n "$workflows" ] && ! gh issue list -R "$GITHUB_REPOSITORY" --state open --search "$title in:title" --json title --jq '.[].title' | grep -xF "$title" > /dev/null; then
+    if ! gh issue create -R "$GITHUB_REPOSITORY" --title "$title" --body "Upstream changed workflows this fork keeps its own copies of:
+
+$workflows
+
+A workflow's GitHub token can't change workflow files, so autofork leaves them to you. Bring over what this fork needs from upstream's changes, keeping what it does differently, or delete the copies it doesn't run, then close this issue. Until then, later syncs name further changes the same way in their commit messages.
+
+Synced in ${signed:0:12}." > /dev/null; then
+      echo "::warning::upstream changed workflows this fork copied, but autofork couldn't open an issue about it: turn on the fork's issues and give the workflow issues: write"
+    fi
+  fi
 fi

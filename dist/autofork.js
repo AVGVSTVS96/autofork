@@ -8,6 +8,7 @@ import { homedir } from "node:os";
 import { basename, join } from "node:path";
 var DIR = ".autofork";
 var CONTROL = [DIR, ".github"];
+var WORKFLOWS = [".github/workflows", ".github/actions"];
 var SOURCE = [".", ...CONTROL.map((path) => `:(exclude)${path}`)];
 var BOT = [
   "-c",
@@ -223,6 +224,12 @@ function restoreControl(dir, base) {
     git(dir, "checkout", base, "--", ...owned);
   git(dir, "clean", "-fdq", "--", ...CONTROL);
 }
+function workflowsBehind(root, base, source) {
+  const files = (...args) => git(root, "diff", "--name-only", "--no-renames", ...args, "--", ...WORKFLOWS).split(`
+`);
+  const upstreamChanged = new Set(files(base, source));
+  return files("--diff-filter=MD", "HEAD", source).filter((file) => file && upstreamChanged.has(file));
+}
 function changed(dir) {
   return git(dir, "status", "--porcelain").length > 0;
 }
@@ -400,7 +407,8 @@ Save them as a patch first: write ${DIR}/<id>/PATCH.md, then run autofork save <
       parents.push("-p", source);
     const lines = [
       ...result.healed,
-      ...[...result.upstreamHas].map(([id, reason]) => `upstream has ${id}: ${reason}`)
+      ...[...result.upstreamHas].map(([id, reason]) => `upstream has ${id}: ${reason}`),
+      ...workflowsBehind(root, base, source).map((file) => `upstream changed ${file} since ${short(base)}`)
     ];
     const message = [`autofork: sync ${config.upstream} to ${short(source)}`, lines.join(`
 `)].filter(Boolean).join(`
@@ -496,7 +504,7 @@ async function setup(root, upstream, args) {
       say(`It also publishes ${others.join(", ")}. To follow one, put it in "follow" in ${DIR}/config.json.`);
   }
   if (inherited.length)
-    say(`Your fork has ${inherited.length} workflow${inherited.length === 1 ? "" : "s"} copied from upstream, and they run here too. Delete the ones you don't want; upstream's new ones never get copied in.`);
+    say(`Your fork has ${inherited.length} workflow${inherited.length === 1 ? "" : "s"} copied from upstream, and they run here too. Delete the ones you don't want. autofork leaves workflows to you: it never copies upstream's new ones in, and opens an issue when upstream changes one you keep.`);
   if (readme)
     say(`${readme} now says this is a personal fork kept current by autofork. To drop that line, delete it and ${DIR}/${NOTE}/.`);
   if (drift.length)

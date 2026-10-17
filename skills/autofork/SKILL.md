@@ -36,6 +36,10 @@ A patch can also be just a `PATCH.md`. Push it and the next sync has an agent bu
 
 If `.autofork/<id>/UPSTREAM.md` exists, upstream shipped its own version of that patch and autofork stopped applying it. Show the user what it says and ask which they want. Upstream's: delete `.autofork/<id>/`. Theirs: update `PATCH.md` to say how theirs differs from upstream's, delete `UPSTREAM.md`, and push; the next sync rebuilds it.
 
+## When upstream changes a workflow
+
+A sync leaves the fork's `.github/` as it is; a workflow's GitHub token can't edit workflow files. When upstream changes a workflow the fork keeps a copy of, the sync says so in its commit message, `upstream changed <file> since <commit>`, and opens an issue. Bring over what the fork needs from upstream's change, keeping what the fork's copy does differently, or delete copies the fork doesn't run. Then close the issue.
+
 ## Apps that update themselves
 
 A fork's code stays current on its own, but an installed app updates from wherever its updater points, which is upstream. When the user wants installs of the fork that update themselves, follow [releases.md](releases.md).
