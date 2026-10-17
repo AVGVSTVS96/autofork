@@ -371,3 +371,13 @@ test("a sync names upstream's changes to workflows the fork keeps, and leaves th
   expect(file(mine, ".github/workflows/release.yml")).toBe("name: release from the fork\n");
   expect(sh(mine, "ls .github/workflows")).toBe("autofork.yml\nrelease.yml\ntest.yml");
 });
+
+test("a config without follow follows what init would pick", () => {
+  const mine = join(home, "ci-fork");
+  const config = JSON.parse(file(mine, ".autofork/config.json"));
+  write(mine, ".autofork/config.json", `${JSON.stringify({ upstream: config.upstream }, null, 2)}\n`);
+  sh(mine, "git commit -qam 'no follow'");
+  sh(join(home, "ci"), "echo three > app.js && git commit -qam three");
+  expect(autofork(mine, "sync").output.result).toBe("synced");
+  expect(file(mine, "app.js")).toBe("three\n");
+});
