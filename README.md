@@ -75,7 +75,7 @@ Your fork's workflows stay as you have them, since a workflow's GitHub token can
 
 To follow a channel like nightlies, put its tag pattern in `follow`, like `"v*-nightly.*"`. The fork then moves to the newest release whose tag matches, and `init` lists the channels upstream publishes. To follow a branch instead, set `"follow": "main"`. Every upstream commit then gets the same treatment.
 
-An app that updates itself, like a desktop app, updates from upstream's releases until the fork publishes its own. The skill's [release steps](skills/autofork/releases.md) set that up once: a release workflow that runs after each sync, the updater pointed at the fork, and Mac builds signed so they can update without an Apple certificate. [My T3 Code fork](https://github.com/AVGVSTVS96/t3code/releases) works this way.
+An app that updates itself, like a desktop app, updates from upstream's releases until the fork publishes its own. The skill's [release steps](skills/autofork/releases.md) set that up once: a release workflow that runs after each sync, the updater pointed at the fork, and builds signed so they can update without upstream's keys or certificates. [My T3 Code fork](https://github.com/AVGVSTVS96/t3code/releases) works this way.
 
 ## Agents
 
