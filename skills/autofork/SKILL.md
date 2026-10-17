@@ -21,6 +21,8 @@ npx github:AVGVSTVS96/autofork fork owner/repo --verify "<command that checks a 
 
 It follows upstream's releases, or its default branch if it has none. `--follow <branch>` picks a branch; `--follow 'v*-nightly.*'` picks a channel of releases by tag, and `init` lists the channels upstream publishes. It needs `gh` logged in. If `CLAUDE_CODE_OAUTH_TOKEN` is set, it also adds that secret; otherwise tell the user to run `claude setup-token` and `gh secret set CLAUDE_CODE_OAUTH_TOKEN`. In a fork that's already cloned, use `init owner/repo` instead.
 
+`verify` is the check a sync has to pass before it pushes, and the agent that rebuilds a patch runs it too. Take it from upstream's own CI: checks that cover the code the patches touch and pass on upstream as it is. Set up what it needs in `.github/workflows/autofork.yml`, before the autofork step.
+
 ## Change a fork
 
 1. Make the change.
@@ -28,7 +30,7 @@ It follows upstream's releases, or its default branch if it has none. `--follow 
 3. Run `npx github:AVGVSTVS96/autofork save <id>`.
 4. Commit everything and push.
 
-Every source change must belong to a patch: once upstream moves, a sync refuses to rebuild while the fork has changes no patch holds, and `autofork status` lists them. To change an existing patch, edit the code, update its `PATCH.md` if the intent changed, and `save` the same id.
+Every source change must belong to a patch: once upstream moves, a sync refuses to rebuild while the fork has changes no patch holds, and `autofork status` lists them. To change an existing patch, edit the code, update its `PATCH.md` if the intent changed, and `save` the same id. When a change reaches code `verify` doesn't check, widen `verify` in `.autofork/config.json`.
 
 A patch can also be just a `PATCH.md`. Push it and the next sync has an agent build it.
 

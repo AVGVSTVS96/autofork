@@ -193,7 +193,7 @@ To see what upstream changed under it: git diff ${from} ${source} -- ${files.joi
     `Read ${DIR}/${id}/PATCH.md. It says what the patch does and why, and that's the contract.`,
     ...fresh ? [] : [`${DIR}/${id}/${id}.patch is how it was done before. Use it as a guide, not as text to force in.${changes}`],
     "Build it on the current source, the smallest change that fully does what PATCH.md says. Build on what upstream has now: where upstream has its own version of what the patch touches, change that rather than bringing the old one back. Follow upstream's code and conventions, and leave everything else alone.",
-    ...config.verify ? [`Run \`${config.verify}\` and fix what your change breaks. Patches after this one aren't applied yet.`] : [],
+    `Run ${config.verify ? `\`${config.verify}\`, which the sync has to pass, along with upstream's` : "upstream's"} own checks for the code you touched, and fix what your change breaks. Patches after this one aren't applied yet.`,
     ...fresh ? [`Add a short paragraph to the end of ${DIR}/${id}/PATCH.md on why it's built the way it is, for whoever rebuilds it after upstream moves. Keep what's there as it is.`] : []
   ];
   return `You are keeping a patched fork of ${config.upstream} in sync. The fork is upstream plus a stack of patches, each one described in ${DIR}/<id>/PATCH.md.
