@@ -464,7 +464,8 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       # Set up whatever your verify command needs here (node, bun, rust, ...).
-      - uses: AVGVSTVS96/autofork@v1
+      - id: autofork
+        uses: AVGVSTVS96/autofork@v1
         env:
           CLAUDE_CODE_OAUTH_TOKEN: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 `;
