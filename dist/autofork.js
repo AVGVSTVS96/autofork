@@ -338,6 +338,8 @@ function build(root, config, base, options) {
   };
   for (const id of config.patches) {
     const file = patchFile(dir, id);
+    if (options.wait && !options.healFrom && isEmpty(file))
+      throw new Drifted(`${id} isn't built yet`);
     if (isEmpty(file) ? options.healFrom : !apply(dir, file)) {
       if (!options.healFrom)
         throw new Drifted(`${id} doesn't apply to ${short(base)}`);
@@ -484,7 +486,7 @@ Save them as a patch first: write ${DIR}/<id>/PATCH.md, then run autofork save <
   let result;
   try {
     try {
-      result = build(root, config, source, { healFrom });
+      result = build(root, config, source, { healFrom, wait: true });
       verify(config, result, healFrom);
     } catch (error) {
       if (!(error instanceof Drifted))

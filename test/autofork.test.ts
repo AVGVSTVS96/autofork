@@ -236,6 +236,16 @@ test("a patch that's only a PATCH.md is built by the agent", () => {
   patch("wave", "greet() waves at the end.");
   sh(fork, "git add -A && git commit -qm wave");
   expect(autofork(fork, "status").log).toContain("wave  (not built yet)");
+  const head = sh(fork, "git rev-parse HEAD");
+  const waiting = autofork(fork, "sync", "--no-heal");
+  expect(waiting.ok).toBe(true);
+  expect(waiting.log).toContain("wave isn't built yet. The next run that heals rebuilds it.");
+  expect(waiting.output.result).toBe("waiting");
+  expect(sh(fork, "git rev-parse HEAD")).toBe(head);
+  write(upstream, "notes.txt", "wave pending\n");
+  sh(upstream, "git commit -qam notes");
+  expect(autofork(fork, "sync", "--no-heal").output.result).toBe("waiting");
+  expect(sh(fork, "git rev-parse HEAD")).toBe(head);
   agent(
     `sed -i 's/ + "!";/ + "! o\\/";/' app.js\nprintf '\\nThe wave is text, so it works in any terminal.\\n' >> .autofork/wave/PATCH.md`,
   );
