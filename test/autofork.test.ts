@@ -803,3 +803,48 @@ test("a patch rebuilt for verify gets the patches after it back, and one that no
   expect(file(mine, "wink.js")).toContain('whom() + " ;)"');
   expect(existsSync(join(mine, "loaded.txt"))).toBe(false);
 });
+
+test("a patch rebuilt for verify that also makes a later patch's change fails the sync instead of leaving the later one empty", () => {
+  const origin = join(home, "overlap");
+  const mine = join(home, "overlap-fork");
+  mkdirSync(origin);
+  write(origin, "name.js", 'export const who = () => "world";\n');
+  write(origin, "notes.txt", "one\n");
+  sh(origin, "git init -q && git add -A && git commit -qm init");
+  sh(home, `git clone -q ${origin} overlap-fork`);
+  expect(autofork(mine, "init", origin, "--verify", loads).ok).toBe(true);
+  sh(mine, "git add -A && git commit -qm 'track upstream'");
+  savePatch(
+    "a-loud",
+    "loud.js has loud(), the name in upper case.",
+    () =>
+      write(
+        mine,
+        "loud.js",
+        'import { who } from "./name.js";\nexport const loud = () => who().toUpperCase();\n',
+      ),
+    mine,
+  );
+  savePatch(
+    "b-notes",
+    "notes.txt mentions loud().",
+    () => write(mine, "notes.txt", "one\nloud\n"),
+    mine,
+  );
+  write(origin, "name.js", 'export const whom = () => "world";\n');
+  sh(origin, "git commit -qam 'who is whom now'");
+  checkedAgent(
+    {
+      "a-loud": `printf 'import { whom } from "./name.js";\\nexport const loud = () => whom().toUpperCase();\\n' > loud.js; echo loud >> notes.txt`,
+    },
+    mine,
+  );
+  const head = sh(mine, "git rev-parse HEAD");
+  const { ok, log } = autofork(mine, "sync");
+  expect(ok).toBe(false);
+  expect(log).toContain(
+    "rebuilding a-loud also made the change b-notes makes, so b-notes has nothing left to add",
+  );
+  expect(file(home, "agent-runs.log")).toBe("a-loud\n");
+  expect(sh(mine, "git rev-parse HEAD")).toBe(head);
+});

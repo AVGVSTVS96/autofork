@@ -379,6 +379,9 @@ function workflowsBehind(root: string, base: string, source: string) {
   );
 }
 
+const sameSource = (dir: string, ...commits: string[]) =>
+  run("git", ["diff", "--quiet", ...commits, "--", ...SOURCE], dir).ok;
+
 function changed(dir: string) {
   return git(dir, "status", "--porcelain").length > 0;
 }
@@ -525,6 +528,10 @@ function restack(config: Fork, build: Build, index: number, from: string) {
         build,
         id,
         `Patch "${id}" no longer applies on top of ${culprit}, which was just rebuilt.`,
+      );
+    } else if (sameSource(build.dir, "HEAD") && !sameSource(build.dir, `${step}~`, step)) {
+      throw new Failure(
+        `rebuilding ${culprit} also made the change ${id} makes, so ${id} has nothing left to add and nothing was pushed: say in their PATCH.md files which patch makes which change, or merge them into one`,
       );
     }
     build.steps.push(commit(build.dir, id));

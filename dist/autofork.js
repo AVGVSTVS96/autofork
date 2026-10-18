@@ -257,6 +257,7 @@ function workflowsBehind(root, base, source) {
   const upstreamChanged = new Set(files(base, source));
   return files("--diff-filter=MD", "HEAD", source).filter((file) => file && upstreamChanged.has(file));
 }
+var sameSource = (dir, ...commits) => run("git", ["diff", "--quiet", ...commits, "--", ...SOURCE], dir).ok;
 function changed(dir) {
   return git(dir, "status", "--porcelain").length > 0;
 }
@@ -380,6 +381,8 @@ function restack(config, build, index, from) {
       reset(build.dir);
       verify(config, build, from);
       heal(config, build, id, `Patch "${id}" no longer applies on top of ${culprit}, which was just rebuilt.`);
+    } else if (sameSource(build.dir, "HEAD") && !sameSource(build.dir, `${step}~`, step)) {
+      throw new Failure(`rebuilding ${culprit} also made the change ${id} makes, so ${id} has nothing left to add and nothing was pushed: say in their PATCH.md files which patch makes which change, or merge them into one`);
     }
     build.steps.push(commit(build.dir, id));
   });
