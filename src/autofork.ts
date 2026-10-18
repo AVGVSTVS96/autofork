@@ -30,7 +30,7 @@ type Build = {
   dir: string;
   steps: string[];
   source: string;
-  healed: string[];
+  healed: Map<string, string>;
   upstreamHas: Map<string, string>;
 };
 
@@ -216,7 +216,7 @@ function touched(dir: string, file: string) {
   return stat.ok ? stat.out.toString().trim().split("\n").filter(Boolean).map((line) => line.split("\t")[2]) : [];
 }
 
-function healPrompt(config: Fork, build: Build, id: string, source: string, from: string) {
+function healPrompt(config: Fork, build: Build, id: string, source: string, from: string, broke: boolean) {
   const before = config.patches.slice(0, config.patches.indexOf(id));
   const fresh = isEmpty(patchFile(build.dir, id));
   const files = touched(build.dir, patchFile(build.dir, id));
@@ -230,7 +230,7 @@ function healPrompt(config: Fork, build: Build, id: string, source: string, from
   ];
   return `You are keeping a patched fork of ${config.upstream} in sync. The fork is upstream plus a stack of patches, each one described in ${DIR}/<id>/PATCH.md.
 
-This checkout is upstream at ${source}${before.length ? `, with ${before.join(", ")} already applied` : ""}. ${fresh ? `Patch "${id}" is new and hasn't been built yet.` : `Upstream changed, and patch "${id}" no longer applies.`}
+This checkout is upstream at ${source}${before.length ? `, with ${before.join(", ")} already applied` : ""}. ${broke ? `Patch "${id}" still applies, but \`${config.verify}\` fails with it.` : fresh ? `Patch "${id}" is new and hasn't been built yet.` : `Upstream changed, and patch "${id}" no longer applies.`}
 
 ${steps.map((step, index) => `${index + 1}. ${step}`).join("\n")}
 
@@ -266,8 +266,8 @@ function changed(dir: string) {
   return git(dir, "status", "--porcelain").length > 0;
 }
 
-function heal(config: Fork, build: Build, id: string, source: string, from: string) {
-  const prompt = healPrompt(config, build, id, source, from);
+function heal(config: Fork, build: Build, id: string, source: string, from: string, broke = false) {
+  const prompt = healPrompt(config, build, id, source, from, broke);
   const fresh = isEmpty(patchFile(build.dir, id));
   const [doing, done] = fresh ? ["building", "built"] : ["healing", "healed"];
   const doc = patchDoc(build.dir, id);
@@ -282,7 +282,7 @@ function heal(config: Fork, build: Build, id: string, source: string, from: stri
     restoreControl(build.dir, build.steps[0]);
     if (changed(build.dir)) {
       if (why.startsWith(wish)) writeFileSync(doc, why);
-      build.healed.push(`${done} ${id}`);
+      build.healed.set(id, done);
       return;
     }
     if (reason) {
@@ -300,10 +300,14 @@ function commit(dir: string, message: string) {
   return git(dir, "rev-parse", "HEAD");
 }
 
+function reset(dir: string, to = "HEAD") {
+  git(dir, "reset", "--hard", "--quiet", to);
+  git(dir, "clean", "-fdq");
+}
+
 function apply(dir: string, file: string) {
   if (run("git", ["apply", "--3way", "--whitespace=nowarn", file], dir).ok) return true;
-  git(dir, "reset", "--hard", "--quiet");
-  git(dir, "clean", "-fdq");
+  reset(dir);
   return false;
 }
 
@@ -328,7 +332,7 @@ function worktree(root: string, base: string) {
 
 function build(root: string, config: Fork, base: string, options: { healFrom?: string; fold?: { id: string; patch: string } }): Build {
   const dir = worktree(root, base);
-  const build: Build = { dir, source: base, steps: [commit(dir, `upstream ${short(base)}`)], healed: [], upstreamHas: new Map() };
+  const build: Build = { dir, source: base, steps: [commit(dir, `upstream ${short(base)}`)], healed: new Map(), upstreamHas: new Map() };
   for (const id of config.patches) {
     const file = patchFile(dir, id);
     if (isEmpty(file) ? options.healFrom : !apply(dir, file)) {
@@ -343,6 +347,47 @@ function build(root: string, config: Fork, base: string, options: { healFrom?: s
     build.steps.push(commit(dir, id));
   }
   return build;
+}
+
+function bisect(build: Build, command: string) {
+  let good = -1;
+  let bad = build.steps.length;
+  while (bad - good > 1) {
+    const step = Math.floor((good + bad) / 2);
+    reset(build.dir, build.steps[step]);
+    if (shell(command, build.dir)) good = step;
+    else bad = step;
+  }
+  return bad;
+}
+
+function restack(config: Fork, build: Build, index: number, from: string) {
+  const [, ...later] = build.steps.splice(index + 1);
+  reset(build.dir, build.steps[index]);
+  heal(config, build, config.patches[index], build.source, from, true);
+  build.steps.push(commit(build.dir, config.patches[index]));
+  later.forEach((step, offset) => {
+    const id = config.patches[index + 1 + offset];
+    if (!run("git", ["cherry-pick", "--no-commit", step], build.dir).ok) {
+      reset(build.dir);
+      heal(config, build, id, build.source, from);
+    }
+    build.steps.push(commit(build.dir, id));
+  });
+}
+
+function verify(config: Fork, build: Build, from?: string) {
+  const command = config.verify;
+  while (command && !shell(command, build.dir)) {
+    say("verify failed, finding the patch it fails on");
+    const step = bisect(build, command);
+    if (step === build.steps.length) return say("verify passed when run again");
+    const id = config.patches[step - 1];
+    if (!id) throw new Failure(`verify fails on upstream ${short(build.source)} itself: ${command}`);
+    if (build.healed.has(id)) throw new Failure(`verify fails with ${id}, which the agent ${build.healed.get(id)}: ${command}`);
+    if (!from) throw new Drifted(`${id} still applies, but verify fails with it`);
+    restack(config, build, step - 1, from);
+  }
 }
 
 function refresh(target: string, config: Fork, build: Build) {
@@ -409,18 +454,18 @@ async function sync(root: string, args: string[]) {
   }
   const moved = base === source ? short(source) : `${short(base)} → ${short(source)}`;
   say(`upstream ${moved}, ${config.patches.length} patch${config.patches.length === 1 ? "" : "es"}`);
+  const healFrom = args.includes("--no-heal") ? undefined : base;
   let result: Build | undefined;
   try {
     try {
-      result = build(root, config, source, { healFrom: args.includes("--no-heal") ? undefined : base });
+      result = build(root, config, source, { healFrom });
+      verify(config, result, healFrom);
     } catch (error) {
       if (!(error instanceof Drifted)) throw error;
       say(`${error.message}. The next run that heals rebuilds it.`);
       return output({ result: "waiting" });
     }
-    if (config.verify && !shell(config.verify, result.dir)) throw new Failure(`verify failed: ${config.verify}`);
-    git(result.dir, "reset", "--hard", "--quiet");
-    git(result.dir, "clean", "-fdq");
+    reset(result.dir);
     refresh(result.dir, config, result);
     const tree = git(result.dir, "rev-parse", `${commit(result.dir, "refresh")}^{tree}`);
     if (tree === git(root, "rev-parse", "HEAD^{tree}")) {
@@ -431,7 +476,7 @@ async function sync(root: string, args: string[]) {
     const parents = ["-p", head];
     if (!run("git", ["merge-base", "--is-ancestor", source, head], root).ok) parents.push("-p", source);
     const lines = [
-      ...result.healed,
+      ...[...result.healed].map(([id, done]) => `${done} ${id}`),
       ...[...result.upstreamHas].map(([id, reason]) => `upstream has ${id}: ${reason}`),
       ...workflowsBehind(root, base, source).map((file) => `upstream changed ${file} in ${short(base)}..${short(source)}`),
     ];

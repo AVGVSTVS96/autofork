@@ -382,3 +382,91 @@ test("a config without follow follows what init would pick", () => {
   expect(autofork(mine, "sync").output.result).toBe("synced");
   expect(file(mine, "app.js")).toBe("three\n");
 });
+
+const checked = join(home, "checked");
+const checkedFork = join(home, "checked-fork");
+const runs = join(home, "agent-runs.log");
+
+function checkedAgent(heals: Record<string, string>) {
+  const path = join(home, "checked-agent.sh");
+  const cases = Object.entries(heals).map(([id, script]) => `  *'"${id}"'*) echo ${id} >> ${runs}; printf '%s' "$prompt" > ${home}/prompt-${id}.txt; ${script} ;;`);
+  writeFileSync(path, `prompt="$(cat)"\ncase "$prompt" in\n${cases.join("\n")}\nesac\n`);
+  writeFileSync(runs, "");
+  const config = JSON.parse(file(checkedFork, ".autofork/config.json"));
+  write(checkedFork, ".autofork/config.json", `${JSON.stringify({ ...config, agent: `sh ${path}` }, null, 2)}\n`);
+  sh(checkedFork, "git diff --quiet || git commit -qam 'use test agent'");
+}
+
+function savePatch(id: string, intent: string, change: () => void) {
+  change();
+  mkdirSync(join(checkedFork, ".autofork", id), { recursive: true });
+  write(checkedFork, `.autofork/${id}/PATCH.md`, `${intent}\n`);
+  expect(autofork(checkedFork, "save", id).ok).toBe(true);
+  sh(checkedFork, `git add -A && git commit -qm ${id}`);
+}
+
+test("a patch that still applies but fails verify waits for a run that heals", () => {
+  mkdirSync(checked);
+  sh(checked, "git init -q && echo one > notes.txt");
+  write(checked, "name.js", 'export const name = () => "world";\n');
+  write(checked, "app.js", 'import { name } from "./name.js";\nexport const greet = () => "hello " + name();\n');
+  sh(checked, "git add -A && git commit -qm init");
+  sh(home, `git clone -q ${checked} checked-fork`);
+  expect(autofork(checkedFork, "init", checked, "--verify", `for f in *.js; do node -e "import('./$f')" || exit 1; done`).ok).toBe(true);
+  sh(checkedFork, "git add -A && git commit -qm 'track upstream'");
+  savePatch("a-notes", "notes.txt says the notes are mine.", () => write(checkedFork, "notes.txt", "mine\n"));
+  savePatch("b-shout", "extra.js has shout(), the name in upper case.", () =>
+    write(checkedFork, "extra.js", 'import { name } from "./name.js";\nexport const shout = () => name().toUpperCase();\n'),
+  );
+  write(checked, "name.js", 'export const who = () => "world";\n');
+  write(checked, "app.js", 'import { who } from "./name.js";\nexport const greet = () => "hello " + who();\n');
+  sh(checked, "git commit -qam 'name is who now'");
+  checkedAgent({});
+  const head = sh(checkedFork, "git rev-parse HEAD");
+  const { ok, log, output } = autofork(checkedFork, "sync", "--no-heal");
+  expect(ok).toBe(true);
+  expect(output.result).toBe("waiting");
+  expect(log).toContain("b-shout still applies, but verify fails with it. The next run that heals rebuilds it.");
+  expect(sh(checkedFork, "git rev-parse HEAD")).toBe(head);
+});
+
+test("verify keeps failing on a patch the agent rebuilt, and the sync fails instead of calling it again", () => {
+  savePatch("c-wave", "greet() waves at the end.", () =>
+    write(checkedFork, "app.js", 'import { name } from "./name.js";\nexport const greet = () => "hello " + name() + " o/";\n'),
+  );
+  checkedAgent({
+    "b-shout": `printf 'import { who } from "./name.js";\\nexport const shout = () => who().toUpperCase();\\n' > extra.js`,
+    "c-wave": `sed -i 's/{ who }/{ whom }/; s/who();/whom() + " o\\/";/' app.js`,
+  });
+  const { ok, log } = autofork(checkedFork, "sync");
+  expect(ok).toBe(false);
+  expect(log).toContain("verify fails with c-wave, which the agent healed");
+  expect(file(home, "agent-runs.log")).toBe("c-wave\nb-shout\n");
+});
+
+test("a patch that still applies but fails verify is rebuilt, and the patches after it keep what was built for them", () => {
+  checkedAgent({
+    "b-shout": `printf 'import { who } from "./name.js";\\nexport const shout = () => who().toUpperCase();\\n' > extra.js`,
+    "c-wave": `sed -i 's/who();/who() + " o\\/";/' app.js`,
+  });
+  const { ok, log } = autofork(checkedFork, "sync");
+  expect(ok).toBe(true);
+  expect(log).toContain("verify failed, finding the patch it fails on");
+  expect(log).toContain("healed c-wave\nhealed b-shout");
+  expect(file(home, "agent-runs.log")).toBe("c-wave\nb-shout\n");
+  expect(file(home, "prompt-b-shout.txt")).toContain(`with a-notes already applied. Patch "b-shout" still applies, but \`for f in *.js;`);
+  expect(file(checkedFork, "extra.js")).toContain("who().toUpperCase()");
+  expect(file(checkedFork, "app.js")).toContain('who() + " o/"');
+  expect(file(checkedFork, "notes.txt")).toBe("mine\n");
+  expect(file(checkedFork, ".autofork/b-shout/b-shout.patch")).toContain("+export const shout = () => who().toUpperCase();");
+});
+
+test("verify that fails on upstream itself fails the sync without the agent", () => {
+  write(checked, "name.js", 'export const whom = () => "world";\n');
+  sh(checked, "git commit -qam 'break upstream'");
+  checkedAgent({ "b-shout": "true", "c-wave": "true" });
+  const { ok, log } = autofork(checkedFork, "sync");
+  expect(ok).toBe(false);
+  expect(log).toContain(`verify fails on upstream ${sh(checked, "git rev-parse HEAD").slice(0, 12)} itself`);
+  expect(file(home, "agent-runs.log")).toBe("");
+});
