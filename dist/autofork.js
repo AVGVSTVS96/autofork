@@ -191,22 +191,19 @@ function touched(dir, file) {
   return stat.ok ? stat.out.toString().trim().split(`
 `).filter(Boolean).map((line) => line.split("\t")[2]) : [];
 }
-function healPrompt(config, build, id, source, from, broke) {
+function healPrompt(config, build, id, broken) {
   const before = config.patches.slice(0, config.patches.indexOf(id));
   const fresh = isEmpty(patchFile(build.dir, id));
-  const files = touched(build.dir, patchFile(build.dir, id));
-  const changes = from !== source && files.length ? `
-To see what upstream changed under it: git diff ${from} ${source} -- ${files.join(" ")}` : "";
   const steps = [
     `Read ${DIR}/${id}/PATCH.md. It says what the patch does and why, and that's the contract.`,
-    ...fresh ? [] : [`${DIR}/${id}/${id}.patch is how it was done before. Use it as a guide, not as text to force in.${changes}`],
+    ...fresh ? [] : [`${DIR}/${id}/${id}.patch is how it was done before. Use it as a guide, not as text to force in.`],
     "Build it on the current source, the smallest change that fully does what PATCH.md says. Build on what upstream has now: where upstream has its own version of what the patch touches, change that rather than bringing the old one back. Follow upstream's code and conventions, and leave everything else alone.",
     `Run upstream's own checks for the code you touched${config.verify ? `, and \`${config.verify}\`, which the sync has to pass` : ""}. Fix what your change breaks. Patches after this one aren't applied yet.`,
     ...fresh ? [`Add a short paragraph to the end of ${DIR}/${id}/PATCH.md on why it's built the way it is, for whoever rebuilds it after upstream moves. Keep what's there as it is.`] : []
   ];
   return `You are keeping a patched fork of ${config.upstream} in sync. The fork is upstream plus a stack of patches, each one described in ${DIR}/<id>/PATCH.md.
 
-This checkout is upstream at ${source}${before.length ? `, with ${before.join(", ")} already applied` : ""}. ${broke ? `Patch "${id}" still applies, but \`${config.verify}\` fails with it.` : fresh ? `Patch "${id}" is new and hasn't been built yet.` : `Upstream changed, and patch "${id}" no longer applies.`}
+This checkout is upstream at ${build.source}${before.length ? `, with ${before.join(", ")} already applied` : ""}. ${fresh ? `Patch "${id}" is new and hasn't been built yet.` : broken}
 
 ${steps.map((step, index) => `${index + 1}. ${step}`).join(`
 `)}
@@ -241,8 +238,8 @@ function workflowsBehind(root, base, source) {
 function changed(dir) {
   return git(dir, "status", "--porcelain").length > 0;
 }
-function heal(config, build, id, source, from, broke = false) {
-  const prompt = healPrompt(config, build, id, source, from, broke);
+function heal(config, build, id, broken) {
+  const prompt = healPrompt(config, build, id, broken);
   const fresh = isEmpty(patchFile(build.dir, id));
   const [doing, done] = fresh ? ["building", "built"] : ["healing", "healed"];
   const doc = patchDoc(build.dir, id);
@@ -308,13 +305,16 @@ function worktree(root, base) {
 }
 function build(root, config, base, options) {
   const dir = worktree(root, base);
-  const build = { dir, source: base, steps: [commit(dir, `upstream ${short(base)}`)], healed: new Map, upstreamHas: new Map };
+  const build = { dir, source: base, steps: [commit(dir, `upstream ${short(base)}`)], verified: -1, healed: new Map, upstreamHas: new Map };
   for (const id of config.patches) {
     const file = patchFile(dir, id);
     if (isEmpty(file) ? options.healFrom : !apply(dir, file)) {
       if (!options.healFrom)
         throw new Drifted(`${id} doesn't apply to ${short(base)}`);
-      heal(config, build, id, base, options.healFrom);
+      verify(config, build, options.healFrom);
+      const files = touched(dir, file);
+      const changes = options.healFrom !== base && files.length ? ` To see what upstream changed under it: git diff ${options.healFrom} ${base} -- ${files.join(" ")}` : "";
+      heal(config, build, id, `Upstream changed, and patch "${id}" no longer applies.${changes}`);
     } else if (!isEmpty(file) && !changed(dir)) {
       build.upstreamHas.set(id, "the same change, line for line");
     }
@@ -325,49 +325,61 @@ function build(root, config, base, options) {
   }
   return build;
 }
-function bisect(build, command) {
-  let good = -1;
+function bisect(config, build, command) {
   let bad = build.steps.length;
-  while (bad - good > 1) {
-    const step = Math.floor((good + bad) / 2);
+  while (bad - build.verified > 1) {
+    const step = Math.floor((build.verified + bad) / 2);
+    say(`verify with ${step ? `the patches up to ${config.patches[step - 1]}` : "upstream alone"}`);
     reset(build.dir, build.steps[step]);
     if (shell(command, build.dir))
-      good = step;
+      build.verified = step;
     else
       bad = step;
   }
   return bad;
 }
 function restack(config, build, index, from) {
+  const culprit = config.patches[index];
   const [, ...later] = build.steps.splice(index + 1);
   reset(build.dir, build.steps[index]);
-  heal(config, build, config.patches[index], build.source, from, true);
-  build.steps.push(commit(build.dir, config.patches[index]));
+  const changes = from !== build.source ? ` To see what upstream changed: git diff --stat ${from} ${build.source}` : "";
+  heal(config, build, culprit, `Patch "${culprit}" still applies cleanly, but the sync's check fails with it, so it's left out here.${changes}`);
+  build.steps.push(commit(build.dir, culprit));
   later.forEach((step, offset) => {
     const id = config.patches[index + 1 + offset];
     if (!run("git", ["cherry-pick", "--no-commit", step], build.dir).ok) {
       reset(build.dir);
-      heal(config, build, id, build.source, from);
+      verify(config, build, from);
+      heal(config, build, id, `Patch "${id}" no longer applies on top of ${culprit}, which was just rebuilt.`);
     }
     build.steps.push(commit(build.dir, id));
   });
 }
 function verify(config, build, from) {
   const command = config.verify;
-  while (command && !shell(command, build.dir)) {
+  if (!command)
+    return;
+  while (!shell(command, build.dir)) {
+    if (!from)
+      throw new Drifted("verify fails, so a patch needs rebuilding");
     say("verify failed, finding the patch it fails on");
-    const step = bisect(build, command);
-    if (step === build.steps.length)
-      return say("verify passed when run again");
-    const id = config.patches[step - 1];
-    if (!id)
+    const step = bisect(config, build, command);
+    if (step === build.steps.length) {
+      say("verify passed when run again");
+      break;
+    }
+    if (step === 0)
       throw new Failure(`verify fails on upstream ${short(build.source)} itself: ${command}`);
+    const id = config.patches[step - 1];
+    if (run("git", ["diff", "--quiet", build.steps[step - 1], build.steps[step]], build.dir).ok) {
+      throw new Failure(`verify passes and fails on the same code, so the sync can't tell which patch breaks it: ${command}`);
+    }
     if (build.healed.has(id))
       throw new Failure(`verify fails with ${id}, which the agent ${build.healed.get(id)}: ${command}`);
-    if (!from)
-      throw new Drifted(`${id} still applies, but verify fails with it`);
     restack(config, build, step - 1, from);
   }
+  build.verified = build.steps.length - 1;
+  reset(build.dir, build.steps.at(-1));
 }
 function refresh(target, config, build) {
   config.patches.forEach((id, index) => {
@@ -448,7 +460,6 @@ Save them as a patch first: write ${DIR}/<id>/PATCH.md, then run autofork save <
       say(`${error.message}. The next run that heals rebuilds it.`);
       return output({ result: "waiting" });
     }
-    reset(result.dir);
     refresh(result.dir, config, result);
     const tree = git(result.dir, "rev-parse", `${commit(result.dir, "refresh")}^{tree}`);
     if (tree === git(root, "rev-parse", "HEAD^{tree}")) {
@@ -670,7 +681,7 @@ Usage:
   autofork init <owner/repo>    set up a fork you already have, from inside it
   autofork save <id>            save your changes as the patch in .autofork/<id>
   autofork status               your patches, and changes no patch holds yet
-  autofork sync                 rebuild on upstream; an agent heals what no longer applies
+  autofork sync                 rebuild on upstream; an agent heals what breaks
 
 Options for fork and init:
   --follow <what>               releases (upstream's Latest), a channel of them

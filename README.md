@@ -63,7 +63,7 @@ doesn't undo them.
 
 ## Updates
 
-When upstream publishes a release, the workflow rebuilds your fork on it. Patches that still apply go in with git. When one doesn't, an agent rebuilds it from its `PATCH.md`, your `verify` command checks the build, and the result is pushed as a signed commit.
+When upstream publishes a release, the workflow rebuilds your fork on it. Patches that still apply go in with git. When one doesn't, or your `verify` command fails with it, an agent rebuilds it from its `PATCH.md`. Once `verify` passes, the result is pushed as a signed commit.
 
 When upstream ships its own version of one of your patches, autofork stops applying it and opens an issue on your fork. The fork takes upstream's version, and the agent isn't called for that patch again. You decide what happens next: delete the patch's folder to keep upstream's, or say in its `PATCH.md` how yours differs and delete its `UPSTREAM.md` to bring yours back.
 
@@ -119,7 +119,7 @@ Usage:
   autofork init <owner/repo>    set up a fork you already have, from inside it
   autofork save <id>            save your changes as the patch in .autofork/<id>
   autofork status               your patches, and changes no patch holds yet
-  autofork sync                 rebuild on upstream; an agent heals what no longer applies
+  autofork sync                 rebuild on upstream; an agent heals what breaks
 
 Options for fork and init:
   --follow <what>               releases (upstream's Latest), a channel of them
@@ -138,6 +138,7 @@ autofork keeps forks current today. The agent behind it is meant to grow into au
 - Workflows a fork keeps from upstream, like its release workflow: a sync opens an issue when upstream changes one, since a sync leaves `.github/` to the fork.
 - Rebuilds checked by upstream's own checks on the code they touch, and `verify` picked from upstream's CI so it covers what the patches change.
 - Release steps for apps that update themselves that sign for whatever the updater checks, with Electron as one example.
+- Patches that still apply but fail `verify`, rebuilt by the agent like ones that no longer apply, instead of failing the sync until someone steps in.
 
 **What we're building next**
 

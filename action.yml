@@ -1,5 +1,5 @@
 name: autofork
-description: Rebuild your fork from upstream plus your patches. An agent re-implements the ones that stop applying.
+description: Rebuild your fork from upstream plus your patches. An agent re-implements the ones that break.
 author: AVGVSTVS96
 branding:
   icon: git-merge
