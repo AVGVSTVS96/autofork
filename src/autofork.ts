@@ -48,6 +48,7 @@ type Build = {
   healed: Map<string, string>;
   upstreamHas: Map<string, string>;
   ready?: string;
+  rebuilt?: string;
   failed?: string;
 };
 
@@ -515,23 +516,46 @@ function merge(dir: string, file: string, config: Config): Left {
 }
 
 function prepare(config: Config, build: Build) {
+  if (!config.setup) return;
   const head = git(build.dir, "rev-parse", "HEAD");
-  if (!config.setup || build.ready === head) return;
-  say(`setup: ${config.setup}`);
-  if (!shell(config.setup, build.dir))
-    throw new Failure(`setup fails on ${short(head)}: ${config.setup}`);
-  build.ready = head;
-  reset(build.dir);
+  if (build.ready !== head) {
+    say(`setup: ${config.setup}`);
+    if (!shell(config.setup, build.dir))
+      throw new Failure(`setup fails on ${short(head)}: ${config.setup}`);
+    build.ready = head;
+    build.rebuilt = generatedChanges(config, build.dir);
+    reset(build.dir);
+  }
+  if (build.rebuilt && !git(build.dir, "status", "--porcelain", "--", ...(config.generated ?? [])))
+    git(build.dir, "apply", "--whitespace=nowarn", build.rebuilt);
+}
+
+function generatedChanges(config: Config, dir: string) {
+  if (!config.generated?.length) return undefined;
+  for (const path of config.generated) run("git", ["add", "-A", "--", path], dir);
+  const diff = gitBytes(
+    dir,
+    "diff-index",
+    "--cached",
+    "-p",
+    "--binary",
+    "HEAD",
+    "--",
+    ...config.generated,
+  );
+  if (!diff.length) return undefined;
+  const file = join(
+    git(dir, "rev-parse", "--path-format=absolute", "--git-dir"),
+    "autofork-generated.patch",
+  );
+  writeFileSync(file, diff);
+  return file;
 }
 
 function regenerate(config: Config, build: Build) {
-  if (!config.setup || !config.generated?.length) return;
-  say(`setup: ${config.setup}, to rebuild ${config.generated.join(", ")}`);
-  if (!shell(config.setup, build.dir))
-    throw new Failure(`setup fails on the rebuilt fork: ${config.setup}`);
-  for (const path of config.generated) run("git", ["add", "-A", "--", path], build.dir);
-  git(build.dir, ...BOT, "commit", "--quiet", "--no-verify", "--allow-empty", "-m", "generated");
-  reset(build.dir);
+  if (!config.generated?.length) return;
+  prepare(config, build);
+  commit(build.dir, "generated");
 }
 
 function passes(config: Fork, build: Build) {

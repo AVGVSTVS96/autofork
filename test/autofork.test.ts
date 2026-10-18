@@ -1032,3 +1032,42 @@ test("a patch rebuilt for verify keeps a later patch upstream merged as is pause
   expect(file(home, "agent-runs.log")).toBe("a-loud\n");
   expect(sh(mine, "ls .autofork/b-notes")).toBe("PATCH.md\nUPSTREAM.md");
 });
+
+test("verify sees the generated files setup rebuilt for the patches under it", () => {
+  const origin = join(home, "locked");
+  const mine = join(home, "locked-fork");
+  const setup = "sed 's/^/locked /' package.json > lock.txt";
+  mkdirSync(origin);
+  write(origin, "package.json", '{\n  "a": "1"\n}\n');
+  sh(origin, `git init -q && ${setup} && git add -A && git commit -qm init`);
+  sh(home, `git clone -q ${origin} locked-fork`);
+  expect(
+    autofork(mine, "init", origin, "--verify", "sed 's/^/locked /' package.json | cmp - lock.txt")
+      .ok,
+  ).toBe(true);
+  const config = JSON.parse(file(mine, ".autofork/config.json"));
+  write(
+    mine,
+    ".autofork/config.json",
+    `${JSON.stringify({ ...config, setup, generated: ["lock.txt"] }, null, 2)}\n`,
+  );
+  sh(mine, "git add -A && git commit -qm 'track upstream'");
+  savePatch(
+    "dep-b",
+    "The app depends on b.",
+    () => {
+      write(mine, "package.json", '{\n  "a": "1",\n  "b": "1"\n}\n');
+      sh(mine, setup);
+    },
+    mine,
+  );
+  expect(file(mine, ".autofork/dep-b/dep-b.patch")).not.toContain("lock.txt");
+  write(origin, "notes.txt", "one\n");
+  sh(origin, "git add -A && git commit -qm notes");
+  checkedAgent({}, mine);
+  const { ok, output } = autofork(mine, "sync");
+  expect(ok).toBe(true);
+  expect(output.result).toBe("synced");
+  expect(file(home, "agent-runs.log")).toBe("");
+  expect(file(mine, "lock.txt")).toContain('locked   "b": "1"');
+});
