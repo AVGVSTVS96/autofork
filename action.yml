@@ -36,10 +36,10 @@ runs:
         HEAL: ${{ inputs.heal }}
         CODEX_AUTH_URL: ${{ inputs.codex-auth-url }}
       run: '"$GITHUB_ACTION_PATH/action.sh"'
-    - if: failure() && steps.sync.outputs.key != ''
+    - if: (failure() || cancelled()) && steps.sync.outputs.key != ''
       shell: bash
       run: echo '${{ steps.sync.outputs.key }}' > "$RUNNER_TEMP/autofork-failed"
-    - if: failure() && steps.sync.outputs.key != ''
+    - if: (failure() || cancelled()) && steps.sync.outputs.key != ''
       uses: actions/cache/save@v6
       with:
         path: ${{ runner.temp }}/autofork-failed
