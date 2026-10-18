@@ -67,7 +67,7 @@ When upstream publishes a release, the workflow rebuilds your fork on it. Patche
 
 When upstream ships its own version of one of your patches, autofork stops applying it and opens an issue on your fork. The fork takes upstream's version, and the agent isn't called for that patch again. You decide what happens next: delete the patch's folder to keep upstream's, or say in its `PATCH.md` how yours differs and delete its `UPSTREAM.md` to bring yours back.
 
-The agent only runs when a release breaks a patch. Between releases, the workflow's hourly check is git only and ends in seconds. A failed rebuild isn't retried until upstream or your fork changes; running the workflow by hand always retries.
+The agent only runs when a release breaks a patch. Between releases, the workflow's hourly check is git only and ends in seconds. A rebuild that fails or runs out of time isn't retried until upstream or your fork changes; running the workflow by hand always retries.
 
 Commit straight to your fork and the workflow leaves it alone until upstream moves. A rebuild would drop changes no patch holds, so then it stops once and lists them: save them as a patch and push, and the next run syncs.
 
