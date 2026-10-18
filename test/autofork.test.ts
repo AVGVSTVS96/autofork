@@ -1,11 +1,12 @@
-import { expect, test } from "bun:test";
+import { afterAll, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const cli = join(import.meta.dir, "../dist/autofork.js");
 const home = mkdtempSync(join(tmpdir(), "autofork-test-"));
+afterAll(() => rmSync(home, { recursive: true, force: true }));
 const gitconfig = join(home, "gitconfig");
 writeFileSync(gitconfig, "[user]\n\tname = test\n\temail = test@example.com\n[commit]\n\tgpgsign = false\n[init]\n\tdefaultBranch = main\n[diff]\n\tnoprefix = true\n");
 const env = { ...process.env, GIT_CONFIG_GLOBAL: gitconfig, GIT_CONFIG_NOSYSTEM: "1", RUNNER_TEMP: home };
