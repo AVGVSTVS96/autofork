@@ -23,17 +23,17 @@ Start from upstream's release workflow, and save it under the same name in `.git
 - Give the build the version from the tag explicitly. The fork's commit carries no tag, so tools that read the version from git get it wrong.
 - Keep the builds and the update files. Drop package registry publishing, deploys, announcements and anything else that needs upstream's secrets.
 - Publish the GitHub Release yourself, under the tag and at the built commit, with upstream's prerelease and latest flags for that tag. Never publish a draft. Updaters skip drafts.
-- Open an issue when a run fails. GitHub tells only whoever started a run that it failed, and `autofork.yml`'s dispatch is started by GitHub's bot.
+- Open an issue when a run fails, or comment on the one already open. GitHub tells only whoever started a run that it failed, and `autofork.yml`'s dispatch is started by GitHub's bot.
 - Run on GitHub's standard hosted runners, which cost nothing on a public fork. A private fork pays for every minute, and macOS minutes cost the most.
 
-Then start it from `autofork.yml`. A push made with `GITHUB_TOKEN` starts no workflows, but a dispatch does. Give the autofork step `id: autofork`, add `actions: write` to the workflow's `permissions`, and add this step after it:
+Then start it from `autofork.yml`. A push made with `GITHUB_TOKEN` starts no workflows, but a dispatch does. Give the autofork step `id: autofork`, add `actions: write` to the workflow's `permissions`, and add this step after it, with the release workflow's file name:
 
 ```yaml
-- if: steps.autofork.outputs.result == 'synced'
+- if: steps.autofork.outputs.result == 'synced' && steps.autofork.outputs.tag != ''
   env:
     GH_TOKEN: ${{ github.token }}
     TAG: ${{ steps.autofork.outputs.tag }}
-  run: gh workflow run release.yml --repo "$GITHUB_REPOSITORY" ${TAG:+-f tag="$TAG"}
+  run: gh workflow run release.yml --repo "$GITHUB_REPOSITORY" -f tag="$TAG"
 ```
 
 ## 5. Pass the updater's checks without upstream's keys

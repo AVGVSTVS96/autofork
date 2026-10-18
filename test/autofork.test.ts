@@ -366,7 +366,7 @@ test("a sync names upstream's changes to workflows the fork keeps, and leaves th
   const { ok, log } = autofork(mine, "sync");
   expect(ok).toBe(true);
   expect(file(mine, "app.js")).toBe("two\n");
-  expect(log).toContain(`upstream changed .github/workflows/release.yml since ${base}`);
+  expect(log).toContain(`upstream changed .github/workflows/release.yml in ${base}..${sh(origin, "git rev-parse HEAD").slice(0, 12)}`);
   expect(log).not.toMatch(/upstream changed .*(test|lint|deploy)\.yml/);
   expect(file(mine, ".github/workflows/release.yml")).toBe("name: release from the fork\n");
   expect(sh(mine, "ls .github/workflows")).toBe("autofork.yml\nrelease.yml\ntest.yml");

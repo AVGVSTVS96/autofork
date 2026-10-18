@@ -71,7 +71,7 @@ The agent only runs when a release breaks a patch. Between releases, the workflo
 
 Commit straight to your fork and the workflow leaves it alone until upstream moves. A rebuild would drop changes no patch holds, so then it stops once and lists them: save them as a patch and push, and the next run syncs.
 
-Your fork's workflows stay as you have them, since a workflow's GitHub token can't edit workflow files. When upstream changes one your fork keeps a copy of, autofork opens an issue, so you can bring the change over or delete your copy.
+A sync never changes `.github/`: it's your fork's own, and a workflow's GitHub token can't push workflow files. When upstream changes a workflow your fork keeps a copy of, autofork opens an issue, so you can bring the change over or delete your copy.
 
 To follow a channel like nightlies, put its tag pattern in `follow`, like `"v*-nightly.*"`. The fork then moves to the newest release whose tag matches, and `init` lists the channels upstream publishes. To follow a branch instead, set `"follow": "main"`. Every upstream commit then gets the same treatment.
 
