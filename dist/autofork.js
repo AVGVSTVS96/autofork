@@ -2,7 +2,15 @@
 
 // src/autofork.ts
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from "node:fs";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
@@ -27,7 +35,11 @@ class Drifted extends Failure {
 }
 function run(command, args, cwd, env) {
   const result = spawnSync(command, args, { cwd, env, maxBuffer: 1 << 30 });
-  return { ok: result.status === 0, out: result.stdout, err: result.stderr?.toString().trim() ?? "" };
+  return {
+    ok: result.status === 0,
+    out: result.stdout,
+    err: result.stderr?.toString().trim() ?? ""
+  };
 }
 function git(cwd, ...args) {
   return gitWith(cwd, undefined, ...args);
@@ -70,7 +82,11 @@ async function readConfig(root) {
   }
   const config = JSON.parse(readFileSync(configFile(root), "utf8"));
   const follow = config.follow ?? await defaultFollow(root, config.upstream);
-  return { ...config, follow, patches: discover(root).filter((id) => !existsSync(upstreamDoc(root, id))) };
+  return {
+    ...config,
+    follow,
+    patches: discover(root).filter((id) => !existsSync(upstreamDoc(root, id)))
+  };
 }
 function discover(root) {
   return readdirSync(join(root, DIR), { withFileTypes: true }).filter((entry) => entry.isDirectory() && existsSync(patchDoc(root, entry.name))).map((entry) => entry.name).sort();
@@ -145,7 +161,9 @@ async function defaultFollow(root, upstream) {
 var channelOf = (tag) => tag.replace(/\d+/g, "*").replace(/\*(?:\.\*)+/g, "*");
 async function channels(upstream) {
   const published = await releases(upstream, "releases?per_page=100") ?? [];
-  return [...new Set(published.filter((release) => release.prerelease && !release.draft).map((release) => channelOf(release.tag_name)))];
+  return [
+    ...new Set(published.filter((release) => release.prerelease && !release.draft).map((release) => channelOf(release.tag_name)))
+  ];
 }
 function baseline(root) {
   const synced = git(root, "log", "--first-parent", "-1", "--format=%s", "-E", "--grep=^auto(fork|patch): sync ", "HEAD").split(" ").at(-1);
@@ -196,10 +214,14 @@ function healPrompt(config, build, id, broken) {
   const fresh = isEmpty(patchFile(build.dir, id));
   const steps = [
     `Read ${DIR}/${id}/PATCH.md. It says what the patch does and why, and that's the contract.`,
-    ...fresh ? [] : [`${DIR}/${id}/${id}.patch is how it was done before. Use it as a guide, not as text to force in.`],
+    ...fresh ? [] : [
+      `${DIR}/${id}/${id}.patch is how it was done before. Use it as a guide, not as text to force in.`
+    ],
     "Build it on the current source, the smallest change that fully does what PATCH.md says. Build on what upstream has now: where upstream has its own version of what the patch touches, change that rather than bringing the old one back. Follow upstream's code and conventions, and leave everything else alone.",
     `Run upstream's own checks for the code you touched${config.verify ? `, and \`${config.verify}\`, which the sync has to pass` : ""}. Fix what your change breaks. Patches after this one aren't applied yet.`,
-    ...fresh ? [`Add a short paragraph to the end of ${DIR}/${id}/PATCH.md on why it's built the way it is, for whoever rebuilds it after upstream moves. Keep what's there as it is.`] : []
+    ...fresh ? [
+      `Add a short paragraph to the end of ${DIR}/${id}/PATCH.md on why it's built the way it is, for whoever rebuilds it after upstream moves. Keep what's there as it is.`
+    ] : []
   ];
   return `You are keeping a patched fork of ${config.upstream} in sync. The fork is upstream plus a stack of patches, each one described in ${DIR}/<id>/PATCH.md.
 
@@ -305,7 +327,14 @@ function worktree(root, base) {
 }
 function build(root, config, base, options) {
   const dir = worktree(root, base);
-  const build = { dir, source: base, steps: [commit(dir, `upstream ${short(base)}`)], verified: -1, healed: new Map, upstreamHas: new Map };
+  const build = {
+    dir,
+    source: base,
+    steps: [commit(dir, `upstream ${short(base)}`)],
+    verified: -1,
+    healed: new Map,
+    upstreamHas: new Map
+  };
   for (const id of config.patches) {
     const file = patchFile(dir, id);
     if (isEmpty(file) ? options.healFrom : !apply(dir, file)) {
@@ -693,7 +722,12 @@ Options for fork and init:
 A patch is .autofork/<id>/PATCH.md, saying what the change does and why, next
 to <id>.patch, the diff. https://github.com/AVGVSTVS96/autofork
 `;
-var commands = { init, save, status, sync };
+var commands = {
+  init,
+  save,
+  status,
+  sync
+};
 async function main([name, ...args]) {
   if (name === "fork")
     return fork(process.cwd(), args);
