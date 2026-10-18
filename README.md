@@ -131,9 +131,26 @@ Options for fork and init:
 
 ## Roadmap
 
-First batch of updates after launch:
+autofork keeps forks current today. The agent behind it is meant to grow into automatic maintenance of any codebase, and autofork is its first packaging: set up in one step, with an app to see and manage your forks and what they cost.
 
-- An option to re-check every change against what you asked for on each new release, not only when a release breaks it. Today a change is only revisited when it stops applying.
+**Just landed**
+
+- Workflows a fork keeps from upstream, like its release workflow: a sync opens an issue when upstream changes one, since a sync leaves `.github/` to the fork.
+- Rebuilds checked by upstream's own checks on the code they touch, and `verify` picked from upstream's CI so it covers what the patches change.
+- Release steps for apps that update themselves that sign for whatever the updater checks, with Electron as one example.
+
+**What we're building next**
+
+- Limits on what the agent spends, set by you: rebuilds a month, spend a month and spend per rebuild, with defaults like 10 rebuilds, $200 a month and $20 a rebuild at API prices. A run near the limit finishes instead of being thrown away.
+- What each fork's rebuilds cost, from their token counts at API prices.
+- A dashboard on [autofork.com](https://autofork.com) to see your forks and what each costs, and set its budget.
+- How often a fork checks upstream, set by you and run on time. GitHub's scheduled runs can start hours late.
+- An option to re-check every change against what you asked for on each new release, not only when a release breaks it.
+- A first install of a fork's app on a Mac that needs no developer certificate from you.
+
+**Open question**
+
+- Whether autofork.com only shows forks that run themselves in their own Actions, or can also run the same engine for you.
 
 ## History
 
@@ -142,6 +159,10 @@ First batch of updates after launch:
 - **July:** [herdr](https://github.com/AVGVSTVS96/herdr), the first fork rebuilt from patches. Proof of concept.
 - **October:** forks of [Claude Code's plugins](https://github.com/AVGVSTVS96/claude-plugins-official), [Buzz](https://github.com/AVGVSTVS96/buzz) and [T3 Code](https://github.com/AVGVSTVS96/t3code), in daily use.
 - **October:** autofork.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
