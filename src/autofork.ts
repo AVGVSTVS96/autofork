@@ -658,7 +658,7 @@ function restack(config: Fork, build: Build, index: number, from: string) {
   later.forEach((step, offset) => {
     const id = config.patches[index + 1 + offset];
     const file = stepPatch(config, build, step);
-    if (!apply(build.dir, file, config)) {
+    if (!isEmpty(file) && !apply(build.dir, file, config)) {
       verify(config, build, from);
       heal(
         config,

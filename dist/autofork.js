@@ -481,7 +481,7 @@ ${build.failed}
   later.forEach((step, offset) => {
     const id = config.patches[index + 1 + offset];
     const file = stepPatch(config, build, step);
-    if (!apply(build.dir, file, config)) {
+    if (!isEmpty(file) && !apply(build.dir, file, config)) {
       verify(config, build, from);
       heal(config, build, id, `Patch "${id}" no longer applies cleanly on top of ${culprit}, which was just rebuilt.`, { file });
     } else if (sameSource(config, build.dir, "HEAD") && !sameSource(config, build.dir, `${step}~`, step)) {

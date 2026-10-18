@@ -989,3 +989,46 @@ test("setup installs before the agent and verify run, and generated files are re
   expect(file(home, "agent-runs.log")).toBe("");
   expect(file(mine, "lock.txt")).toContain('locked   "b": "1",');
 });
+
+test("a patch rebuilt for verify keeps a later patch upstream merged as is paused, without the agent", () => {
+  const origin = join(home, "merged-later");
+  const mine = join(home, "merged-later-fork");
+  mkdirSync(origin);
+  write(origin, "name.js", 'export const who = () => "world";\n');
+  write(origin, "notes.txt", "one\n");
+  sh(origin, "git init -q && git add -A && git commit -qm init");
+  sh(home, `git clone -q ${origin} merged-later-fork`);
+  expect(autofork(mine, "init", origin, "--verify", loads).ok).toBe(true);
+  sh(mine, "git add -A && git commit -qm 'track upstream'");
+  savePatch(
+    "a-loud",
+    "loud.js has loud(), the name in upper case.",
+    () =>
+      write(
+        mine,
+        "loud.js",
+        'import { who } from "./name.js";\nexport const loud = () => who().toUpperCase();\n',
+      ),
+    mine,
+  );
+  savePatch(
+    "b-notes",
+    "notes.txt has a second line.",
+    () => write(mine, "notes.txt", "one\ntwo\n"),
+    mine,
+  );
+  write(origin, "name.js", 'export const whom = () => "world";\n');
+  write(origin, "notes.txt", "one\ntwo\n");
+  sh(origin, "git commit -qam 'who is whom now, and notes has two lines'");
+  checkedAgent(
+    {
+      "a-loud": `printf 'import { whom } from "./name.js";\\nexport const loud = () => whom().toUpperCase();\\n' > loud.js`,
+    },
+    mine,
+  );
+  const { ok, log } = autofork(mine, "sync");
+  expect(ok).toBe(true);
+  expect(log).toContain("healed a-loud\nupstream has b-notes: the same change, line for line");
+  expect(file(home, "agent-runs.log")).toBe("a-loud\n");
+  expect(sh(mine, "ls .autofork/b-notes")).toBe("PATCH.md\nUPSTREAM.md");
+});
