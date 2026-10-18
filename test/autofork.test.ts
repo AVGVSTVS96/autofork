@@ -470,3 +470,23 @@ test("verify that fails on upstream itself fails the sync without the agent", ()
   expect(log).toContain(`verify fails on upstream ${sh(checked, "git rev-parse HEAD").slice(0, 12)} itself`);
   expect(file(home, "agent-runs.log")).toBe("");
 });
+
+test("each new patch keeps the note its agent added to PATCH.md, when a later patch is built in the same sync", () => {
+  write(checked, "name.js", 'export const who = () => "world";\n');
+  sh(checked, "git commit -qam 'fix upstream'");
+  for (const id of ["d-bang", "e-tilde"]) {
+    mkdirSync(join(checkedFork, ".autofork", id), { recursive: true });
+    write(checkedFork, `.autofork/${id}/PATCH.md`, `notes.txt ends with a ${id.slice(2)}.\n`);
+  }
+  sh(checkedFork, "git add -A && git commit -qm 'two new patches'");
+  checkedAgent({
+    "d-bang": `echo '!' >> notes.txt; printf '\\nA line of its own.\\n' >> .autofork/d-bang/PATCH.md`,
+    "e-tilde": `echo '~' >> notes.txt; printf '\\nAfter the bang.\\n' >> .autofork/e-tilde/PATCH.md`,
+  });
+  const { ok, log } = autofork(checkedFork, "sync");
+  expect(ok).toBe(true);
+  expect(log).toContain("built d-bang\nbuilt e-tilde");
+  expect(file(checkedFork, "notes.txt")).toBe("mine\n!\n~\n");
+  expect(file(checkedFork, ".autofork/d-bang/PATCH.md")).toBe("notes.txt ends with a bang.\n\nA line of its own.\n");
+  expect(file(checkedFork, ".autofork/e-tilde/PATCH.md")).toBe("notes.txt ends with a tilde.\n\nAfter the bang.\n");
+});

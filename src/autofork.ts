@@ -279,7 +279,7 @@ function heal(config: Fork, build: Build, id: string, source: string, from: stri
     git(build.dir, "reset", "--soft", "--quiet", build.steps.at(-1)!);
     const reason = existsSync(upstreamDoc(build.dir, id)) ? readFileSync(upstreamDoc(build.dir, id), "utf8").trim() : "";
     const why = fresh && existsSync(doc) ? readFileSync(doc, "utf8") : "";
-    restoreControl(build.dir, build.steps[0]);
+    restoreControl(build.dir, build.steps.at(-1)!);
     if (changed(build.dir)) {
       if (why.startsWith(wish)) writeFileSync(doc, why);
       build.healed.set(id, done);
