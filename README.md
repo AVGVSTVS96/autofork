@@ -31,6 +31,8 @@ npx github:AVGVSTVS96/autofork save context-usage
 
 Or just write the `PATCH.md` and push. The workflow has an agent build it.
 
+Patches go on in the alphabetical order of their folder names, each on top of the ones before it. A patch the others need, like one that makes a package split out of a monorepo build on its own, needs a name that sorts first, like `0-standalone`.
+
 A `PATCH.md` is plain prose: what you want and why, and why it's built the way it is, not which lines it touches, so an agent can rebuild it on whatever upstream looks like next. This is the one in [my T3 Code fork](https://github.com/AVGVSTVS96/t3code/tree/main/.autofork/context-usage):
 
 ```md
@@ -130,6 +132,9 @@ Options for fork and init:
                                 by tag, like 'v*-nightly.*', or a branch.
                                 Default: releases, or the default branch if
                                 upstream has none
+  --setup <command>             the command that installs dependencies
+  --generated <files>           files setup writes, like lockfiles, comma
+                                separated: rebuilt by setup, never patched
   --verify <command>            the command that checks a build
 ```
 
@@ -139,6 +144,7 @@ autofork keeps forks current today. The agent behind it is meant to grow into au
 
 **Just landed**
 
+- Forks whose upstream can't pass `verify` on its own, like a package split out of a monorepo: when `verify` fails, the sync finds the patch that breaks it, even when that's the one that makes the package build, instead of stopping at upstream. `init` and `fork` take `--setup` and `--generated`.
 - Rebuilds that start where git leaves off, from [a field report](https://github.com/AVGVSTVS96/autofork/issues/3) on a large fork: the agent gets the patch applied as far as it goes with conflict markers, only the files left to finish, `verify`'s last lines when it failed, and dependencies installed by `setup`, and lockfiles are rebuilt instead of patched.
 - Workflows a fork keeps from upstream, like its release workflow: a sync opens an issue when upstream changes one, since a sync leaves `.github/` to the fork.
 - Rebuilds checked by upstream's own checks on the code they touch, and `verify` picked from upstream's CI so it covers what the patches change.

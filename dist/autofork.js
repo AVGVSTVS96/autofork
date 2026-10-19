@@ -94,9 +94,9 @@ async function readConfig(root) {
 function discover(root) {
   return readdirSync(join(root, DIR), { withFileTypes: true }).filter((entry) => entry.isDirectory() && existsSync(patchDoc(root, entry.name))).map((entry) => entry.name).sort();
 }
-function writeConfig(dir, { upstream, follow, verify, agent, green }) {
+function writeConfig(dir, { upstream, follow, setup, generated, verify, agent, green }) {
   mkdirSync(join(dir, DIR), { recursive: true });
-  writeFileSync(configFile(dir), `${JSON.stringify({ upstream, follow, verify, agent, green }, null, 2)}
+  writeFileSync(configFile(dir), `${JSON.stringify({ upstream, follow, setup, generated, verify, agent, green }, null, 2)}
 `);
   writeFileSync(join(dir, DIR, ".gitignore"), `!*.patch
 `);
@@ -248,7 +248,7 @@ This checkout is upstream at ${build.source}${before.length ? `, with ${before.j
 ${steps.map((step, index) => `${index + 1}. ${step}`).join(`
 `)}
 
-Don't edit anything ${fresh ? "else " : ""}in ${DIR}/ or .github/, and don't commit. Leave only your source change: remove anything your checks generated that git would pick up.
+Don't edit anything ${fresh ? "else " : ""}in ${DIR}/ or .github/, and don't commit. Leave only your source change: remove anything your checks generated that git would pick up${config.generated?.length ? `, but leave ${config.generated.join(", ")}, which the sync rebuilds` : ""}.
 If upstream already does what PATCH.md asks, or something close enough that building it would duplicate upstream's own version, write one line saying what upstream does to ${DIR}/${id}/UPSTREAM.md, and the sync leaves the patch out.`;
 }
 var installed = (bin) => run("sh", ["-c", `command -v ${bin}`], ".").ok;
@@ -470,13 +470,30 @@ function build(root, config, base, options) {
   }
   return build;
 }
-function bisect(config, build) {
+function verifies(config, build, step, from) {
+  const failed = build.failed;
+  reset(build.dir, build.steps[step]);
+  if (passes(config, build))
+    return true;
+  if (step > 0 || !from)
+    return false;
+  const { check } = build.failed;
+  if (from !== build.source) {
+    say(`verify with upstream ${short(from)} alone, where the fork was`);
+    reset(build.dir, from);
+    if (passes(config, build))
+      throw new Failure(`${check} fails on upstream ${short(build.source)} itself: ${config[check]}`);
+  }
+  say(`${check} fails on upstream alone where the fork was too, so the patches are what make it pass`);
+  build.failed = failed;
+  return true;
+}
+function bisect(config, build, from) {
   let bad = build.steps.length;
   while (bad - build.verified > 1) {
     const step = Math.floor((build.verified + bad) / 2);
     say(`verify with ${step ? `the patches up to ${config.patches[step - 1]}` : "upstream alone"}`);
-    reset(build.dir, build.steps[step]);
-    if (passes(config, build))
+    if (verifies(config, build, step, from))
       build.verified = step;
     else
       bad = step;
@@ -512,19 +529,17 @@ ${lines}
 function verify(config, build, from) {
   if (!config.setup && !config.verify)
     return;
-  while (!passes(config, build)) {
+  while (!verifies(config, build, build.steps.length - 1, from)) {
     if (!from)
       throw new Drifted(`${build.failed.check} fails, so a patch needs rebuilding`);
     say(`${build.failed.check} failed, finding the patch it fails on`);
-    const step = bisect(config, build);
+    const step = bisect(config, build, from);
     if (step === build.steps.length) {
       say(`${build.failed.check} passed when run again`);
       break;
     }
     const failing = build.failed.check;
     const command = config[failing];
-    if (step === 0)
-      throw new Failure(`${failing} fails on upstream ${short(build.source)} itself: ${command}`);
     const id = config.patches[step - 1];
     if (run("git", ["diff", "--quiet", build.steps[step - 1], build.steps[step]], build.dir).ok) {
       throw new Failure(`${failing} passes and fails on the same code, so the sync can't tell which patch breaks it: ${command}`);
@@ -698,11 +713,18 @@ jobs:
         env:
           CLAUDE_CODE_OAUTH_TOKEN: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 `;
-async function setup(root, upstream, args) {
+function options(args) {
+  const setup = flag(args, "--setup");
+  const generated = flag(args, "--generated")?.split(",");
+  if (generated && !setup)
+    throw new Failure("--generated files are rebuilt by --setup, so set it too");
+  return { follow: flag(args, "--follow"), setup, generated, verify: flag(args, "--verify") };
+}
+async function setup(root, upstream, chosen) {
   if (existsSync(configFile(root)))
     throw new Failure(`${DIR}/config.json already exists`);
-  const follow = flag(args, "--follow") ?? await defaultFollow(root, upstream);
-  const config = { upstream, follow, verify: flag(args, "--verify") };
+  const follow = chosen.follow ?? await defaultFollow(root, upstream);
+  const config = { ...chosen, upstream, follow };
   writeConfig(root, config);
   const path = join(root, ".github/workflows/autofork.yml");
   mkdirSync(join(root, ".github/workflows"), { recursive: true });
@@ -714,7 +736,7 @@ async function setup(root, upstream, args) {
   const inherited = git(root, "ls-files", ".github/workflows").split(`
 `).filter((file) => file && !file.endsWith("/autofork.yml"));
   if ("branch" in parseFollow(follow)) {
-    say(`autofork follows ${upstream}'s ${follow} branch${flag(args, "--follow") ? "" : ", since it has no releases"}.`);
+    say(`autofork follows ${upstream}'s ${follow} branch${chosen.follow ? "" : ", since it has no releases"}.`);
   } else {
     const others = (await channels(upstream)).filter((channel) => channel !== follow);
     say(`autofork follows ${upstream}'s ${follow === "releases" ? "" : `${follow} `}releases.`);
@@ -789,19 +811,20 @@ function claim(root, upstream) {
 }
 async function init(root, args) {
   if (!args[0])
-    throw new Failure("usage: autofork init <owner/repo | git url> [--follow <releases | channel | branch>] [--verify <command>]");
-  await setup(root, args[0], args);
+    throw new Failure("usage: autofork init <owner/repo | git url> [--follow <releases | channel | branch>] [--setup <command>] [--generated <files>] [--verify <command>]");
+  await setup(root, args[0], options(args));
   claim(root, args[0]);
   say("Add a CLAUDE_CODE_OAUTH_TOKEN secret (claude setup-token), commit, and push.");
 }
 async function fork(cwd, args) {
   const upstream = args[0];
   if (!/^[\w.-]+\/[\w.-]+$/.test(upstream ?? ""))
-    throw new Failure("usage: autofork fork <owner/repo> [--follow <releases | channel | branch>] [--verify <command>]");
+    throw new Failure("usage: autofork fork <owner/repo> [--follow <releases | channel | branch>] [--setup <command>] [--generated <files>] [--verify <command>]");
+  const chosen = options(args);
   if (!run("gh", ["repo", "fork", upstream, "--clone", "--default-branch-only"], cwd).ok)
     throw new Failure("gh couldn't fork it. Is the GitHub CLI installed and logged in?");
   const root = join(cwd, upstream.split("/")[1]);
-  const readme = await setup(root, upstream, args);
+  const readme = await setup(root, upstream, chosen);
   claim(root, upstream);
   const repo = origin(root);
   const token = process.env.CLAUDE_CODE_OAUTH_TOKEN;
@@ -844,6 +867,9 @@ Options for fork and init:
                                 by tag, like 'v*-nightly.*', or a branch.
                                 Default: releases, or the default branch if
                                 upstream has none
+  --setup <command>             the command that installs dependencies
+  --generated <files>           files setup writes, like lockfiles, comma
+                                separated: rebuilt by setup, never patched
   --verify <command>            the command that checks a build
 
 A patch is .autofork/<id>/PATCH.md, saying what the change does and why, next
