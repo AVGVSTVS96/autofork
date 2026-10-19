@@ -415,7 +415,7 @@ ${command}`], {
   build.failed = { check, lines };
   return false;
 }
-var passes = (config, build) => prepare(config, build) && succeeds(build, "verify", config.verify);
+var passes = (config, build) => prepare(config, build) && (!config.verify || succeeds(build, "verify", config.verify));
 function stepPatch(config, build, step) {
   const gitDir = git(build.dir, "rev-parse", "--path-format=absolute", "--git-dir");
   const file = join(gitDir, `autofork-${step}.patch`);
@@ -510,7 +510,7 @@ ${lines}
   });
 }
 function verify(config, build, from) {
-  if (!config.verify)
+  if (!config.setup && !config.verify)
     return;
   while (!passes(config, build)) {
     if (!from)
@@ -518,7 +518,7 @@ function verify(config, build, from) {
     say(`${build.failed.check} failed, finding the patch it fails on`);
     const step = bisect(config, build);
     if (step === build.steps.length) {
-      say("verify passed when run again");
+      say(`${build.failed.check} passed when run again`);
       break;
     }
     const failing = build.failed.check;

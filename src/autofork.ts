@@ -579,7 +579,7 @@ function succeeds(build: Build, check: "setup" | "verify", command: string) {
 }
 
 const passes = (config: Fork, build: Build) =>
-  prepare(config, build) && succeeds(build, "verify", config.verify!);
+  prepare(config, build) && (!config.verify || succeeds(build, "verify", config.verify));
 
 function stepPatch(config: Config, build: Build, step: string) {
   const gitDir = git(build.dir, "rev-parse", "--path-format=absolute", "--git-dir");
@@ -715,13 +715,13 @@ function restack(config: Fork, build: Build, index: number, from: string) {
 }
 
 function verify(config: Fork, build: Build, from?: string) {
-  if (!config.verify) return;
+  if (!config.setup && !config.verify) return;
   while (!passes(config, build)) {
     if (!from) throw new Drifted(`${build.failed!.check} fails, so a patch needs rebuilding`);
     say(`${build.failed!.check} failed, finding the patch it fails on`);
     const step = bisect(config, build);
     if (step === build.steps.length) {
-      say("verify passed when run again");
+      say(`${build.failed!.check} passed when run again`);
       break;
     }
     const failing = build.failed!.check;

@@ -1072,17 +1072,17 @@ test("verify sees the generated files setup rebuilt for the patches under it", (
   expect(file(mine, "lock.txt")).toContain('locked   "b": "1"');
 });
 
-test("a patch that still applies but breaks setup is rebuilt like one that fails verify", () => {
-  const origin = join(home, "installs");
-  const mine = join(home, "installs-fork");
+function breaksSetup(name: string, verify?: string) {
+  const origin = join(home, name);
+  const mine = join(home, `${name}-fork`);
   const setup = `while read d; do test -f "pkgs/$d" || { echo "no package $d"; exit 1; }; done < deps.txt`;
   mkdirSync(join(origin, "pkgs"), { recursive: true });
   write(origin, "deps.txt", "a\n");
   write(origin, "pkgs/a", "");
   write(origin, "pkgs/b", "");
   sh(origin, "git init -q && git add -A && git commit -qm init");
-  sh(home, `git clone -q ${origin} installs-fork`);
-  expect(autofork(mine, "init", origin, "--verify", "test -f deps.txt").ok).toBe(true);
+  sh(home, `git clone -q ${origin} ${name}-fork`);
+  expect(autofork(mine, "init", origin, ...(verify ? ["--verify", verify] : [])).ok).toBe(true);
   const config = JSON.parse(file(mine, ".autofork/config.json"));
   write(mine, ".autofork/config.json", `${JSON.stringify({ ...config, setup }, null, 2)}\n`);
   sh(mine, "git add -A && git commit -qm 'track upstream'");
@@ -1100,4 +1100,9 @@ test("a patch that still applies but breaks setup is rebuilt like one that fails
   expect(prompt).toContain(`but \`${setup}\` fails with it. Its last lines:`);
   expect(prompt).toContain("no package b");
   expect(file(mine, "deps.txt")).toBe("a\nbee\n");
-});
+}
+
+test("a patch that still applies but breaks setup is rebuilt like one that fails verify", () =>
+  breaksSetup("installs", "test -f deps.txt"));
+
+test("setup without verify is the check a sync has to pass", () => breaksSetup("installs-only"));
