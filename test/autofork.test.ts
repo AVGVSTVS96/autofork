@@ -975,6 +975,7 @@ test("setup installs before the agent and verify run, and generated files are re
   const prompt = file(home, "prompt-dep-b.txt");
   expect(prompt).toContain(`Dependencies are installed: \`${setup}\` ran here`);
   expect(prompt).toContain("What's left: the conflict markers in package.json.");
+  expect(prompt).toContain("that git would pick up, but leave lock.txt, which the sync rebuilds.");
   expect(prompt).toContain(" -- package.json\n");
   expect(file(mine, "lock.txt")).toBe(
     'locked {\nlocked   "a": "1",\nlocked   "b": "1",\nlocked   "c": "1"\nlocked }\n',
@@ -1041,16 +1042,25 @@ test("verify sees the generated files setup rebuilt for the patches under it", (
   write(origin, "package.json", '{\n  "a": "1"\n}\n');
   sh(origin, `git init -q && ${setup} && git add -A && git commit -qm init`);
   sh(home, `git clone -q ${origin} locked-fork`);
+  const verify = "sed 's/^/locked /' package.json | cmp - lock.txt";
+  const unset = autofork(mine, "init", origin, "--generated", "lock.txt", "--verify", verify);
+  expect(unset.log).toContain("--generated files are rebuilt by --setup, so set it too");
+  expect(existsSync(join(mine, ".autofork"))).toBe(false);
   expect(
-    autofork(mine, "init", origin, "--verify", "sed 's/^/locked /' package.json | cmp - lock.txt")
-      .ok,
+    autofork(
+      mine,
+      "init",
+      origin,
+      "--setup",
+      setup,
+      "--generated",
+      "lock.txt,other.lock",
+      "--verify",
+      verify,
+    ).ok,
   ).toBe(true);
   const config = JSON.parse(file(mine, ".autofork/config.json"));
-  write(
-    mine,
-    ".autofork/config.json",
-    `${JSON.stringify({ ...config, setup, generated: ["lock.txt"] }, null, 2)}\n`,
-  );
+  expect(config).toMatchObject({ setup, generated: ["lock.txt", "other.lock"], verify });
   sh(mine, "git add -A && git commit -qm 'track upstream'");
   savePatch(
     "dep-b",
@@ -1106,3 +1116,99 @@ test("a patch that still applies but breaks setup is rebuilt like one that fails
   breaksSetup("installs", "test -f deps.txt"));
 
 test("setup without verify is the check a sync has to pass", () => breaksSetup("installs-only"));
+
+test("a patch the build needs is rebuilt when verify fails with it, even though upstream alone never passes verify", () => {
+  const origin = join(home, "split");
+  const mine = join(home, "split-fork");
+  mkdirSync(origin);
+  write(
+    origin,
+    "app.js",
+    'import { who } from "./lib/name.js";\nexport const greet = () => "hello " + who();\n',
+  );
+  write(origin, "notes.txt", "one\n");
+  sh(origin, "git init -q && git add -A && git commit -qm init");
+  sh(home, `git clone -q ${origin} split-fork`);
+  expect(autofork(mine, "init", origin, "--verify", loads).ok).toBe(true);
+  sh(mine, "git add -A && git commit -qm 'track upstream'");
+  savePatch(
+    "a-standalone",
+    "lib/name.js stands in for the monorepo's name package, so the app builds on its own.",
+    () => {
+      mkdirSync(join(mine, "lib"));
+      write(mine, "lib/name.js", 'export const who = () => "world";\n');
+      write(mine, "notes.txt", "one\nstandalone\n");
+    },
+    mine,
+  );
+  savePatch(
+    "b-shout",
+    "extra.js has shout(), the name in upper case.",
+    () =>
+      write(
+        mine,
+        "extra.js",
+        'import { who } from "./lib/name.js";\nexport const shout = () => who().toUpperCase();\n',
+      ),
+    mine,
+  );
+  write(
+    origin,
+    "app.js",
+    'import { whom } from "./lib/name.js";\nexport const greet = () => "hello " + whom();\n',
+  );
+  sh(origin, "git commit -qam 'greet whom'");
+  checkedAgent(
+    {
+      "a-standalone": `printf 'export const who = () => "world";\\nexport const whom = who;\\n' > lib/name.js`,
+    },
+    mine,
+  );
+  const failed = autofork(mine, "sync");
+  expect(failed.ok).toBe(true);
+  expect(failed.log).toContain(
+    "verify fails on upstream alone where the fork was too, so the patches are what make it pass",
+  );
+  expect(failed.log).toContain("healed a-standalone");
+  expect(file(home, "agent-runs.log")).toBe("a-standalone\n");
+  expect(file(home, "prompt-a-standalone.txt")).toContain(
+    'Patch "a-standalone" still applies cleanly, and it\'s applied here',
+  );
+  expect(file(mine, "lib/name.js")).toContain("export const whom = who;");
+  expect(file(mine, "extra.js")).toContain("who().toUpperCase()");
+
+  write(origin, "notes.txt", "uno\n");
+  sh(origin, "git commit -qam 'notes in spanish'");
+  checkedAgent(
+    {
+      "a-standalone": `grep -q '^<<<<<<< ours' notes.txt || exit 1; printf 'uno\\nstandalone\\n' > notes.txt`,
+    },
+    mine,
+  );
+  const drifted = autofork(mine, "sync");
+  expect(drifted.ok).toBe(true);
+  expect(drifted.log).toContain("healed a-standalone");
+  expect(file(home, "agent-runs.log")).toBe("a-standalone\n");
+  expect(file(mine, "notes.txt")).toBe("uno\nstandalone\n");
+  expect(file(mine, "lib/name.js")).toContain("export const whom = who;");
+});
+
+test("a fork without patches whose upstream never passes verify fails the sync instead of pushing", () => {
+  const origin = join(home, "unpatched");
+  const mine = join(home, "unpatched-fork");
+  mkdirSync(origin);
+  write(origin, "notes.txt", "one\n");
+  sh(origin, "git init -q && git add -A && git commit -qm init");
+  sh(home, `git clone -q ${origin} unpatched-fork`);
+  expect(autofork(mine, "init", origin, "--verify", "false").ok).toBe(true);
+  sh(mine, "git add -A && git commit -qm 'track upstream'");
+  write(origin, "notes.txt", "two\n");
+  sh(origin, "git commit -qam two");
+  const head = sh(mine, "git rev-parse HEAD");
+  const { ok, log } = autofork(mine, "sync");
+  expect(ok).toBe(false);
+  expect(log).toContain(
+    `verify fails on upstream ${sh(origin, "git rev-parse HEAD").slice(0, 12)} itself`,
+  );
+  expect(sh(mine, "git rev-parse HEAD")).toBe(head);
+});
