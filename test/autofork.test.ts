@@ -1192,3 +1192,23 @@ test("a patch the build needs is rebuilt when verify fails with it, even though 
   expect(file(mine, "notes.txt")).toBe("uno\nstandalone\n");
   expect(file(mine, "lib/name.js")).toContain("export const whom = who;");
 });
+
+test("a fork without patches whose upstream never passes verify fails the sync instead of pushing", () => {
+  const origin = join(home, "unpatched");
+  const mine = join(home, "unpatched-fork");
+  mkdirSync(origin);
+  write(origin, "notes.txt", "one\n");
+  sh(origin, "git init -q && git add -A && git commit -qm init");
+  sh(home, `git clone -q ${origin} unpatched-fork`);
+  expect(autofork(mine, "init", origin, "--verify", "false").ok).toBe(true);
+  sh(mine, "git add -A && git commit -qm 'track upstream'");
+  write(origin, "notes.txt", "two\n");
+  sh(origin, "git commit -qam two");
+  const head = sh(mine, "git rev-parse HEAD");
+  const { ok, log } = autofork(mine, "sync");
+  expect(ok).toBe(false);
+  expect(log).toContain(
+    `verify fails on upstream ${sh(origin, "git rev-parse HEAD").slice(0, 12)} itself`,
+  );
+  expect(sh(mine, "git rev-parse HEAD")).toBe(head);
+});

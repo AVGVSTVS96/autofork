@@ -670,14 +670,14 @@ function verifies(config: Fork, build: Build, step: number, from?: string) {
   if (passes(config, build)) return true;
   if (step > 0 || !from) return false;
   const { check } = build.failed!;
-  if (from !== build.source) {
+  let broke = !config.patches.length;
+  if (!broke && from !== build.source) {
     say(`verify with upstream ${short(from)} alone, where the fork was`);
     reset(build.dir, from);
-    if (passes(config, build))
-      throw new Failure(
-        `${check} fails on upstream ${short(build.source)} itself: ${config[check]}`,
-      );
+    broke = passes(config, build);
   }
+  if (broke)
+    throw new Failure(`${check} fails on upstream ${short(build.source)} itself: ${config[check]}`);
   say(
     `${check} fails on upstream alone where the fork was too, so the patches are what make it pass`,
   );
