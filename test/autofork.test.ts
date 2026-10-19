@@ -629,7 +629,7 @@ test("a patch that still applies but fails verify is rebuilt before the agent bu
   expect(log).toContain("healed b-shout\nhealed c-wave");
   expect(file(home, "agent-runs.log")).toBe("b-shout\nc-wave\n");
   expect(file(home, "prompt-b-shout.txt")).toContain(
-    `with a-notes already applied. Patch "b-shout" still applies cleanly, and it's applied here, but the sync's check fails with it. Its last lines:`,
+    `with a-notes already applied. Patch "b-shout" still applies cleanly, and it's applied here, but \`${loads}\` fails with it. Its last lines:`,
   );
   expect(file(home, "prompt-b-shout.txt")).toContain("does not provide an export named 'name'");
   expect(file(checkedFork, "extra.js")).toContain("who().toUpperCase()");
@@ -709,7 +709,7 @@ test("each patch that fails verify is rebuilt before the agent rebuilds a later 
   expect(log).toContain("healed b-shout\nhealed c-wave\nhealed f-wink\nhealed g-loud");
   expect(file(home, "agent-runs.log")).toBe("b-shout\nc-wave\nf-wink\ng-loud\n");
   expect(file(home, "prompt-f-wink.txt")).toContain(
-    `Patch "f-wink" still applies cleanly, and it's applied here, but the sync's check fails with it.`,
+    `Patch "f-wink" still applies cleanly, and it's applied here, but \`${loads}\` fails with it.`,
   );
   expect(file(checkedFork, "extra.js")).toContain('whom().toUpperCase() + "!"');
   expect(file(checkedFork, "wink.js")).toContain('whom() + " ;)"');
@@ -1070,4 +1070,34 @@ test("verify sees the generated files setup rebuilt for the patches under it", (
   expect(output.result).toBe("synced");
   expect(file(home, "agent-runs.log")).toBe("");
   expect(file(mine, "lock.txt")).toContain('locked   "b": "1"');
+});
+
+test("a patch that still applies but breaks setup is rebuilt like one that fails verify", () => {
+  const origin = join(home, "installs");
+  const mine = join(home, "installs-fork");
+  const setup = `while read d; do test -f "pkgs/$d" || { echo "no package $d"; exit 1; }; done < deps.txt`;
+  mkdirSync(join(origin, "pkgs"), { recursive: true });
+  write(origin, "deps.txt", "a\n");
+  write(origin, "pkgs/a", "");
+  write(origin, "pkgs/b", "");
+  sh(origin, "git init -q && git add -A && git commit -qm init");
+  sh(home, `git clone -q ${origin} installs-fork`);
+  expect(autofork(mine, "init", origin, "--verify", "test -f deps.txt").ok).toBe(true);
+  const config = JSON.parse(file(mine, ".autofork/config.json"));
+  write(mine, ".autofork/config.json", `${JSON.stringify({ ...config, setup }, null, 2)}\n`);
+  sh(mine, "git add -A && git commit -qm 'track upstream'");
+  savePatch("dep-b", "The app depends on b.", () => write(mine, "deps.txt", "a\nb\n"), mine);
+  sh(origin, "git mv pkgs/b pkgs/bee && git commit -qm 'b is bee now'");
+  checkedAgent({ "dep-b": `printf 'a\\nbee\\n' > deps.txt` }, mine);
+  const waiting = autofork(mine, "sync", "--no-heal");
+  expect(waiting.output.result).toBe("waiting");
+  expect(waiting.log).toContain("setup fails, so a patch needs rebuilding");
+  const { ok, log } = autofork(mine, "sync");
+  expect(ok).toBe(true);
+  expect(log).toContain("healed dep-b");
+  expect(file(home, "agent-runs.log")).toBe("dep-b\n");
+  const prompt = file(home, "prompt-dep-b.txt");
+  expect(prompt).toContain(`but \`${setup}\` fails with it. Its last lines:`);
+  expect(prompt).toContain("no package b");
+  expect(file(mine, "deps.txt")).toBe("a\nbee\n");
 });

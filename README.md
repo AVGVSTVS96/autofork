@@ -63,7 +63,7 @@ doesn't undo them.
 
 ## Updates
 
-When upstream publishes a release, the workflow rebuilds your fork on it. Patches that still apply go in with git. When one doesn't, or your `verify` command fails with it, an agent rebuilds it from its `PATCH.md`. Git applies what still fits first and marks the conflicts, so the agent starts with only the files left to finish, and with the last lines `verify` printed when that's what failed. Once `verify` passes, the result is pushed as a signed commit.
+When upstream publishes a release, the workflow rebuilds your fork on it. Patches that still apply go in with git. When one doesn't, or your `setup` or `verify` command fails with it, an agent rebuilds it from its `PATCH.md`. Git applies what still fits first and marks the conflicts, so the agent starts with only the files left to finish, and with the last lines the command printed when that's what failed. Once `verify` passes, the result is pushed as a signed commit.
 
 When upstream ships its own version of one of your patches, autofork stops applying it and opens an issue on your fork. The fork takes upstream's version, and the agent isn't called for that patch again. You decide what happens next: delete the patch's folder to keep upstream's, or say in its `PATCH.md` how yours differs and delete its `UPSTREAM.md` to bring yours back.
 

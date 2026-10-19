@@ -277,7 +277,7 @@ function workflowsBehind(root, base, source) {
 }
 var sameSource = (config, dir, ...commits) => run("git", ["diff", "--quiet", ...commits, "--", ...sourcePaths(config)], dir).ok;
 function heal(config, build, id, broken, patch) {
-  prepare(config, build);
+  prepared(config, build);
   const step = build.steps.at(-1);
   const left = patch ? merge(build.dir, patch.file, config) : undefined;
   const rejects = left?.rejected.map((path) => `${path}.rej`) ?? [];
@@ -363,18 +363,23 @@ function merge(dir, file, config) {
 }
 function prepare(config, build) {
   if (!config.setup)
-    return;
+    return true;
   const head = git(build.dir, "rev-parse", "HEAD");
   if (build.ready !== head) {
     say(`setup: ${config.setup}`);
-    if (!shell(config.setup, build.dir))
-      throw new Failure(`setup fails on ${short(head)}: ${config.setup}`);
+    if (!succeeds(build, "setup", config.setup))
+      return false;
     build.ready = head;
     build.rebuilt = generatedChanges(config, build.dir);
     reset(build.dir);
   }
   if (build.rebuilt && !git(build.dir, "status", "--porcelain", "--", ...config.generated ?? []))
     git(build.dir, "apply", "--whitespace=nowarn", build.rebuilt);
+  return true;
+}
+function prepared(config, build) {
+  if (!prepare(config, build))
+    throw new Failure(`setup fails on ${short(git(build.dir, "rev-parse", "HEAD"))}: ${config.setup}`);
 }
 function generatedChanges(config, dir) {
   if (!config.generated?.length)
@@ -391,13 +396,12 @@ function generatedChanges(config, dir) {
 function regenerate(config, build) {
   if (!config.generated?.length)
     return;
-  prepare(config, build);
+  prepared(config, build);
   commit(build.dir, "generated");
 }
-function passes(config, build) {
-  prepare(config, build);
+function succeeds(build, check, command) {
   const result = spawnSync("sh", ["-c", `exec 2>&1
-${config.verify}`], {
+${command}`], {
     cwd: build.dir,
     stdio: ["inherit", "pipe", "inherit"],
     maxBuffer: 1 << 30
@@ -405,11 +409,13 @@ ${config.verify}`], {
   process.stderr.write(result.stdout);
   if (result.status === 0)
     return true;
-  build.failed = result.stdout.toString().trimEnd().split(`
+  const lines = result.stdout.toString().trimEnd().split(`
 `).slice(-100).join(`
 `);
+  build.failed = { check, lines };
   return false;
 }
+var passes = (config, build) => prepare(config, build) && succeeds(build, "verify", config.verify);
 function stepPatch(config, build, step) {
   const gitDir = git(build.dir, "rev-parse", "--path-format=absolute", "--git-dir");
   const file = join(gitDir, `autofork-${step}.patch`);
@@ -479,15 +485,16 @@ function bisect(config, build) {
 }
 function restack(config, build, index, from) {
   const culprit = config.patches[index];
+  const { check, lines } = build.failed;
   const [built, ...later] = build.steps.splice(index + 1);
   reset(build.dir, build.steps[index]);
   const changes = from !== build.source ? `
 
 To see what upstream changed: git diff --stat ${from} ${build.source}` : "";
-  heal(config, build, culprit, `Patch "${culprit}" still applies cleanly, and it's applied here, but the sync's check fails with it. Its last lines:
+  heal(config, build, culprit, `Patch "${culprit}" still applies cleanly, and it's applied here, but \`${config[check]}\` fails with it. Its last lines:
 
 \`\`\`
-${build.failed}
+${lines}
 \`\`\`${changes}`, { file: stepPatch(config, build, built) });
   build.steps.push(commit(build.dir, culprit));
   later.forEach((step, offset) => {
@@ -503,26 +510,27 @@ ${build.failed}
   });
 }
 function verify(config, build, from) {
-  const command = config.verify;
-  if (!command)
+  if (!config.verify)
     return;
   while (!passes(config, build)) {
     if (!from)
-      throw new Drifted("verify fails, so a patch needs rebuilding");
-    say("verify failed, finding the patch it fails on");
+      throw new Drifted(`${build.failed.check} fails, so a patch needs rebuilding`);
+    say(`${build.failed.check} failed, finding the patch it fails on`);
     const step = bisect(config, build);
     if (step === build.steps.length) {
       say("verify passed when run again");
       break;
     }
+    const failing = build.failed.check;
+    const command = config[failing];
     if (step === 0)
-      throw new Failure(`verify fails on upstream ${short(build.source)} itself: ${command}`);
+      throw new Failure(`${failing} fails on upstream ${short(build.source)} itself: ${command}`);
     const id = config.patches[step - 1];
     if (run("git", ["diff", "--quiet", build.steps[step - 1], build.steps[step]], build.dir).ok) {
-      throw new Failure(`verify passes and fails on the same code, so the sync can't tell which patch breaks it: ${command}`);
+      throw new Failure(`${failing} passes and fails on the same code, so the sync can't tell which patch breaks it: ${command}`);
     }
     if (build.healed.has(id))
-      throw new Failure(`verify fails with ${id}, which the agent ${build.healed.get(id)}: ${command}`);
+      throw new Failure(`${failing} fails with ${id}, which the agent ${build.healed.get(id)}: ${command}`);
     restack(config, build, step - 1, from);
   }
   build.verified = build.steps.length - 1;
