@@ -81,9 +81,9 @@ function commitUpstream(text: string, message: string) {
   sh(upstream, `git commit -qam '${message}'`);
 }
 
-function patch(id: string, text: string) {
-  mkdirSync(join(fork, ".autofork", id), { recursive: true });
-  write(fork, `.autofork/${id}/PATCH.md`, `${text}\n`);
+function patch(id: string, text: string, dir = fork) {
+  mkdirSync(join(dir, ".autofork", id), { recursive: true });
+  write(dir, `.autofork/${id}/PATCH.md`, `${text}\n`);
 }
 
 test("init tracks upstream", () => {
@@ -457,6 +457,7 @@ case "$*" in
   "repo view"*) echo acme/app ;;
   "api repos/me/app") echo '{"fork":true,"owner":{"login":"me"},"parent":{"full_name":"acme/app","description":"An app"}}' ;;
   "api users/me") echo '{"type":"User","name":"Ada Lovelace"}' ;;
+  "api repos/me/app/actions/workflows?per_page=100") echo '{"workflows":[{"id":7,"path":".github/workflows/ci.yml","state":"active"},{"id":8,"path":".github/workflows/autofork.yml","state":"active"},{"id":9,"path":".github/workflows/old.yml","state":"disabled_manually"}]}' ;;
   *) echo '{}' ;;
 esac
 `,
@@ -476,42 +477,49 @@ esac
   const calls = file(home, "gh.log");
   expect(calls).toContain("api -X PUT repos/me/app/actions/permissions -F enabled=true");
   expect(calls).toContain("repo edit me/app --enable-issues");
+  expect(calls).toContain("api -X PUT repos/me/app/actions/workflows/7/disable");
+  expect(calls).not.toMatch(/workflows\/[89]\/disable/);
   expect(calls).toContain("api -X PATCH repos/me/app -f description=Ada's autofork · An app");
 });
 
-test("a sync names upstream's changes to workflows the fork keeps, and leaves the fork's copies as they are", () => {
+test("a sync brings upstream's .github/ like any other code, and keeps the fork's own autofork.yml", () => {
   const origin = join(home, "ci");
   const mine = join(home, "ci-fork");
   mkdirSync(join(origin, ".github/workflows"), { recursive: true });
+  mkdirSync(join(origin, ".github/scripts"), { recursive: true });
   sh(origin, "git init -q -b trunk && echo one > app.js");
-  for (const name of ["release", "test", "lint"])
-    write(origin, `.github/workflows/${name}.yml`, `name: ${name}\n`);
+  const release = (on: string, jobs: string) =>
+    `name: release\non: ${on}\n${"#\n".repeat(8)}jobs: ${jobs}\n`;
+  write(origin, ".github/workflows/release.yml", release("push", "build"));
+  write(origin, ".github/workflows/test.yml", "name: test\n");
+  write(origin, ".github/scripts/changes.cjs", "one\n");
   sh(origin, "git add -A && git commit -qm init");
   sh(home, `git clone -q ${origin} ci-fork`);
-  const base = sh(mine, "git rev-parse HEAD").slice(0, 12);
-  expect(autofork(mine, "init", origin).log).toContain(
-    "opens an issue when upstream changes one you keep",
-  );
-  write(mine, ".github/workflows/release.yml", "name: release from the fork\n");
-  sh(
-    mine,
-    "git rm -q .github/workflows/lint.yml && git add -A && git commit -qm 'track upstream, release from the fork'",
-  );
-  sh(origin, "echo two > app.js");
-  for (const name of ["release", "test", "lint", "deploy"])
-    write(origin, `.github/workflows/${name}.yml`, `name: ${name} 2\n`);
+  expect(autofork(mine, "init", origin).ok).toBe(true);
+  write(mine, ".github/workflows/autofork.yml", "name: autofork, set up for this fork\n");
+  sh(mine, "git add -A && git commit -qm 'track upstream'");
+  write(mine, ".github/workflows/release.yml", release("workflow_dispatch", "build"));
+  patch("release", "Release only when autofork dispatches it.", mine);
+  expect(autofork(mine, "save", "release").ok).toBe(true);
+  sh(mine, "git add -A && git commit -qm 'release from the fork'");
+  sh(origin, "echo two > app.js && echo two > .github/scripts/changes.cjs");
+  write(origin, ".github/workflows/release.yml", release("push", "build and sign"));
+  write(origin, ".github/workflows/test.yml", "name: test 2\n");
+  write(origin, ".github/workflows/deploy.yml", "name: deploy\n");
   sh(origin, "git add -A && git commit -qm two");
-  write(mine, ".github/workflows/test.yml", "name: test 2\n");
-  sh(mine, "git commit -qam 'bring test.yml over'");
-  const { ok, log } = autofork(mine, "sync");
+  const { ok, log } = autofork(mine, "sync", "--no-heal");
   expect(ok).toBe(true);
+  expect(log).not.toContain("upstream changed");
   expect(file(mine, "app.js")).toBe("two\n");
-  expect(log).toContain(
-    `upstream changed .github/workflows/release.yml in ${base}..${sh(origin, "git rev-parse HEAD").slice(0, 12)}`,
+  expect(file(mine, ".github/scripts/changes.cjs")).toBe("two\n");
+  expect(file(mine, ".github/workflows/test.yml")).toBe("name: test 2\n");
+  expect(file(mine, ".github/workflows/release.yml")).toBe(
+    release("workflow_dispatch", "build and sign"),
   );
-  expect(log).not.toMatch(/upstream changed .*(test|lint|deploy)\.yml/);
-  expect(file(mine, ".github/workflows/release.yml")).toBe("name: release from the fork\n");
-  expect(sh(mine, "ls .github/workflows")).toBe("autofork.yml\nrelease.yml\ntest.yml");
+  expect(file(mine, ".github/workflows/autofork.yml")).toBe(
+    "name: autofork, set up for this fork\n",
+  );
+  expect(sh(mine, "ls .github/workflows")).toBe("autofork.yml\ndeploy.yml\nrelease.yml\ntest.yml");
 });
 
 test("a config without follow follows what init would pick", () => {

@@ -16,7 +16,7 @@ Make one patch, a `release-feed` patch, that swaps upstream's repo for the fork'
 
 ## 4. Add a release workflow
 
-Start from upstream's release workflow, and save it under the same name in `.github/workflows/`. A sync never changes it, and when upstream changes its own, the sync opens an issue so the fork can bring the change over.
+Change upstream's release workflow in place, as a `release-workflow` patch, so upstream's later changes to how it builds and releases keep reaching the fork's. When upstream has none, add one under a name upstream doesn't use.
 
 - Trigger it only on `workflow_dispatch`, with a `tag` input, which `autofork.yml` fills in. Upstream's tag triggers never fire in the fork.
 - Build the commit the dispatch ran on, the fork's branch. Never check out upstream's tag, which has none of the patches.

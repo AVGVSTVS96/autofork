@@ -6,7 +6,7 @@ branding:
   color: green
 inputs:
   token:
-    description: Token that pushes the signed sync commit
+    description: Token that pushes the signed sync commit. By default the workflow's own, and the autofork app's for a sync that changes workflow files
     default: ${{ github.token }}
   heal:
     description: Let the agent rebuild patches that no longer apply or fail verify. When false, they wait for a run that heals.
@@ -33,6 +33,7 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.token }}
+        ACTIONS_TOKEN: ${{ github.token }}
         HEAL: ${{ inputs.heal }}
         CODEX_AUTH_URL: ${{ inputs.codex-auth-url }}
       run: '"$GITHUB_ACTION_PATH/action.sh"'

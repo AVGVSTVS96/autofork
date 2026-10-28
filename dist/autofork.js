@@ -13,10 +13,10 @@ import {
 } from "node:fs";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 var DIR = ".autofork";
-var CONTROL = [DIR, ".github"];
-var WORKFLOWS = [".github/workflows", ".github/actions"];
+var WORKFLOW = ".github/workflows/autofork.yml";
+var CONTROL = [DIR, WORKFLOW];
 var SOURCE = [".", ...CONTROL.map((path) => `:(exclude)${path}`)];
 var BOT = [
   "-c",
@@ -248,7 +248,7 @@ This checkout is upstream at ${build.source}${before.length ? `, with ${before.j
 ${steps.map((step, index) => `${index + 1}. ${step}`).join(`
 `)}
 
-Don't edit anything ${fresh ? "else " : ""}in ${DIR}/ or .github/, and don't commit. Leave only your source change: remove anything your checks generated that git would pick up${config.generated?.length ? `, but leave ${config.generated.join(", ")}, which the sync rebuilds` : ""}.
+Don't edit ${WORKFLOW} or anything ${fresh ? "else " : ""}in ${DIR}/, and don't commit. Leave only your source change: remove anything your checks generated that git would pick up${config.generated?.length ? `, but leave ${config.generated.join(", ")}, which the sync rebuilds` : ""}.
 If upstream already does what PATCH.md asks, or something close enough that building it would duplicate upstream's own version, write one line saying what upstream does to ${DIR}/${id}/UPSTREAM.md, and the sync leaves the patch out.`;
 }
 var installed = (bin) => run("sh", ["-c", `command -v ${bin}`], ".").ok;
@@ -268,12 +268,6 @@ function restoreControl(dir, base) {
   if (owned.length)
     git(dir, "checkout", base, "--", ...owned);
   git(dir, "clean", "-fdq", "--", ...CONTROL);
-}
-function workflowsBehind(root, base, source) {
-  const files = (...args) => git(root, "diff", "--name-only", "--no-renames", ...args, "--", ...WORKFLOWS).split(`
-`);
-  const upstreamChanged = new Set(files(base, source));
-  return files("--diff-filter=MD", "HEAD", source).filter((file) => file && upstreamChanged.has(file));
 }
 var sameSource = (config, dir, ...commits) => run("git", ["diff", "--quiet", ...commits, "--", ...sourcePaths(config)], dir).ok;
 function heal(config, build, id, broken, patch) {
@@ -645,8 +639,7 @@ Save them as a patch first: write ${DIR}/<id>/PATCH.md, then run autofork save <
       parents.push("-p", source);
     const lines = [
       ...[...result.healed].map(([id, done]) => `${done} ${id}`),
-      ...[...result.upstreamHas].map(([id, reason]) => `upstream has ${id}: ${reason}`),
-      ...workflowsBehind(root, base, source).map((file) => `upstream changed ${file} in ${short(base)}..${short(source)}`)
+      ...[...result.upstreamHas].map(([id, reason]) => `upstream has ${id}: ${reason}`)
     ];
     const message = [`autofork: sync ${config.upstream} to ${short(source)}`, lines.join(`
 `)].filter(Boolean).join(`
@@ -697,6 +690,7 @@ on:
 permissions:
   contents: write
   issues: write
+  id-token: write
 
 concurrency: autofork
 
@@ -728,15 +722,13 @@ async function setup(root, upstream, chosen) {
   const follow = chosen.follow ?? await defaultFollow(root, upstream);
   const config = { ...chosen, upstream, follow };
   writeConfig(root, config);
-  const path = join(root, ".github/workflows/autofork.yml");
-  mkdirSync(join(root, ".github/workflows"), { recursive: true });
+  const path = join(root, WORKFLOW);
+  mkdirSync(dirname(path), { recursive: true });
   if (!existsSync(path))
     writeFileSync(path, workflow(git(root, "branch", "--show-current") || defaultBranch(root, upstream)));
   await fetchUpstream(root, config);
   const { base, drift } = check(root, { ...config, patches: [] }, workingTree(root));
   const readme = addNote(root, upstream, base, drift);
-  const inherited = git(root, "ls-files", ".github/workflows").split(`
-`).filter((file) => file && !file.endsWith("/autofork.yml"));
   if ("branch" in parseFollow(follow)) {
     say(`autofork follows ${upstream}'s ${follow} branch${chosen.follow ? "" : ", since it has no releases"}.`);
   } else {
@@ -745,8 +737,6 @@ async function setup(root, upstream, chosen) {
     if (others.length)
       say(`It also publishes ${others.join(", ")}. To follow one, put it in "follow" in ${DIR}/config.json.`);
   }
-  if (inherited.length)
-    say(`Your fork has ${inherited.length} workflow${inherited.length === 1 ? "" : "s"} copied from upstream, and they run here too. Delete the ones you don't want. autofork leaves workflows to you: it never copies upstream's new ones in, and opens an issue when upstream changes one you keep.`);
   if (readme)
     say(`${readme} now says this is a personal fork kept current by autofork. To drop that line, delete it and ${DIR}/${NOTE}/.`);
   if (drift.length)
@@ -805,6 +795,10 @@ function claim(root, upstream) {
     return;
   run("gh", ["api", "-X", "PUT", `repos/${repo}/actions/permissions`, "-F", "enabled=true"], root);
   run("gh", ["repo", "edit", repo, "--enable-issues"], root);
+  const inherited = api(`repos/${repo}/actions/workflows?per_page=100`)?.workflows ?? [];
+  const off = inherited.filter((flow) => flow.path !== WORKFLOW && flow.state === "active" && run("gh", ["api", "-X", "PUT", `repos/${repo}/actions/workflows/${flow.id}/disable`], root).ok);
+  if (off.length)
+    say(`Turned off upstream's ${off.length} workflow${off.length === 1 ? "" : "s"} in your fork. Turn on any you want in its Actions tab; syncs keep them current with upstream either way.`);
   if (fork.parent?.full_name.toLowerCase() !== githubRepo(upstream)?.toLowerCase())
     return;
   const owner = api(`users/${fork.owner.login}`);
@@ -832,7 +826,7 @@ async function fork(cwd, args) {
   const token = process.env.CLAUDE_CODE_OAUTH_TOKEN;
   if (token)
     run("gh", ["secret", "set", "CLAUDE_CODE_OAUTH_TOKEN", "--repo", repo, "--body", token], root);
-  git(root, "add", DIR, ".github/workflows/autofork.yml", ...readme ? [readme] : []);
+  git(root, "add", DIR, WORKFLOW, ...readme ? [readme] : []);
   git(root, "commit", "--quiet", "-m", `autofork: follow ${upstream}`);
   git(root, "push", "--quiet");
   say(`${repo} now keeps itself current with ${upstream}. It's cloned in ./${basename(root)}.`);

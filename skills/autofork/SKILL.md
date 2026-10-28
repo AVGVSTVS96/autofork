@@ -40,9 +40,9 @@ Patches go on in the alphabetical order of their ids, each on top of the ones be
 
 If `.autofork/<id>/UPSTREAM.md` exists, upstream shipped its own version of that patch and autofork stopped applying it. Show the user what it says and ask which they want. Upstream's: delete `.autofork/<id>/`. Theirs: update `PATCH.md` to say how theirs differs from upstream's, delete `UPSTREAM.md`, and push; the next sync rebuilds it.
 
-## When upstream changes a workflow
+## Workflows
 
-A sync never changes `.github/`: it's the fork's own, and a workflow's GitHub token can't push workflow files. When upstream changes a workflow the fork keeps a copy of, the sync says so in its commit message, `upstream changed <file> in <from>..<to>`, and opens an issue. Bring over what the fork needs from upstream's change, keeping what the fork's copy does differently, or delete copies the fork doesn't run. Then close the issue.
+`.github/` comes from upstream like the rest of the code, except the fork's own `.github/workflows/autofork.yml`. To change one of upstream's workflows, like its release workflow, make the change a patch, so upstream's later changes to it keep coming in. Upstream's workflows stay off in the fork until the user turns them on in the Actions tab. Leave the ones the fork doesn't run in place: deleting one is a patch that breaks each time upstream changes it. A sync that changes workflow files pushes with the autofork app's token, which needs the app installed on the fork and `id-token: write` in `autofork.yml`. Without them the sync waits and opens an issue saying so.
 
 ## Apps that update themselves
 
