@@ -859,6 +859,9 @@ test("a patch rebuilt for verify that also makes a later patch's change fails th
     "rebuilding a-loud also made the change b-notes makes, so b-notes has nothing left to add",
   );
   expect(file(home, "agent-runs.log")).toBe("a-loud\n");
+  expect(file(home, "prompt-a-loud.txt")).toContain(
+    "The patches after this one, b-notes, aren't applied yet. They go on top of yours, so leave what their PATCH.md files ask for to them.",
+  );
   expect(sh(mine, "git rev-parse HEAD")).toBe(head);
 });
 
