@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, join, resolve } from "node:path";
 
 const DIR = ".autofork";
 const WORKFLOWS = ".github/workflows";
@@ -744,7 +744,7 @@ ${failed.lines}
 Make it pass. Fold each fix into the commit of the patch it belongs to (git commit --fixup, then an autosquash rebase onto ${build.steps[0]}), built on what upstream has now and in upstream's code and conventions, so each patch still does what its PATCH.md says. When you're done, the commits on ${build.steps[0]} are these patches, one each, named by its id, in this order.${config.setup && failed.check === "verify" ? ` Dependencies are installed: \`${config.setup}\` ran here, so run it again if you change them.` : ""}${later.length ? ` Patches after these aren't applied yet: ${later.join(", ")}. Each goes on top, so leave what its PATCH.md asks for to it.` : ""}
 
 Don't edit anything in ${DIR}/ or ${WORKFLOWS}/. Leave out of your commits anything your checks generated${config.generated?.length ? `, and the changes setup made to ${config.generated.join(", ")}, which the sync rebuilds` : ""}.
-If upstream now does what a patch's PATCH.md asks, or something close enough that the patch would duplicate upstream's own version, edit that patch's commit so it's empty, keeping the commit, and write one line saying what upstream does to ${DIR}/<id>/UPSTREAM.md, without committing it. The sync leaves the patch out.`;
+If upstream now does what a patch's PATCH.md asks, or something close enough that the patch would duplicate upstream's own version, edit that patch's commit so it's empty, keeping the commit, and write one line saying what upstream does to ${DIR}/<id>/UPSTREAM.md. The sync leaves the patch out.`;
 }
 
 const patchId = (config: Config, dir: string, from: string, to: string) =>
@@ -776,23 +776,34 @@ function fix(config: Fork, build: Build, failed: Failed, from: string) {
     );
   }
   const last = ids.findLastIndex((id) => build.healed.has(id));
-  if (last >= 0 && (last === ids.length - 1 || !passesAt(config, build, build.steps[last + 1])))
+  if (last >= 0 && (last === ids.length - 1 || !passesAt(config, build, build.steps[last + 1]))) {
+    say(`${failed.check} fails with ${ids[last]}, which an agent just built, so run it again`);
+    if (passesAt(config, build, before.at(-1)!)) return;
     throw new Failure(
       `${failed.check} fails with ${ids[last]}, which the agent ${build.healed.get(ids[last])}: ${command}`,
     );
+  }
   reset(build.dir, before.at(-1)!);
   if (failed.check === "verify") prepared(config, build);
   say(`fixing ${failed.check} in the patches`);
   if (!shell(agentCommand(config), build.dir, fixPrompt(config, build, ids, failed, from), BOT))
     throw new Failure(`the agent failed while fixing ${failed.check}`);
+  const pausing = new Set<string>();
   for (const id of ids) {
     const doc = upstreamDoc(build.dir, id);
     const reason = existsSync(doc) ? readFileSync(doc, "utf8").trim() : "";
     if (reason && !build.upstreamHas.has(id)) {
       build.upstreamHas.set(id, reason);
       build.healed.delete(id);
+      pausing.add(id);
     }
   }
+  if (
+    ["rebase-merge", "rebase-apply"].some((path) =>
+      existsSync(resolve(build.dir, git(build.dir, "rev-parse", "--git-path", path))),
+    )
+  )
+    throw new Failure(`the agent left a rebase unfinished while fixing ${failed.check}`);
   const onUpstream = run("git", ["merge-base", "--is-ancestor", base, "HEAD"], build.dir).ok;
   if (
     !onUpstream ||
@@ -801,7 +812,9 @@ function fix(config: Fork, build: Build, failed: Failed, from: string) {
     throw new Failure(
       `the agent's commits on upstream aren't ${ids.join(", ")}, one per patch in that order, so nothing was pushed`,
     );
-  if (!run("git", ["diff", "--quiet", before.at(-1)!, "HEAD", "--", ...CONTROL], build.dir).ok)
+  const docs = [...pausing].map((id) => `${DIR}/${id}/UPSTREAM.md`);
+  const control = git(build.dir, "diff", "--name-only", before.at(-1)!, "HEAD", "--", ...CONTROL);
+  if (control.split("\n").some((path) => path && !docs.includes(path)))
     throw new Failure(`the agent changed ${CONTROL.join(" or ")} while fixing ${failed.check}`);
   const old = build.steps;
   build.steps = [base, ...git(build.dir, "rev-list", "--reverse", `${base}..HEAD`).split("\n")];
@@ -811,7 +824,9 @@ function fix(config: Fork, build: Build, failed: Failed, from: string) {
     if (build.upstreamHas.has(id)) {
       if (now)
         throw new Failure(
-          `the agent's fix changed ${id}, which upstream already has, so nothing was pushed`,
+          pausing.has(id)
+            ? `the agent wrote UPSTREAM.md for ${id} but left its change in, so nothing was pushed`
+            : `the agent's fix changed ${id}, which upstream already has, so nothing was pushed`,
         );
     } else if (was && !now) {
       throw new Failure(
