@@ -893,8 +893,10 @@ async function sync(root: string, args: string[]) {
       result = build(root, config, source, { healFrom, wait: true });
       verify(config, result, healFrom);
       regenerate(config, result);
-      if (behind.length && healFrom && !args.includes("--no-workflows"))
+      if (behind.length && !args.includes("--no-workflows")) {
+        if (!healFrom) throw new Drifted("upstream changed workflows this fork keeps");
         updated = updateWorkflows(config, result, behind, range);
+      }
     } catch (error) {
       if (!(error instanceof Drifted)) throw error;
       say(`${error.message}. The next run that heals rebuilds it.`);

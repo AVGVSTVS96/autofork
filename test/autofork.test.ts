@@ -562,6 +562,20 @@ test("an upstream change to workflows alone moves the fork on, so the agent isn'
   expect(file(home, "workflow-runs.log")).toBe("run\n");
 });
 
+test("a run that doesn't heal leaves upstream's workflow changes for one that does", () => {
+  const origin = join(home, "ci");
+  const mine = join(home, "ci-fork");
+  writeFileSync(join(home, "workflow-runs.log"), "");
+  sh(
+    origin,
+    "echo 'name: release 5' > .github/workflows/release.yml && git commit -qam 'release 5'",
+  );
+  expect(autofork(mine, "sync", "--no-heal").output.result).toBe("waiting");
+  expect(file(home, "workflow-runs.log")).toBe("");
+  expect(autofork(mine, "sync").output.result).toBe("synced");
+  expect(file(home, "workflow-runs.log")).toBe("run\n");
+});
+
 test("a config without follow follows what init would pick", () => {
   const mine = join(home, "ci-fork");
   const config = JSON.parse(file(mine, ".autofork/config.json"));

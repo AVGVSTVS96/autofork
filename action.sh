@@ -41,7 +41,7 @@ workflow_token() {
 }
 
 leave_workflows="--no-workflows"
-if [ "${HEAL:-true}" = true ] && [ -n "${WORKFLOW_TOKEN_URL:-}" ] &&
+if [ -n "${WORKFLOW_TOKEN_URL:-}" ] &&
   [ -n "$(git ls-files .github/workflows ':!.github/workflows/autofork.yml')" ]; then
   if workflow_token > /dev/null; then
     leave_workflows=""
