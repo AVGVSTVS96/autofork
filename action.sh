@@ -18,11 +18,14 @@ if [ -n "${CODEX_AUTH:-}" ]; then
   printf '%s' "$CODEX_AUTH" > "$codex_auth"
 fi
 
+oidc() {
+  curl -fsS -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" "${ACTIONS_ID_TOKEN_REQUEST_URL:-}&audience=autofork" | jq -r .value
+}
+
 keep_codex_auth() {
   [ -n "${CODEX_AUTH:-}" ] && [ -n "${CODEX_AUTH_URL:-}" ] || return 0
   [ "$(cat "$codex_auth")" != "$CODEX_AUTH" ] || return 0
-  oidc="$(curl -fsS -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=autofork" | jq -r .value)"
-  if curl -fsS -X POST -H "Authorization: Bearer $oidc" -H "Content-Type: application/json" --data-binary @"$codex_auth" "$CODEX_AUTH_URL" > /dev/null; then
+  if curl -fsS -X POST -H "Authorization: Bearer $(oidc)" -H "Content-Type: application/json" --data-binary @"$codex_auth" "$CODEX_AUTH_URL" > /dev/null; then
     echo "saved Codex's refreshed sign-in"
   else
     echo "::warning::couldn't save Codex's refreshed sign-in; sign in again if the next run can't reach Codex"
@@ -30,7 +33,19 @@ keep_codex_auth() {
 }
 trap keep_codex_auth EXIT
 
-if ! node "$GITHUB_ACTION_PATH/dist/autofork.js" sync ${skip:+--skip "$skip"} $heal; then
+leave_workflows="--no-workflows"
+workflow_token=""
+if [ "${HEAL:-true}" = true ] && [ -n "${WORKFLOW_TOKEN_URL:-}" ] &&
+  [ -n "$(git ls-files .github/workflows ':!.github/workflows/autofork.yml')" ]; then
+  if workflow_token="$(curl -fsS -X POST -H "Authorization: Bearer $(oidc)" "$WORKFLOW_TOKEN_URL" | jq -re .token)"; then
+    echo "::add-mask::$workflow_token"
+    leave_workflows=""
+  else
+    echo "::warning::couldn't get a token that can push workflow files from $WORKFLOW_TOKEN_URL, so upstream's changes to this fork's workflows become an issue"
+  fi
+fi
+
+if ! node "$GITHUB_ACTION_PATH/dist/autofork.js" sync ${skip:+--skip "$skip"} $heal $leave_workflows; then
   echo "result=failed" >> "$GITHUB_OUTPUT"
   exit 1
 fi
@@ -38,13 +53,15 @@ fi
 if [ "$(git rev-parse HEAD)" != "$head" ]; then
   parents=()
   for parent in $(git log -1 --format=%P); do parents+=(-f "parents[]=$parent"); done
-  remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+  pusher="$GH_TOKEN"
+  git diff --quiet "$head" HEAD -- .github/workflows || pusher="$workflow_token"
+  remote="https://x-access-token:${pusher}@github.com/${GITHUB_REPOSITORY}.git"
   scratch="refs/heads/autofork-objects-${GITHUB_RUN_ID}"
-  git push --quiet "$remote" "HEAD:$scratch" 2>&1 | { grep -v '^remote:' || true; } >&2
+  git push --quiet "$remote" "$(git commit-tree -p HEAD -m '[skip ci]' 'HEAD^{tree}'):$scratch" 2>&1 | { grep -v '^remote:' || true; } >&2
   trap 'git push --quiet "$remote" --delete "$scratch" || true; keep_codex_auth' EXIT
-  signed="$(gh api "repos/$GITHUB_REPOSITORY/git/commits" \
+  signed="$(GH_TOKEN="$pusher" gh api "repos/$GITHUB_REPOSITORY/git/commits" \
     -f message="$(git log -1 --format=%B)" -f tree="$(git rev-parse 'HEAD^{tree}')" "${parents[@]}" --jq .sha)"
-  if ! moved="$(gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/heads/$GITHUB_REF_NAME" -f sha="$signed" 2>&1)"; then
+  if ! moved="$(GH_TOKEN="$pusher" gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/heads/$GITHUB_REF_NAME" -f sha="$signed" 2>&1)"; then
     if [ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$GITHUB_REF_NAME" --jq .object.sha)" = "$head" ]; then
       echo "$moved" >&2
       exit 1
@@ -75,7 +92,7 @@ if [ "$(git rev-parse HEAD)" != "$head" ]; then
 
 $workflows
 
-autofork never changes the fork's \`.github/\`, and a workflow's GitHub token can't push workflow files. Bring over what this fork needs from upstream's changes, keeping what it does differently, or delete the copies it doesn't run, then close this issue.
+autofork leaves the fork's \`.github/workflows/\` to it, and the sync couldn't bring these changes over: a workflow's own GitHub token can't push workflow files. Bring over what this fork needs from upstream's changes, keeping what it does differently, or delete the copies it doesn't run, then close this issue.
 
 Synced in ${signed:0:12}." > /dev/null
     fi || echo "::warning::upstream changed workflows this fork copied, but autofork couldn't open an issue about it: turn on the fork's issues and give the workflow issues: write"

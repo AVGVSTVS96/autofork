@@ -11,6 +11,9 @@ inputs:
   heal:
     description: Let the agent rebuild patches that no longer apply or fail verify. When false, they wait for a run that heals.
     default: "true"
+  workflow-token-url:
+    description: "Where to get a token that can push workflow files, so the sync's agent can bring upstream's changes into the workflows the fork keeps. autofork.com's app gives one. Needs `id-token: write`."
+    default: ""
   codex-auth-url:
     description: "Where to send Codex's sign-in after it refreshes, so the CODEX_AUTH secret stays current. Needs `id-token: write`."
     default: ""
@@ -35,6 +38,7 @@ runs:
         GH_TOKEN: ${{ inputs.token }}
         HEAL: ${{ inputs.heal }}
         CODEX_AUTH_URL: ${{ inputs.codex-auth-url }}
+        WORKFLOW_TOKEN_URL: ${{ inputs.workflow-token-url }}
       run: '"$GITHUB_ACTION_PATH/action.sh"'
     - if: (failure() || cancelled()) && steps.sync.outputs.key != ''
       shell: bash

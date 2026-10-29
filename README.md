@@ -73,7 +73,7 @@ The agent only runs when a release breaks a patch. Between releases, the workflo
 
 Commit straight to your fork and the workflow leaves it alone until upstream moves. A rebuild would drop changes no patch holds, so then it stops once and lists them: save them as a patch and push, and the next run syncs.
 
-A sync never changes `.github/`: it's your fork's own, and a workflow's GitHub token can't push workflow files. When upstream changes a workflow your fork keeps a copy of, autofork opens an issue, so you can bring the change over or delete your copy.
+`.github/workflows/` is your fork's own, and the rest of `.github/` syncs like any other code. When upstream changes a workflow your fork keeps a copy of, the sync's agent brings over what your copy needs and keeps what it does differently. Pushing that takes a token that can push workflow files, which a workflow's own GitHub token can't: the action's `workflow-token-url` gets one from autofork.com's app. Without one, autofork opens an issue instead, so you can bring the change over or delete your copy.
 
 To follow a channel like nightlies, put its tag pattern in `follow`, like `"v*-nightly.*"`. The fork then moves to the newest release whose tag matches, and `init` lists the channels upstream publishes. To follow a branch instead, set `"follow": "main"`. Every upstream commit then gets the same treatment.
 
@@ -146,7 +146,7 @@ autofork keeps forks current today. The agent behind it is meant to grow into au
 
 - Forks whose upstream can't pass `verify` on its own, like a package split out of a monorepo: when `verify` fails, the sync finds the patch that breaks it, even when that's the one that makes the package build, instead of stopping at upstream. `init` and `fork` take `--setup` and `--generated`.
 - Rebuilds that start where git leaves off, from [a field report](https://github.com/AVGVSTVS96/autofork/issues/3) on a large fork: the agent gets the patch applied as far as it goes with conflict markers, only the files left to finish, `verify`'s last lines when it failed, and dependencies installed by `setup`, and lockfiles are rebuilt instead of patched.
-- Workflows a fork keeps from upstream, like its release workflow: a sync opens an issue when upstream changes one, since a sync leaves `.github/` to the fork.
+- Workflows a fork keeps from upstream, like its release workflow: when upstream changes one, the sync's agent brings the change into the fork's copy, or opens an issue when it has no token that can push workflow files. The rest of `.github/` syncs like code.
 - Rebuilds checked by upstream's own checks on the code they touch, and `verify` picked from upstream's CI so it covers what the patches change.
 - Release steps for apps that update themselves that sign for whatever the updater checks, with Electron as one example.
 - Patches that still apply but fail `verify`, rebuilt by the agent like ones that no longer apply, instead of failing the sync until someone steps in.
