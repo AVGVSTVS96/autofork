@@ -65,7 +65,7 @@ doesn't undo them.
 
 ## Updates
 
-When upstream publishes a release, the workflow rebuilds your fork on it. Patches that still apply go in with git. When one doesn't, or your `setup` or `verify` command fails with it, an agent rebuilds it from its `PATCH.md`. Git applies what still fits first and marks the conflicts, so the agent starts with only the files left to finish, and with the last lines the command printed when that's what failed. Once `verify` passes, the result is pushed as a signed commit.
+When upstream publishes a release, the workflow rebuilds your fork on it. Patches that still apply go in with git. When one doesn't, an agent rebuilds it from its `PATCH.md`. Git applies what still fits first and marks the conflicts, so the agent starts with only the files left to finish. When your `setup` or `verify` command fails with the patches, and upstream didn't break it on its own, an agent gets the last lines it printed and fixes each patch in its own commit. Once `verify` passes, the result is pushed as a signed commit.
 
 When upstream ships its own version of one of your patches, autofork stops applying it and opens an issue on your fork. The fork takes upstream's version, and the agent isn't called for that patch again. You decide what happens next: delete the patch's folder to keep upstream's, or say in its `PATCH.md` how yours differs and delete its `UPSTREAM.md` to bring yours back.
 
@@ -144,12 +144,12 @@ autofork keeps forks current today. The agent behind it is meant to grow into au
 
 **Just landed**
 
-- Forks whose upstream can't pass `verify` on its own, like a package split out of a monorepo: when `verify` fails, the sync finds the patch that breaks it, even when that's the one that makes the package build, instead of stopping at upstream. `init` and `fork` take `--setup` and `--generated`.
+- Forks whose upstream can't pass `verify` on its own, like a package split out of a monorepo: when `verify` fails on upstream alone, the sync checks upstream where the fork was too, and has the agent fix the patches instead of stopping at upstream. `init` and `fork` take `--setup` and `--generated`.
 - Rebuilds that start where git leaves off, from [a field report](https://github.com/AVGVSTVS96/autofork/issues/3) on a large fork: the agent gets the patch applied as far as it goes with conflict markers, only the files left to finish, `verify`'s last lines when it failed, and dependencies installed by `setup`, and lockfiles are rebuilt instead of patched.
 - Workflows a fork keeps from upstream, like its release workflow: when upstream changes one, the sync's agent brings the change into the fork's copy, or opens an issue when it has no token that can push workflow files. The rest of `.github/` syncs like code. A fork set up before this keeps old copies of upstream's `.github/` files, so its first sync after upstream moves may stop on them, and its message says how to take upstream's copies and keep the fork's own changes as a patch.
 - Rebuilds checked by upstream's own checks on the code they touch, and `verify` picked from upstream's CI so it covers what the patches change.
 - Release steps for apps that update themselves that sign for whatever the updater checks, with Electron as one example.
-- Patches that still apply but fail `verify`, rebuilt by the agent like ones that no longer apply, instead of failing the sync until someone steps in.
+- Patches that still apply but fail `verify`, fixed by one agent run, each in its own commit, instead of failing the sync until someone steps in.
 
 **What we're building next**
 
