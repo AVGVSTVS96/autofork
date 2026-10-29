@@ -547,6 +547,20 @@ test("the agent brings upstream's changes into the workflows the fork keeps, and
   expect(file(mine, "app.js")).toBe("three\n");
 });
 
+test("an upstream change to workflows alone moves the fork on, so the agent isn't paid again for it", () => {
+  const origin = join(home, "ci");
+  const mine = join(home, "ci-fork");
+  const path = join(home, "workflow-agent.sh");
+  writeFileSync(path, `cat > /dev/null\necho run >> ${home}/workflow-runs.log\n`);
+  sh(
+    origin,
+    "echo 'name: release 4' > .github/workflows/release.yml && git commit -qam 'release 4'",
+  );
+  expect(autofork(mine, "sync").output.result).toBe("synced");
+  expect(autofork(mine, "sync").output.result).toBe("current");
+  expect(file(home, "workflow-runs.log")).toBe("run\n");
+});
+
 test("a config without follow follows what init would pick", () => {
   const mine = join(home, "ci-fork");
   const config = JSON.parse(file(mine, ".autofork/config.json"));

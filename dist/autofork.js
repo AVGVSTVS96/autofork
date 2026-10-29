@@ -292,9 +292,9 @@ Bring into this fork's copies what it needs from those changes, and keep what th
   }
   git(build.dir, "checkout", "--", ...rest);
   git(build.dir, "clean", "-fdq", "--", ...rest);
-  const updated = git(build.dir, "diff", "--name-only", "--no-renames", head, "--", WORKFLOWS);
-  return files.filter((file) => updated.split(`
-`).includes(file));
+  git(build.dir, "add", "-A", "--", WORKFLOWS);
+  return git(build.dir, "diff", "--cached", "--name-only", "--no-renames", head, "--", WORKFLOWS).split(`
+`).filter(Boolean);
 }
 var sameSource = (config, dir, ...commits) => run("git", ["diff", "--quiet", ...commits, "--", ...sourcePaths(config)], dir).ok;
 function heal(config, build, id, broken, patch) {
@@ -661,7 +661,7 @@ Save them as a patch first: write ${DIR}/<id>/PATCH.md, then run autofork save <
     }
     refresh(result.dir, config, result);
     const tree = git(result.dir, "rev-parse", `${commit(result.dir, "refresh")}^{tree}`);
-    if (tree === git(root, "rev-parse", "HEAD^{tree}")) {
+    if (tree === git(root, "rev-parse", "HEAD^{tree}") && !behind.length) {
       say("already up to date");
       return output({ result: "current" });
     }

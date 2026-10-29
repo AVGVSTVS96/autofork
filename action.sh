@@ -57,8 +57,9 @@ if [ "$(git rev-parse HEAD)" != "$head" ]; then
   git diff --quiet "$head" HEAD -- .github/workflows || pusher="$workflow_token"
   remote="https://x-access-token:${pusher}@github.com/${GITHUB_REPOSITORY}.git"
   scratch="refs/heads/autofork-objects-${GITHUB_RUN_ID}"
-  git push --quiet "$remote" "$(git commit-tree -p HEAD -m '[skip ci]' 'HEAD^{tree}'):$scratch" 2>&1 | { grep -v '^remote:' || true; } >&2
-  trap 'git push --quiet "$remote" --delete "$scratch" || true; keep_codex_auth' EXIT
+  push() { git -c http.https://github.com/.extraheader= push --quiet "$remote" "$@"; }
+  push "$(git commit-tree -p HEAD -m '[skip ci]' 'HEAD^{tree}'):$scratch" 2>&1 | { grep -v '^remote:' || true; } >&2
+  trap 'push --delete "$scratch" || true; keep_codex_auth' EXIT
   signed="$(GH_TOKEN="$pusher" gh api "repos/$GITHUB_REPOSITORY/git/commits" \
     -f message="$(git log -1 --format=%B)" -f tree="$(git rev-parse 'HEAD^{tree}')" "${parents[@]}" --jq .sha)"
   if ! moved="$(GH_TOKEN="$pusher" gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/heads/$GITHUB_REF_NAME" -f sha="$signed" 2>&1)"; then
