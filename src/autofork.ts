@@ -14,8 +14,8 @@ import { homedir } from "node:os";
 import { basename, join } from "node:path";
 
 const DIR = ".autofork";
-const CONTROL = [DIR, ".github"];
-const WORKFLOWS = [".github/workflows", ".github/actions"];
+const WORKFLOWS = ".github/workflows";
+const CONTROL = [DIR, WORKFLOWS];
 const SOURCE = [".", ...CONTROL.map((path) => `:(exclude)${path}`)];
 const BOT = [
   "-c",
@@ -380,7 +380,7 @@ This checkout is upstream at ${build.source}${before.length ? `, with ${before.j
 
 ${steps.map((step, index) => `${index + 1}. ${step}`).join("\n")}
 
-Don't edit anything ${fresh ? "else " : ""}in ${DIR}/ or .github/, and don't commit. Leave only your source change: remove anything your checks generated that git would pick up${config.generated?.length ? `, but leave ${config.generated.join(", ")}, which the sync rebuilds` : ""}.
+Don't edit anything ${fresh ? "else " : ""}in ${DIR}/ or ${WORKFLOWS}/, and don't commit. Leave only your source change: remove anything your checks generated that git would pick up${config.generated?.length ? `, but leave ${config.generated.join(", ")}, which the sync rebuilds` : ""}.
 If upstream already does what PATCH.md asks, or something close enough that building it would duplicate upstream's own version, write one line saying what upstream does to ${DIR}/${id}/UPSTREAM.md, and the sync leaves the patch out.`;
 }
 
@@ -409,11 +409,47 @@ function restoreControl(dir: string, base: string) {
 
 function workflowsBehind(root: string, base: string, source: string) {
   const files = (...args: string[]) =>
-    git(root, "diff", "--name-only", "--no-renames", ...args, "--", ...WORKFLOWS).split("\n");
+    git(root, "diff", "--name-only", "--no-renames", ...args, "--", WORKFLOWS).split("\n");
   const upstreamChanged = new Set(files(base, source));
   return files("--diff-filter=MD", "HEAD", source).filter(
     (file) => file && upstreamChanged.has(file),
   );
+}
+
+function updateWorkflows(config: Fork, build: Build, files: string[], range: string) {
+  const head = git(build.dir, "rev-parse", "HEAD");
+  const own = `${WORKFLOWS}/autofork.yml`;
+  const rest = [".", `:(exclude)${WORKFLOWS}`];
+  say(`bringing upstream's changes into ${files.join(", ")}`);
+  const ran = shell(
+    agentCommand(config),
+    build.dir,
+    `You are keeping a patched fork of ${config.upstream} in sync. The workflows in ${WORKFLOWS}/ are the fork's own copies, and upstream changed ${files.join(", ")}: git diff ${range} -- ${WORKFLOWS}
+
+Bring into this fork's copies what it needs from those changes, and keep what the fork does differently. Add a workflow only where upstream split or renamed one the fork keeps. Only what you change in ${WORKFLOWS}/ is kept, except autofork.yml, and the sync commits it.`,
+  );
+  git(build.dir, "reset", "--quiet", head);
+  if (!ran) {
+    say("the agent failed while updating workflows, so they stay as they were");
+    reset(build.dir);
+    return;
+  }
+  git(build.dir, "checkout", "--", ...rest);
+  git(build.dir, "clean", "-fdq", "--", ...rest);
+  run("git", ["checkout", "--", own], build.dir);
+  git(build.dir, "clean", "-fq", "--", own);
+  git(build.dir, "add", "-A", "--", WORKFLOWS);
+  const updated = git(
+    build.dir,
+    "diff",
+    "--cached",
+    "--name-only",
+    "--no-renames",
+    head,
+    "--",
+    WORKFLOWS,
+  );
+  return updated.split("\n").filter(Boolean);
 }
 
 const sameSource = (config: Config, dir: string, ...commits: string[]) =>
@@ -853,7 +889,7 @@ async function sync(root: string, args: string[]) {
   const { drift } = check(root, config, "HEAD", base);
   if (drift.length) {
     throw new Failure(
-      `these files differ from what your patches build, so a sync would drop them:\n  ${drift.join("\n  ")}\nSave them as a patch first: write ${DIR}/<id>/PATCH.md, then run autofork save <id>`,
+      `these files differ from what your patches build, so a sync would drop them:\n  ${drift.join("\n  ")}\nWhere one is just an old copy of upstream's, take upstream's first: git checkout ${short(base)} -- <file>, or git rm <file> if upstream had it and deleted it. Then save the fork's own changes, on top of upstream's copies, as a patch: write ${DIR}/<id>/PATCH.md, then run autofork save <id>`,
     );
   }
   const moved = base === source ? short(source) : `${short(base)} → ${short(source)}`;
@@ -861,12 +897,19 @@ async function sync(root: string, args: string[]) {
     `upstream ${moved}, ${config.patches.length} patch${config.patches.length === 1 ? "" : "es"}`,
   );
   const healFrom = args.includes("--no-heal") ? undefined : base;
+  const behind = workflowsBehind(root, base, source);
+  const range = `${short(base)}..${short(source)}`;
   let result: Build | undefined;
+  let updated: string[] | undefined;
   try {
     try {
       result = build(root, config, source, { healFrom, wait: true });
       verify(config, result, healFrom);
       regenerate(config, result);
+      if (behind.length && !args.includes("--no-workflows")) {
+        if (!healFrom) throw new Drifted("upstream changed workflows this fork keeps");
+        updated = updateWorkflows(config, result, behind, range);
+      }
     } catch (error) {
       if (!(error instanceof Drifted)) throw error;
       say(`${error.message}. The next run that heals rebuilds it.`);
@@ -874,7 +917,7 @@ async function sync(root: string, args: string[]) {
     }
     refresh(result.dir, config, result);
     const tree = git(result.dir, "rev-parse", `${commit(result.dir, "refresh")}^{tree}`);
-    if (tree === git(root, "rev-parse", "HEAD^{tree}")) {
+    if (tree === git(root, "rev-parse", "HEAD^{tree}") && !behind.length) {
       say("already up to date");
       return output({ result: "current" });
     }
@@ -885,9 +928,9 @@ async function sync(root: string, args: string[]) {
     const lines = [
       ...[...result.healed].map(([id, done]) => `${done} ${id}`),
       ...[...result.upstreamHas].map(([id, reason]) => `upstream has ${id}: ${reason}`),
-      ...workflowsBehind(root, base, source).map(
-        (file) => `upstream changed ${file} in ${short(base)}..${short(source)}`,
-      ),
+      ...(updated
+        ? updated.map((file) => `brought upstream's changes to ${file} in ${range}`)
+        : behind.map((file) => `upstream changed ${file} in ${range}`)),
     ];
     const message = [`autofork: sync ${config.upstream} to ${short(source)}`, lines.join("\n")]
       .filter(Boolean)
@@ -1024,7 +1067,7 @@ async function setup(root: string, upstream: string, chosen: ReturnType<typeof o
   }
   if (inherited.length)
     say(
-      `Your fork has ${inherited.length} workflow${inherited.length === 1 ? "" : "s"} copied from upstream, and they run here too. Delete the ones you don't want. autofork leaves workflows to you: it never copies upstream's new ones in, and opens an issue when upstream changes one you keep.`,
+      `Your fork has ${inherited.length} workflow${inherited.length === 1 ? "" : "s"} copied from upstream, and they run here too. Delete the ones you don't want. autofork leaves workflows to you: it never copies upstream's new ones in, and when upstream changes one you keep, the sync's agent brings that into your copy, or opens an issue when the workflow's token can't push workflow files.`,
     );
   if (readme)
     say(

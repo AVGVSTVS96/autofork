@@ -42,7 +42,7 @@ If `.autofork/<id>/UPSTREAM.md` exists, upstream shipped its own version of that
 
 ## When upstream changes a workflow
 
-A sync never changes `.github/`: it's the fork's own, and a workflow's GitHub token can't push workflow files. When upstream changes a workflow the fork keeps a copy of, the sync says so in its commit message, `upstream changed <file> in <from>..<to>`, and opens an issue. Bring over what the fork needs from upstream's change, keeping what the fork's copy does differently, or delete copies the fork doesn't run. Then close the issue.
+`.github/workflows/` is the fork's own, and the rest of `.github/` syncs like code, so a fork's own changes there, like a composite action its release workflow uses, are saved as a patch. When upstream changes a workflow the fork keeps a copy of, the sync's agent brings over what the fork's copy needs, and the commit message says `brought upstream's changes to <file> in <from>..<to>`. Pushing that takes a token that can push workflow files, which a workflow's own GitHub token can't: forks made on autofork.com get one from autofork's GitHub app. For another fork, install the app (https://github.com/apps/autofork-app), then give the autofork step `workflow-token-url: https://autofork.com/api/github/token` and the workflow `id-token: write`. Code the sync runs can reach that token too, so ask the user before turning it on. Without one, the commit message says `upstream changed <file> in <from>..<to>` and the sync opens an issue. Bring over what the fork needs from upstream's change, keeping what the fork's copy does differently, or delete copies the fork doesn't run. Then close the issue.
 
 ## Apps that update themselves
 
