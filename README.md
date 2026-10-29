@@ -104,10 +104,10 @@ Your agent then knows how to fork a repo and keep its changes as patches.
 | key | |
 | --- | --- |
 | `upstream` | `owner/repo`, or any git URL |
-| `follow` | `releases` (the release GitHub marks as upstream's latest, or its newest version tag when it has no GitHub releases), a channel (a tag pattern like `v*-nightly.*`: the newest release whose tag matches) or a branch. Default: `releases`, or the default branch if upstream has no releases |
+| `follow` | `releases` (the release GitHub marks as upstream's latest, or its newest version tag when it has no GitHub releases), a channel (a tag pattern like `v*-nightly.*`: the newest release whose tag matches) or a branch. Default: `releases`, or the default branch if upstream has no releases, written here by the first sync that pushes, so it doesn't change when upstream starts publishing releases |
 | `setup` | the command that installs dependencies in the rebuild, like `pnpm install --no-frozen-lockfile`. It runs before `verify` and the agent, and again once the patches under them change, and the agent is told it ran |
 | `generated` | files `setup` writes, like lockfiles. They're left out of patches and rebuilt by `setup` once the patches are in, so they never conflict |
-| `verify` | the command that checks a build |
+| `verify` | the command that checks a build. Without one, the next agent run picks it from upstream's CI, with `setup` too if there's none, and writes them here, copied into `provisional` until a later sync, on a fresh machine, passes them on upstream alone. A sync that finds one failing there, still as the agent wrote it, skips them, and the next drops them if it finds the same; both ship instead of stopping. A pick that fails with the patches is dropped, and no patch is rebuilt for it. A picked `setup` becomes yours once you change `verify` or add `generated` |
 | `agent` | the command that rebuilds a patch, prompt on stdin. Default: Claude Code when `CLAUDE_CODE_OAUTH_TOKEN` is set, otherwise Codex when it's signed in (a `CODEX_AUTH` secret holding `~/.codex/auth.json`) |
 | `green` | when following a branch, `false` takes upstream's newest commit even when its checks failed |
 
