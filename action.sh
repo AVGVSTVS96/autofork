@@ -50,7 +50,7 @@ if [ "${HEAL:-true}" = true ] && [ -n "${WORKFLOW_TOKEN_URL:-}" ] &&
   fi
 fi
 
-if ! env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL node "$GITHUB_ACTION_PATH/dist/autofork.js" sync ${skip:+--skip "$skip"} $heal $leave_workflows; then
+if ! node "$GITHUB_ACTION_PATH/dist/autofork.js" sync ${skip:+--skip "$skip"} $heal $leave_workflows; then
   echo "result=failed" >> "$GITHUB_OUTPUT"
   exit 1
 fi
@@ -59,10 +59,14 @@ if [ "$(git rev-parse HEAD)" != "$head" ]; then
   parents=()
   for parent in $(git log -1 --format=%P); do parents+=(-f "parents[]=$parent"); done
   pusher="$GH_TOKEN"
-  git diff --quiet "$head" HEAD -- .github/workflows || pusher="$(workflow_token)"
+  if ! git diff --quiet "$head" HEAD -- .github/workflows && ! pusher="$(workflow_token)"; then
+    echo "::error::the sync changed workflows, but $WORKFLOW_TOKEN_URL gave no token to push them, so nothing was pushed"
+    echo "result=failed" >> "$GITHUB_OUTPUT"
+    exit 1
+  fi
   remote="https://x-access-token:${pusher}@github.com/${GITHUB_REPOSITORY}.git"
   scratch="refs/heads/autofork-objects-${GITHUB_RUN_ID}"
-  push() { git -c http.https://github.com/.extraheader= push --quiet "$remote" "$@"; }
+  push() { git -c http.https://github.com/.extraheader= -c core.hooksPath=/dev/null push --quiet "$remote" "$@"; }
   push "$(git commit-tree -p HEAD -m '[skip ci]' 'HEAD^{tree}'):$scratch" 2>&1 | { grep -v '^remote:' || true; } >&2
   trap 'push --delete "$scratch" || true; keep_codex_auth' EXIT
   signed="$(GH_TOKEN="$pusher" gh api "repos/$GITHUB_REPOSITORY/git/commits" \

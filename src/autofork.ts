@@ -993,7 +993,6 @@ on:
 permissions:
   contents: write
   issues: write
-  id-token: write
 
 concurrency: autofork
 
@@ -1009,8 +1008,6 @@ jobs:
       # Set up the tools your setup and verify commands need here (node, bun, rust, ...).
       - id: autofork
         uses: AVGVSTVS96/autofork@v1
-        with:
-          workflow-token-url: https://autofork.com/api/github/token
         env:
           CLAUDE_CODE_OAUTH_TOKEN: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 `;
