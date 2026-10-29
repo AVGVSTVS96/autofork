@@ -1390,6 +1390,51 @@ test("a patch the build needs is fixed when verify fails with it, even though up
   expect(file(mine, "lib/name.js")).toContain("export const whom = who;");
 });
 
+test("a rebuild under the patch that makes upstream build doesn't pay for a fix on the stack below it", () => {
+  const origin = join(home, "split-later");
+  const mine = join(home, "split-later-fork");
+  mkdirSync(origin);
+  write(
+    origin,
+    "app.js",
+    'import { who } from "./lib/name.js";\nexport const greet = () => "hello " + who();\n',
+  );
+  write(origin, "notes.txt", "one\n");
+  sh(origin, "git init -q && git add -A && git commit -qm init");
+  sh(home, `git clone -q ${origin} split-later-fork`);
+  expect(autofork(mine, "init", origin, "--verify", loads).ok).toBe(true);
+  sh(mine, "git add -A && git commit -qm 'track upstream'");
+  savePatch(
+    "a-extra",
+    "extra.js says hi.",
+    () => write(mine, "extra.js", "export const hi = 1;\n"),
+    mine,
+  );
+  savePatch(
+    "b-notes",
+    "notes.txt has a second line.",
+    () => write(mine, "notes.txt", "one\ntwo\n"),
+    mine,
+  );
+  savePatch(
+    "c-standalone",
+    "lib/name.js stands in for the monorepo's name package, so the app builds on its own.",
+    () => {
+      mkdirSync(join(mine, "lib"));
+      write(mine, "lib/name.js", 'export const who = () => "world";\n');
+    },
+    mine,
+  );
+  write(origin, "notes.txt", "uno\n");
+  sh(origin, "git commit -qam 'notes in spanish'");
+  checkedAgent({ "b-notes": "printf 'uno\\ntwo\\n' > notes.txt", fix: "true" }, mine);
+  const { ok, log } = autofork(mine, "sync");
+  expect(ok).toBe(true);
+  expect(log).toContain("healed b-notes");
+  expect(file(home, "agent-runs.log")).toBe("b-notes\n");
+  expect(file(mine, "notes.txt")).toBe("uno\ntwo\n");
+});
+
 test("a fork without patches whose upstream never passes verify fails the sync instead of pushing", () => {
   const origin = join(home, "unpatched");
   const mine = join(home, "unpatched-fork");

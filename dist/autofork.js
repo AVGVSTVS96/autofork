@@ -514,10 +514,12 @@ function verify(config, build, from) {
     const patched = build.steps.length > 1;
     if (patched)
       say(`${failed.check} fails, verify with upstream ${short(build.source)} alone`);
-    if (!patched || !passesAt(config, build, build.steps[0]))
+    if (!patched || !passesAt(config, build, build.steps[0])) {
       guard(config, build, from);
-    if (patched)
-      fix(config, build, failed, from);
+      if (build.steps.length <= config.patches.length)
+        return;
+    }
+    fix(config, build, failed, from);
   } finally {
     reset(build.dir, build.steps.at(-1));
   }

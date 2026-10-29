@@ -705,8 +705,11 @@ function verify(config: Fork, build: Build, from?: string) {
     const failed = build.failed!;
     const patched = build.steps.length > 1;
     if (patched) say(`${failed.check} fails, verify with upstream ${short(build.source)} alone`);
-    if (!patched || !passesAt(config, build, build.steps[0])) guard(config, build, from);
-    if (patched) fix(config, build, failed, from);
+    if (!patched || !passesAt(config, build, build.steps[0])) {
+      guard(config, build, from);
+      if (build.steps.length <= config.patches.length) return;
+    }
+    fix(config, build, failed, from);
   } finally {
     reset(build.dir, build.steps.at(-1)!);
   }
