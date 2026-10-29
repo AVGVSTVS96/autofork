@@ -535,7 +535,7 @@ test("the agent brings upstream's changes into the workflows the fork keeps, and
   const { ok, log } = autofork(mine, "sync");
   expect(ok).toBe(true);
   expect(file(home, "workflow-prompt.txt")).toContain(
-    `git diff ${from}..${to} -- .github/workflows/release.yml`,
+    `upstream changed .github/workflows/release.yml: git diff ${from}..${to} -- .github/workflows`,
   );
   expect(log).toContain(
     `brought upstream's changes to .github/workflows/release.yml in ${from}..${to}`,

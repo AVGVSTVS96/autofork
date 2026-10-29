@@ -282,7 +282,7 @@ function updateWorkflows(config, build, files, range) {
   const own = `${WORKFLOWS}/autofork.yml`;
   const rest = [".", `:(exclude)${WORKFLOWS}`];
   say(`bringing upstream's changes into ${files.join(", ")}`);
-  const ran = shell(agentCommand(config), build.dir, `You are keeping a patched fork of ${config.upstream} in sync. The workflows in ${WORKFLOWS}/ are the fork's own copies, and upstream changed some of them: git diff ${range} -- ${files.join(" ")}
+  const ran = shell(agentCommand(config), build.dir, `You are keeping a patched fork of ${config.upstream} in sync. The workflows in ${WORKFLOWS}/ are the fork's own copies, and upstream changed ${files.join(", ")}: git diff ${range} -- ${WORKFLOWS}
 
 Bring into this fork's copies what it needs from those changes, and keep what the fork does differently. Only what you change in ${WORKFLOWS}/ is kept, except autofork.yml, and the sync commits it.`);
   git(build.dir, "reset", "--quiet", head);
@@ -641,7 +641,7 @@ async function sync(root, args) {
     throw new Failure(`these files differ from what your patches build, so a sync would drop them:
   ${drift.join(`
   `)}
-Save them as a patch first: write ${DIR}/<id>/PATCH.md, then run autofork save <id>. If one is an old copy of upstream's, take upstream's instead: git checkout ${short(base)} -- <file>, or git rm <file> if upstream no longer has it`);
+If one is an old copy of upstream's, take upstream's first: git checkout ${short(base)} -- <file>, or git rm <file> if upstream no longer has it. Save the rest as a patch: write ${DIR}/<id>/PATCH.md, then run autofork save <id>`);
   }
   const moved = base === source ? short(source) : `${short(base)} → ${short(source)}`;
   say(`upstream ${moved}, ${config.patches.length} patch${config.patches.length === 1 ? "" : "es"}`);
