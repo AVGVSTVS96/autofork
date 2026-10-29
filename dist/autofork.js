@@ -820,7 +820,7 @@ Where one is just an old copy of upstream's, take upstream's first: git checkout
       return output({ result: "waiting" });
     }
     if (result.proven) {
-      const left = Object.entries(inForce(config)).filter(([key]) => !(key in result.proven));
+      const left = Object.entries(inForce(config)).filter(([key, command]) => result.proven[key] !== command);
       config.provisional = left.length ? Object.fromEntries(left) : undefined;
     }
     saveConfig(result.dir, config);

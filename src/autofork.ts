@@ -1105,7 +1105,9 @@ async function sync(root: string, args: string[]) {
       return output({ result: "waiting" });
     }
     if (result.proven) {
-      const left = Object.entries(inForce(config)).filter(([key]) => !(key in result!.proven!));
+      const left = Object.entries(inForce(config)).filter(
+        ([key, command]) => result!.proven![key as "setup" | "verify"] !== command,
+      );
       config.provisional = left.length ? Object.fromEntries(left) : undefined;
     }
     saveConfig(result.dir, config);
