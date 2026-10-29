@@ -517,13 +517,13 @@ test("a sync brings upstream's .github/ in, but names upstream's changes to work
   expect(sh(mine, "ls .github/workflows")).toBe("autofork.yml\nrelease.yml\ntest.yml");
 });
 
-test("the agent brings upstream's changes into the workflows the fork keeps, and only its changes to those are kept", () => {
+test("the agent brings upstream's changes into the workflows the fork keeps, and only its workflow changes are kept, autofork.yml aside", () => {
   const origin = join(home, "ci");
   const mine = join(home, "ci-fork");
   const path = join(home, "workflow-agent.sh");
   writeFileSync(
     path,
-    `cat > ${home}/workflow-prompt.txt\necho 'on: push' >> .github/workflows/release.yml\necho mine > app.js\necho mine >> .github/workflows/test.yml\n`,
+    `cat > ${home}/workflow-prompt.txt\necho 'on: push' >> .github/workflows/release.yml\necho mine > app.js\necho mine >> .github/workflows/autofork.yml\necho 'name: build' > .github/workflows/build.yml\n`,
   );
   const config = JSON.parse(file(mine, ".autofork/config.json"));
   write(mine, ".autofork/config.json", `${JSON.stringify({ ...config, agent: `sh ${path}` })}\n`);
@@ -545,7 +545,11 @@ test("the agent brings upstream's changes into the workflows the fork keeps, and
     "name: release from the fork\non: push\n",
   );
   expect(file(mine, "app.js")).toBe("three\n");
-  expect(file(mine, ".github/workflows/test.yml")).toBe("name: test 2\n");
+  expect(file(mine, ".github/workflows/build.yml")).toBe("name: build\n");
+  expect(log).toContain(
+    `brought upstream's changes to .github/workflows/build.yml in ${from}..${to}`,
+  );
+  expect(file(mine, ".github/workflows/autofork.yml")).not.toContain("mine");
 });
 
 test("an upstream change to workflows alone moves the fork on, so the agent isn't paid again for it", () => {

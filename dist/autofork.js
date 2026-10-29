@@ -279,11 +279,12 @@ function workflowsBehind(root, base, source) {
 }
 function updateWorkflows(config, build, files, range) {
   const head = git(build.dir, "rev-parse", "HEAD");
-  const rest = [".", ...files.map((file) => `:(exclude,literal)${file}`)];
+  const own = `${WORKFLOWS}/autofork.yml`;
+  const rest = [".", `:(exclude)${WORKFLOWS}`];
   say(`bringing upstream's changes into ${files.join(", ")}`);
   const ran = shell(agentCommand(config), build.dir, `You are keeping a patched fork of ${config.upstream} in sync. The workflows in ${WORKFLOWS}/ are the fork's own copies, and upstream changed some of them: git diff ${range} -- ${files.join(" ")}
 
-Bring into this fork's copies what it needs from those changes, and keep what the fork does differently. Only what you change in those files is kept, and the sync commits it.`);
+Bring into this fork's copies what it needs from those changes, and keep what the fork does differently. Only what you change in ${WORKFLOWS}/ is kept, except autofork.yml, and the sync commits it.`);
   git(build.dir, "reset", "--quiet", head);
   if (!ran) {
     say("the agent failed while updating workflows, so they stay as they were");
@@ -292,7 +293,10 @@ Bring into this fork's copies what it needs from those changes, and keep what th
   }
   git(build.dir, "checkout", "--", ...rest);
   git(build.dir, "clean", "-fdq", "--", ...rest);
-  const updated = git(build.dir, "diff", "--name-only", "--no-renames", head, "--", ...files);
+  run("git", ["checkout", "--", own], build.dir);
+  git(build.dir, "clean", "-fq", "--", own);
+  git(build.dir, "add", "-A", "--", WORKFLOWS);
+  const updated = git(build.dir, "diff", "--cached", "--name-only", "--no-renames", head, "--", WORKFLOWS);
   return updated.split(`
 `).filter(Boolean);
 }

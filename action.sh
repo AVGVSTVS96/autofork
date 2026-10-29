@@ -50,7 +50,7 @@ if [ -n "${WORKFLOW_TOKEN_URL:-}" ] &&
   fi
 fi
 
-if ! node "$GITHUB_ACTION_PATH/dist/autofork.js" sync ${skip:+--skip "$skip"} $heal $leave_workflows; then
+if ! env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL node "$GITHUB_ACTION_PATH/dist/autofork.js" sync ${skip:+--skip "$skip"} $heal $leave_workflows; then
   echo "result=failed" >> "$GITHUB_OUTPUT"
   exit 1
 fi
@@ -61,7 +61,7 @@ if [ "$(git rev-parse HEAD)" != "$head" ]; then
   pusher="$GH_TOKEN"
   if ! git diff --quiet "$head" HEAD -- .github/workflows && ! pusher="$(workflow_token)"; then
     echo "::error::the sync changed workflows, but $WORKFLOW_TOKEN_URL gave no token to push them, so nothing was pushed"
-    echo "result=failed" >> "$GITHUB_OUTPUT"
+    printf 'result=failed\nkey=\n' >> "$GITHUB_OUTPUT"
     exit 1
   fi
   remote="https://x-access-token:${pusher}@github.com/${GITHUB_REPOSITORY}.git"
