@@ -597,6 +597,7 @@ function fix(config, build, failed, from) {
   if (!onUpstream || git(build.dir, "log", "--reverse", "--format=%s", `${base}..HEAD`) !== ids.join(`
 `))
     throw new Failure(`the agent's commits on upstream aren't ${ids.join(", ")}, one per patch in that order, so nothing was pushed`);
+  git(build.dir, "reset", "--quiet");
   restoreControl(build.dir, before.at(-1));
   if (!run("git", ["diff", "--cached", "--quiet"], build.dir).ok)
     gitWith(build.dir, BOT, "commit", "--amend", "--quiet", "--no-verify", "--allow-empty", "--no-edit");

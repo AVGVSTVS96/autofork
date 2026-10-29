@@ -816,6 +816,7 @@ function fix(config: Fork, build: Build, failed: Failed, from: string) {
     throw new Failure(
       `the agent's commits on upstream aren't ${ids.join(", ")}, one per patch in that order, so nothing was pushed`,
     );
+  git(build.dir, "reset", "--quiet");
   restoreControl(build.dir, before.at(-1)!);
   if (!run("git", ["diff", "--cached", "--quiet"], build.dir).ok)
     gitWith(
