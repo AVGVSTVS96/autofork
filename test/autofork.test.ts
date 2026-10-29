@@ -1216,8 +1216,8 @@ test("a patch that still applies but fails verify because upstream now does it i
     {
       fix: [
         "git reset -q --hard $(git log -1 --format=%H --grep='^upstream ')",
-        "git commit -q --allow-empty -m a-loud",
         "echo 'name.js exports loud()' > .autofork/a-loud/UPSTREAM.md",
+        "git add -A && git commit -qm a-loud",
       ].join(" && "),
     },
     mine,
