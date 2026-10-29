@@ -41,7 +41,7 @@ if [ "${HEAL:-true}" = true ] && [ -n "${WORKFLOW_TOKEN_URL:-}" ] &&
     echo "::add-mask::$workflow_token"
     leave_workflows=""
   else
-    echo "::warning::couldn't get a token that can push workflow files from $WORKFLOW_TOKEN_URL, so upstream's changes to this fork's workflows become an issue"
+    echo "no token that can push workflow files from $WORKFLOW_TOKEN_URL, so upstream's changes to this fork's workflows become an issue"
   fi
 fi
 
@@ -93,7 +93,7 @@ if [ "$(git rev-parse HEAD)" != "$head" ]; then
 
 $workflows
 
-autofork leaves the fork's \`.github/workflows/\` to it, and the sync couldn't bring these changes over: a workflow's own GitHub token can't push workflow files. Bring over what this fork needs from upstream's changes, keeping what it does differently, or delete the copies it doesn't run, then close this issue.
+autofork leaves the fork's \`.github/workflows/\` to it, and this sync didn't bring these changes over. Its agent does when the workflow can get a token that can push workflow files, from autofork's GitHub app (https://github.com/apps/autofork-app); a workflow's own token can't. Bring over what this fork needs from upstream's changes, keeping what it does differently, or delete the copies it doesn't run, then close this issue.
 
 Synced in ${signed:0:12}." > /dev/null
     fi || echo "::warning::upstream changed workflows this fork copied, but autofork couldn't open an issue about it: turn on the fork's issues and give the workflow issues: write"

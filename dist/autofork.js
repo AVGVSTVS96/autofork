@@ -279,11 +279,11 @@ function workflowsBehind(root, base, source) {
 }
 function updateWorkflows(config, build, files, range) {
   const head = git(build.dir, "rev-parse", "HEAD");
-  const rest = [".", `:(exclude)${WORKFLOWS}`];
+  const rest = [".", ...files.map((file) => `:(exclude,literal)${file}`)];
   say(`bringing upstream's changes into ${files.join(", ")}`);
   const ran = shell(agentCommand(config), build.dir, `You are keeping a patched fork of ${config.upstream} in sync. The workflows in ${WORKFLOWS}/ are the fork's own copies, and upstream changed some of them: git diff ${range} -- ${files.join(" ")}
 
-Bring into this fork's copies what it needs from those changes, and keep what the fork does differently. Only what you change in ${WORKFLOWS}/ is kept, and the sync commits it.`);
+Bring into this fork's copies what it needs from those changes, and keep what the fork does differently. Only what you change in those files is kept, and the sync commits it.`);
   git(build.dir, "reset", "--quiet", head);
   if (!ran) {
     say("the agent failed while updating workflows, so they stay as they were");
@@ -292,8 +292,8 @@ Bring into this fork's copies what it needs from those changes, and keep what th
   }
   git(build.dir, "checkout", "--", ...rest);
   git(build.dir, "clean", "-fdq", "--", ...rest);
-  git(build.dir, "add", "-A", "--", WORKFLOWS);
-  return git(build.dir, "diff", "--cached", "--name-only", "--no-renames", head, "--", WORKFLOWS).split(`
+  const updated = git(build.dir, "diff", "--name-only", "--no-renames", head, "--", ...files);
+  return updated.split(`
 `).filter(Boolean);
 }
 var sameSource = (config, dir, ...commits) => run("git", ["diff", "--quiet", ...commits, "--", ...sourcePaths(config)], dir).ok;
@@ -637,7 +637,7 @@ async function sync(root, args) {
     throw new Failure(`these files differ from what your patches build, so a sync would drop them:
   ${drift.join(`
   `)}
-Save them as a patch first: write ${DIR}/<id>/PATCH.md, then run autofork save <id>`);
+Save them as a patch first: write ${DIR}/<id>/PATCH.md, then run autofork save <id>. If one is an old copy of upstream's, take upstream's instead: git checkout ${short(base)} -- <file>`);
   }
   const moved = base === source ? short(source) : `${short(base)} → ${short(source)}`;
   say(`upstream ${moved}, ${config.patches.length} patch${config.patches.length === 1 ? "" : "es"}`);
@@ -723,6 +723,7 @@ on:
 permissions:
   contents: write
   issues: write
+  id-token: write
 
 concurrency: autofork
 
@@ -738,6 +739,8 @@ jobs:
       # Set up the tools your setup and verify commands need here (node, bun, rust, ...).
       - id: autofork
         uses: AVGVSTVS96/autofork@v1
+        with:
+          workflow-token-url: https://autofork-app.vercel.app/api/github/token
         env:
           CLAUDE_CODE_OAUTH_TOKEN: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 `;
