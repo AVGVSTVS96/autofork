@@ -964,6 +964,7 @@ function settle(config: Fork, build: Build) {
   const { check } = build.failed!;
   build.failed = undefined;
   if (!(check in picked)) return;
+  // A second strike, on a new upstream commit, keeps one outage of a mirror or registry during setup from costing a fork its checks.
   if (failed && failed !== short(build.source)) {
     say(
       `\`${config[check]}\` fails on upstream alone in a second sync, so the checks an agent picked are dropped and the next agent run picks new ones`,
