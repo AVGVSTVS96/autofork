@@ -740,7 +740,7 @@ jobs:
       - id: autofork
         uses: AVGVSTVS96/autofork@v1
         with:
-          workflow-token-url: https://autofork-app.vercel.app/api/github/token
+          workflow-token-url: https://autofork.com/api/github/token
         env:
           CLAUDE_CODE_OAUTH_TOKEN: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 `;

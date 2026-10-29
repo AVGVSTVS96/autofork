@@ -33,19 +33,24 @@ keep_codex_auth() {
 }
 trap keep_codex_auth EXIT
 
+workflow_token() {
+  local token
+  token="$(curl -fsS -X POST -H "Authorization: Bearer $(oidc)" "$WORKFLOW_TOKEN_URL" | jq -re .token)" || return 1
+  echo "::add-mask::$token" >&2
+  echo "$token"
+}
+
 leave_workflows="--no-workflows"
-workflow_token=""
 if [ "${HEAL:-true}" = true ] && [ -n "${WORKFLOW_TOKEN_URL:-}" ] &&
   [ -n "$(git ls-files .github/workflows ':!.github/workflows/autofork.yml')" ]; then
-  if workflow_token="$(curl -fsS -X POST -H "Authorization: Bearer $(oidc)" "$WORKFLOW_TOKEN_URL" | jq -re .token)"; then
-    echo "::add-mask::$workflow_token"
+  if workflow_token > /dev/null; then
     leave_workflows=""
   else
     echo "no token that can push workflow files from $WORKFLOW_TOKEN_URL, so upstream's changes to this fork's workflows become an issue"
   fi
 fi
 
-if ! node "$GITHUB_ACTION_PATH/dist/autofork.js" sync ${skip:+--skip "$skip"} $heal $leave_workflows; then
+if ! env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL node "$GITHUB_ACTION_PATH/dist/autofork.js" sync ${skip:+--skip "$skip"} $heal $leave_workflows; then
   echo "result=failed" >> "$GITHUB_OUTPUT"
   exit 1
 fi
@@ -54,7 +59,7 @@ if [ "$(git rev-parse HEAD)" != "$head" ]; then
   parents=()
   for parent in $(git log -1 --format=%P); do parents+=(-f "parents[]=$parent"); done
   pusher="$GH_TOKEN"
-  git diff --quiet "$head" HEAD -- .github/workflows || pusher="$workflow_token"
+  git diff --quiet "$head" HEAD -- .github/workflows || pusher="$(workflow_token)"
   remote="https://x-access-token:${pusher}@github.com/${GITHUB_REPOSITORY}.git"
   scratch="refs/heads/autofork-objects-${GITHUB_RUN_ID}"
   push() { git -c http.https://github.com/.extraheader= push --quiet "$remote" "$@"; }
