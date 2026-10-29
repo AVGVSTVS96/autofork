@@ -889,7 +889,7 @@ async function sync(root: string, args: string[]) {
   const { drift } = check(root, config, "HEAD", base);
   if (drift.length) {
     throw new Failure(
-      `these files differ from what your patches build, so a sync would drop them:\n  ${drift.join("\n  ")}\nSave them as a patch first: write ${DIR}/<id>/PATCH.md, then run autofork save <id>. If one is an old copy of upstream's, take upstream's instead: git checkout ${short(base)} -- <file>`,
+      `these files differ from what your patches build, so a sync would drop them:\n  ${drift.join("\n  ")}\nSave them as a patch first: write ${DIR}/<id>/PATCH.md, then run autofork save <id>. If one is an old copy of upstream's, take upstream's instead: git checkout ${short(base)} -- <file>, or git rm <file> if upstream no longer has it`,
     );
   }
   const moved = base === source ? short(source) : `${short(base)} → ${short(source)}`;
