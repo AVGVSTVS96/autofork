@@ -1854,6 +1854,40 @@ fi
   });
 });
 
+test("a second failure on the same upstream commit skips the picks again instead of dropping them", () => {
+  const { origin, mine } = handmade("samecommit");
+  write(origin, "notes.txt", "two\n");
+  sh(origin, "git add -A && git commit -qm notes");
+  write(home, "samecommit-agent.sh", "exit 1\n");
+  expect(autofork(mine, "sync").log).toContain("skips the checks an agent picked");
+  mkdirSync(join(mine, ".autofork/wave"));
+  write(mine, ".autofork/wave/PATCH.md", "greet() waves.\n");
+  sh(mine, "git add -A && git commit -qm 'autofork: greet() waves'");
+  const { log } = autofork(mine, "sync");
+  expect(log).toContain("skips the checks an agent picked");
+  expect(log).not.toContain("are dropped");
+});
+
+test("picks proven on upstream alone that fail with the patches are dropped, not fixed for", () => {
+  const { origin, mine } = handmade("provenfail");
+  const verify = "! grep -q toUpperCase app.js";
+  const config = JSON.parse(file(mine, ".autofork/config.json"));
+  write(
+    mine,
+    ".autofork/config.json",
+    JSON.stringify({ ...config, verify, provisional: { verify } }),
+  );
+  sh(mine, "git commit -qam 'a pick'");
+  write(origin, "notes.txt", "two\n");
+  sh(origin, "git add -A && git commit -qm notes");
+  write(home, "provenfail-agent.sh", "exit 1\n");
+  const { ok, log } = autofork(mine, "sync");
+  expect(ok).toBe(true);
+  expect(log).toContain(`\`${verify}\` fails with the patches`);
+  expect(log).not.toContain("fixing");
+  expect(JSON.parse(file(mine, ".autofork/config.json")).verify).toBeUndefined();
+});
+
 test("a check the user changed from the agent's pick is never dropped", () => {
   const { origin, mine, tool } = handmade("edited");
   const config = JSON.parse(file(mine, ".autofork/config.json"));

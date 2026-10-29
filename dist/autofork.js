@@ -699,18 +699,20 @@ function settle(config, build) {
     return;
   const passed = passes(config, build);
   reset(build.dir);
-  if (passed)
-    return void delete config.provisional;
+  if (passed) {
+    config.provisional = build.proven = picked;
+    return;
+  }
   const { check } = build.failed;
   build.failed = undefined;
   if (!(check in picked))
     return;
-  if (failed) {
+  if (failed && failed !== short(build.source)) {
     say(`\`${config[check]}\` fails on upstream alone in a second sync, so the checks an agent picked are dropped and the next agent run picks new ones`);
     delete config.provisional;
   } else {
     say(`\`${config[check]}\` fails on upstream alone, so this sync skips the checks an agent picked, and the next one drops them if they fail there again`);
-    config.provisional.failed = short(build.source);
+    config.provisional.failed ??= short(build.source);
   }
   for (const key of Object.keys(picked))
     delete config[key];
@@ -816,6 +818,10 @@ Where one is just an old copy of upstream's, take upstream's first: git checkout
         throw error;
       say(`autofork: ${error.message}. The next run that heals rebuilds it.`);
       return output({ result: "waiting" });
+    }
+    if (result.proven) {
+      const left = Object.entries(inForce(config)).filter(([key]) => !(key in result.proven));
+      config.provisional = left.length ? Object.fromEntries(left) : undefined;
     }
     saveConfig(result.dir, config);
     refresh(result.dir, config, result);
