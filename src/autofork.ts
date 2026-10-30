@@ -1242,6 +1242,8 @@ function addNote(root: string, upstream: string, base: string, drift: string[]) 
     .split("\n")
     .find((file) => /^readme\.md$/i.test(file));
   if (!readme || drift.includes(readme) || existsSync(join(root, DIR, NOTE))) return;
+  const text = git(root, "show", `${base}:${readme}`);
+  if (!text.trim() || text.includes("autofork.com")) return;
   const name = basename(upstream).replace(/\.git$/, "");
   mkdirSync(join(root, DIR, NOTE), { recursive: true });
   writeFileSync(

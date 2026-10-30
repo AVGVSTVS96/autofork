@@ -917,6 +917,9 @@ function addNote(root, upstream, base, drift) {
 `).find((file) => /^readme\.md$/i.test(file));
   if (!readme || drift.includes(readme) || existsSync(join(root, DIR, NOTE)))
     return;
+  const text = git(root, "show", `${base}:${readme}`);
+  if (!text.trim() || text.includes("autofork.com"))
+    return;
   const name = basename(upstream).replace(/\.git$/, "");
   mkdirSync(join(root, DIR, NOTE), { recursive: true });
   writeFileSync(patchDoc(root, NOTE), `One line under the README's title says this is a personal fork of ${name} that updates itself with autofork, linking ${name}, https://autofork.com and this fork's \`${DIR}/\` folder. The rest of the README stays as upstream wrote it.

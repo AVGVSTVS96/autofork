@@ -380,6 +380,22 @@ test("init leaves the README's note to the first sync's agent, and later syncs a
   expect(file(mine, "README.md")).toContain("Run it with care.");
 });
 
+test("init leaves out the README line when upstream's README already mentions autofork", () => {
+  const origin = join(home, "noted");
+  mkdirSync(origin);
+  sh(origin, "git init -q");
+  write(
+    origin,
+    "README.md",
+    "# Noted\n\n> A personal fork that updates itself with [autofork](https://autofork.com).\n",
+  );
+  sh(origin, "git add -A && git commit -qm init");
+  sh(home, `git clone -q ${origin} noted-fork`);
+  const mine = join(home, "noted-fork");
+  expect(autofork(mine, "init", origin).ok).toBe(true);
+  expect(existsSync(join(mine, ".autofork/fork-readme"))).toBe(false);
+});
+
 test("a fork on GitHub follows its latest release, not its highest tag", () => {
   const app = join(github, "acme/app.git");
   mkdirSync(app, { recursive: true });
