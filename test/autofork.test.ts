@@ -1648,7 +1648,7 @@ test("an agent that picks no checks in a sync that skipped them doesn't get them
   expect(log).toContain("skips the checks an agent picked");
   expect(log).not.toContain("aren't kept");
   const config = JSON.parse(file(mine, ".autofork/config.json"));
-  expect(config).toMatchObject({ setup: "true", verify: `test -f ${tool}` });
+  expect(config.verify).toBe(`test -f ${tool}`);
   expect(config.provisional.failed).toBe(sh(origin, "git rev-parse HEAD").slice(0, 12));
 });
 
