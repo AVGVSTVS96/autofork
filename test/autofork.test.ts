@@ -1652,7 +1652,7 @@ test("an agent that picks no checks in a sync that skipped them doesn't get them
   expect(config.provisional.failed).toBe(sh(origin, "git rev-parse HEAD").slice(0, 12));
 });
 
-test("a skipped pick an agent leaves as it was isn't taken back as a new pick when it changes another check", () => {
+test("a skipped pick an agent leaves as it was keeps its strike when the agent picks another check", () => {
   const { origin, mine, tool } = handmade("restrike");
   write(origin, "app.js", 'export const greet = (name) => "hi " + name;\n');
   sh(origin, "git commit -qam hi");
@@ -1666,7 +1666,8 @@ test("a skipped pick an agent leaves as it was isn't taken back as a new pick wh
   expect(ok).toBe(true);
   expect(log).toContain("skips the checks an agent picked");
   const config = JSON.parse(file(mine, ".autofork/config.json"));
-  expect(config.verify === `test -f ${tool}` && !config.provisional?.failed).toBe(false);
+  expect(config.verify).toBe(`test -f ${tool}`);
+  expect(config.provisional.failed).toBe(sh(origin, "git rev-parse HEAD").slice(0, 12));
 });
 
 test("an agent's setup counts as the user's once they own verify, so it's never skipped", () => {

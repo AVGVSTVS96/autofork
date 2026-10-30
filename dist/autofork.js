@@ -289,6 +289,7 @@ function keepChecks(config, build, written) {
   if (!written)
     return say(`the agent left ${DIR}/config.json unreadable, so the checks it picked weren't kept`);
   const before = JSON.parse(git(build.dir, "show", `${build.steps[0]}:${DIR}/config.json`));
+  const skipped = config.provisional ?? {};
   let picked = false;
   for (const key of ["setup", "verify"]) {
     const command = written[key];
@@ -298,8 +299,16 @@ function keepChecks(config, build, written) {
     config.provisional = { ...config.provisional, [key]: command };
     picked = true;
   }
-  if (picked)
-    config.provisional = inForce(config);
+  if (!picked)
+    return;
+  const kept = ["setup", "verify"].filter((key) => !config[key] && skipped[key] && written[key] === skipped[key]);
+  config.provisional = {
+    ...inForce(config),
+    ...kept.length && {
+      ...Object.fromEntries(kept.map((key) => [key, skipped[key]])),
+      failed: skipped.failed
+    }
+  };
 }
 function unpick(config, check, where) {
   say(`\`${config[check]}\` fails ${where}, so the unproven checks an agent picked aren't kept`);
