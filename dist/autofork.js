@@ -289,12 +289,10 @@ function keepChecks(config, build, written) {
   if (!written)
     return say(`the agent left ${DIR}/config.json unreadable, so the checks it picked weren't kept`);
   const before = JSON.parse(git(build.dir, "show", `${build.steps[0]}:${DIR}/config.json`));
-  if (["setup", "verify"].every((key) => written[key] === before[key]))
-    return;
   let picked = false;
   for (const key of ["setup", "verify"]) {
     const command = written[key];
-    if (config[key] || typeof command !== "string" || !command.trim())
+    if (config[key] || command === before[key] || typeof command !== "string" || !command.trim())
       continue;
     config[key] = command;
     config.provisional = { ...config.provisional, [key]: command };

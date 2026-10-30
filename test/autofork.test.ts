@@ -1652,6 +1652,23 @@ test("an agent that picks no checks in a sync that skipped them doesn't get them
   expect(config.provisional.failed).toBe(sh(origin, "git rev-parse HEAD").slice(0, 12));
 });
 
+test("a skipped pick an agent leaves as it was isn't taken back as a new pick when it changes another check", () => {
+  const { origin, mine, tool } = handmade("restrike");
+  write(origin, "app.js", 'export const greet = (name) => "hi " + name;\n');
+  sh(origin, "git commit -qam hi");
+  write(
+    home,
+    "restrike-agent.sh",
+    `cat > /dev/null\ntouch ${tool}\nprintf 'export const greet = (name) => "hi " + name.toUpperCase();\\n' > app.js\nnode -e 'const fs = require("fs"); const c = JSON.parse(fs.readFileSync(".autofork/config.json")); fs.writeFileSync(".autofork/config.json", JSON.stringify({ ...c, setup: "true" }))'\n`,
+  );
+  rmSync(tool, { force: true });
+  const { ok, log } = autofork(mine, "sync");
+  expect(ok).toBe(true);
+  expect(log).toContain("skips the checks an agent picked");
+  const config = JSON.parse(file(mine, ".autofork/config.json"));
+  expect(config.verify === `test -f ${tool}` && !config.provisional?.failed).toBe(false);
+});
+
 test("an agent's setup counts as the user's once they own verify, so it's never skipped", () => {
   const { origin, mine, tool } = handmade("leftover");
   const config = JSON.parse(file(mine, ".autofork/config.json"));
