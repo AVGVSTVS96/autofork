@@ -573,7 +573,7 @@ function verify(config, build, from) {
   try {
     if (passesAt(config, build, build.steps.at(-1)))
       return;
-    if (Object.keys(inForce(config)).length) {
+    if (provisional(config, build.failed.check)) {
       unpick(config, build.failed.check, "with the patches");
       return verify(config, build, from);
     }
@@ -686,6 +686,8 @@ function fix(config, build, failed, from) {
   build.ready = undefined;
   if (!passesAt(config, build, build.steps.at(-1))) {
     const { check } = build.failed;
+    if (provisional(config, check))
+      return unpick(config, check, "with the patches");
     throw new Failure(`${check} still fails after the agent's fix: ${config[check]}`);
   }
 }
