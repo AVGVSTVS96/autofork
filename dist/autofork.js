@@ -286,6 +286,8 @@ function checksIn(dir) {
   } catch {}
 }
 function keepChecks(config, build, written) {
+  if (config.verify)
+    return;
   if (!written)
     return say(`the agent left ${DIR}/config.json unreadable, so the checks it picked weren't kept`);
   const before = JSON.parse(git(build.dir, "show", `${build.steps[0]}:${DIR}/config.json`));
@@ -298,7 +300,8 @@ function keepChecks(config, build, written) {
     config[key] = command;
     config.provisional = { ...config.provisional, [key]: command };
   }
-  config.provisional = inForce(config);
+  const picked = inForce(config);
+  config.provisional = Object.keys(picked).length ? picked : undefined;
 }
 function unpick(config, check, where) {
   say(`\`${config[check]}\` fails ${where}, so the unproven checks an agent picked aren't kept`);
@@ -362,7 +365,7 @@ function heal(config, build, id, broken, patch) {
     git(build.dir, "reset", "--soft", "--quiet", step);
     const reason = existsSync(upstreamDoc(build.dir, id)) ? readFileSync(upstreamDoc(build.dir, id), "utf8").trim() : "";
     const why = fresh && existsSync(doc) ? readFileSync(doc, "utf8") : "";
-    const written = config.verify ? {} : checksIn(build.dir);
+    const written = checksIn(build.dir);
     restoreControl(build.dir, step);
     if (reason) {
       keepChecks(config, build, written);

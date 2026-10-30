@@ -175,6 +175,7 @@ test("a drifted patch is healed from git's conflict markers and its PATCH.md", (
   expect(file(fork, ".autofork/shout/shout.patch")).toContain(
     '+  return "hi " + name.toUpperCase();',
   );
+  expect(file(fork, ".autofork/config.json")).not.toContain("provisional");
   agent("exit 1");
   expect(autofork(fork, "sync").log).toContain("already up to date");
 });

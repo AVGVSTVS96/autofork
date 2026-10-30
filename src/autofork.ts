@@ -421,6 +421,7 @@ function checksIn(dir: string): Checks | undefined {
 }
 
 function keepChecks(config: Config, build: Build, written: Checks | undefined) {
+  if (config.verify) return;
   if (!written)
     return say(
       `the agent left ${DIR}/config.json unreadable, so the checks it picked weren't kept`,
@@ -433,7 +434,8 @@ function keepChecks(config: Config, build: Build, written: Checks | undefined) {
     config[key] = command;
     config.provisional = { ...config.provisional, [key]: command };
   }
-  config.provisional = inForce(config);
+  const picked = inForce(config);
+  config.provisional = Object.keys(picked).length ? picked : undefined;
 }
 
 function unpick(config: Config, check: "setup" | "verify", where: string) {
@@ -527,7 +529,7 @@ function heal(
       ? readFileSync(upstreamDoc(build.dir, id), "utf8").trim()
       : "";
     const why = fresh && existsSync(doc) ? readFileSync(doc, "utf8") : "";
-    const written = config.verify ? {} : checksIn(build.dir);
+    const written = checksIn(build.dir);
     restoreControl(build.dir, step);
     if (reason) {
       keepChecks(config, build, written);
