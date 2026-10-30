@@ -155,6 +155,14 @@ test("a drifted patch waits for a run that heals", () => {
   expect(sh(fork, "git rev-parse HEAD")).toBe(head);
 });
 
+test("an agent that leaves conflict markers fails the heal after one run", () => {
+  agent(`echo run >> ${join(home, "runs")}`);
+  const { ok, log } = autofork(fork, "sync");
+  expect(ok).toBe(false);
+  expect(log).toContain("the agent left conflict markers in app.js while healing shout");
+  expect(file(home, "runs")).toBe("run\n");
+});
+
 test("a drifted patch is healed from git's conflict markers and its PATCH.md", () => {
   agent(
     `grep -q '^<<<<<<< ours' app.js || exit 1\nprintf 'export function greet(name) {\\n  return "hi " + name.toUpperCase();\\n}\\n' > app.js`,
@@ -167,6 +175,7 @@ test("a drifted patch is healed from git's conflict markers and its PATCH.md", (
   expect(file(fork, ".autofork/shout/shout.patch")).toContain(
     '+  return "hi " + name.toUpperCase();',
   );
+  expect(file(fork, ".autofork/config.json")).not.toContain("provisional");
   agent("exit 1");
   expect(autofork(fork, "sync").log).toContain("already up to date");
 });
@@ -263,6 +272,17 @@ test("a patch that's only a PATCH.md is built by the agent", () => {
   expect(autofork(fork, "sync").log).toContain("already up to date");
 });
 
+test("an agent that changes nothing fails the build after one run", () => {
+  patch("idle", "greet() idles.");
+  sh(fork, "git add -A && git commit -qm idle");
+  agent(`echo run >> ${join(home, "idle-runs")}`);
+  const { ok, log } = autofork(fork, "sync");
+  expect(ok).toBe(false);
+  expect(log).toContain("the agent changed nothing while building idle");
+  expect(file(home, "idle-runs")).toBe("run\n");
+  sh(fork, "git rm -rq .autofork/idle && git commit -qm 'drop idle'");
+});
+
 test("a patch upstream merged as is is paused without the agent", () => {
   commitUpstream(file(fork, "app.js"), "merge the wave");
   agent("exit 1");
@@ -324,34 +344,57 @@ test("a fork ahead of upstream's newest release stays where it is", () => {
   expect(file(fork, "notes.txt")).toBe("five\n");
 });
 
-test("init puts a note under the README's title as a saved patch, which later syncs apply without the agent", () => {
+test("init leaves the README's note to the first sync's agent, and later syncs apply it without the agent", () => {
   const origin = join(home, "demo");
   const mine = join(home, "demo-fork");
   mkdirSync(origin);
   sh(origin, "git init -q");
-  write(origin, "README.md", "# Demo\n\nDemo does things.\n\n## Install\n\nRun it.\n");
+  const readme = "# Demo\n\nDemo does things.\n\n## Install\n\nRun it.\n";
+  write(origin, "README.md", readme);
   sh(origin, "git add -A && git commit -qm init");
   sh(home, `git clone -q ${origin} demo-fork`);
   const { ok, log } = autofork(mine, "init", origin);
   expect(ok).toBe(true);
-  expect(log).toContain("README.md now says this is a personal fork");
-  expect(file(mine, "README.md")).toBe(
-    "# Demo\n\n> A personal fork of Demo that updates itself with [autofork](https://autofork.com). Its changes, each described in plain words, are in [`.autofork/`](.autofork).\n\nDemo does things.\n\n## Install\n\nRun it.\n",
-  );
-  expect(file(mine, ".autofork/fork-readme/PATCH.md")).toContain("delete this folder");
-  write(
-    mine,
-    ".autofork/config.json",
-    `${JSON.stringify({ ...JSON.parse(file(mine, ".autofork/config.json")), agent: "exit 1" }, null, 2)}\n`,
-  );
-  sh(mine, "git add -A && git commit -qm 'track upstream'");
-  write(origin, "README.md", "# Demo\n\nDemo does things.\n\n## Install\n\nRun it with care.\n");
+  expect(log).toContain("The first sync adds a line to README.md");
+  expect(file(mine, "README.md")).toBe(readme);
+  expect(sh(mine, "ls .autofork/fork-readme")).toBe("PATCH.md");
+  expect(file(mine, ".autofork/fork-readme/PATCH.md")).toContain("personal fork of demo");
+  const useAgent = (agent: string) => {
+    const config = JSON.parse(file(mine, ".autofork/config.json"));
+    write(mine, ".autofork/config.json", `${JSON.stringify({ ...config, agent }, null, 2)}\n`);
+    sh(mine, "git add -A && git commit -qm 'use test agent'");
+  };
+  const noted = readme.replace("\n\n", "\n\n> A personal fork of Demo.\n\n");
+  write(home, "note-agent.sh", `cat > /dev/null\ncat > README.md <<'EOF'\n${noted}EOF\n`);
+  useAgent(`sh ${join(home, "note-agent.sh")}`);
+  const built = autofork(mine, "sync");
+  expect(built.ok).toBe(true);
+  expect(built.log).toContain("built fork-readme");
+  expect(file(mine, "README.md")).toContain("# Demo\n\n> A personal fork of Demo.\n");
+  useAgent("exit 1");
+  write(origin, "README.md", readme.replace("Run it.", "Run it with care."));
   sh(origin, "git commit -qam install");
   const synced = autofork(mine, "sync");
   expect(synced.ok).toBe(true);
   expect(synced.log).not.toContain("building");
-  expect(file(mine, "README.md")).toContain("> A personal fork of Demo");
+  expect(file(mine, "README.md")).toContain("> A personal fork of Demo.");
   expect(file(mine, "README.md")).toContain("Run it with care.");
+});
+
+test("init leaves out the README line when upstream's README already mentions autofork", () => {
+  const origin = join(home, "noted");
+  mkdirSync(origin);
+  sh(origin, "git init -q");
+  write(
+    origin,
+    "README.md",
+    "# Noted\n\n> A personal fork that updates itself with [autofork](https://autofork.com).\n",
+  );
+  sh(origin, "git add -A && git commit -qm init");
+  sh(home, `git clone -q ${origin} noted-fork`);
+  const mine = join(home, "noted-fork");
+  expect(autofork(mine, "init", origin).ok).toBe(true);
+  expect(existsSync(join(mine, ".autofork/fork-readme"))).toBe(false);
 });
 
 test("a fork on GitHub follows its latest release, not its highest tag", () => {
@@ -429,9 +472,7 @@ test("a fork can follow one channel of upstream's releases, named by its tags", 
     "init",
     "acme/nightly",
   );
-  expect(init.log).toContain(
-    "autofork follows acme/nightly's releases.\nIt also publishes v*-preview.*, v*-nightly.*.",
-  );
+  expect(init.log).toContain("autofork follows acme/nightly's releases.");
   const config = JSON.parse(file(mine, ".autofork/config.json"));
   write(
     mine,
@@ -1612,6 +1653,44 @@ test("an agent that picks no checks in a sync that skipped them doesn't get them
   expect(config.provisional.failed).toBe(sh(origin, "git rev-parse HEAD").slice(0, 12));
 });
 
+test("an agent that picks one check in a sync that skipped them picks the set it leaves, with no strike", () => {
+  const { origin, mine, tool } = handmade("restrike");
+  write(origin, "app.js", 'export const greet = (name) => "hi " + name;\n');
+  sh(origin, "git commit -qam hi");
+  write(
+    home,
+    "restrike-agent.sh",
+    `cat > /dev/null\ntouch ${tool}\nprintf 'export const greet = (name) => "hi " + name.toUpperCase();\\n' > app.js\nnode -e 'const fs = require("fs"); const c = JSON.parse(fs.readFileSync(".autofork/config.json")); fs.writeFileSync(".autofork/config.json", JSON.stringify({ ...c, setup: "true" }))'\n`,
+  );
+  rmSync(tool, { force: true });
+  const { ok, log } = autofork(mine, "sync");
+  expect(ok).toBe(true);
+  expect(log).toContain("skips the checks an agent picked");
+  const config = JSON.parse(file(mine, ".autofork/config.json"));
+  expect(config).toMatchObject({ setup: "true", verify: `test -f ${tool}` });
+  expect(config.provisional).toEqual({ setup: "true", verify: `test -f ${tool}` });
+});
+
+test("an agent that edits only the user's setup in a sync that skipped its verify leaves that pick's strike alone", () => {
+  const { origin, mine, tool } = handmade("ownsetup");
+  const config = JSON.parse(file(mine, ".autofork/config.json"));
+  write(mine, ".autofork/config.json", JSON.stringify({ ...config, setup: "true" }));
+  sh(mine, "git commit -qam 'my setup'");
+  write(origin, "app.js", 'export const greet = (name) => "hi " + name;\n');
+  sh(origin, "git commit -qam hi");
+  write(
+    home,
+    "ownsetup-agent.sh",
+    `cat > /dev/null\ntouch ${tool}\nprintf 'export const greet = (name) => "hi " + name.toUpperCase();\\n' > app.js\nnode -e 'const fs = require("fs"); const c = JSON.parse(fs.readFileSync(".autofork/config.json")); fs.writeFileSync(".autofork/config.json", JSON.stringify({ ...c, setup: "true && true" }))'\n`,
+  );
+  const { ok, log } = autofork(mine, "sync");
+  expect(ok).toBe(true);
+  expect(log).toContain("skips the checks an agent picked");
+  const saved = JSON.parse(file(mine, ".autofork/config.json"));
+  expect(saved).toMatchObject({ setup: "true", verify: `test -f ${tool}` });
+  expect(saved.provisional.failed).toBe(sh(origin, "git rev-parse HEAD").slice(0, 12));
+});
+
 test("an agent's setup counts as the user's once they own verify, so it's never skipped", () => {
   const { origin, mine, tool } = handmade("leftover");
   const config = JSON.parse(file(mine, ".autofork/config.json"));
@@ -2002,7 +2081,7 @@ test("a check the user changed from the agent's pick is never dropped", () => {
   expect(sh(mine, "git rev-parse HEAD")).toBe(head);
 });
 
-function pickedChecksFail(name: string, verify: string, where: string) {
+function pickChecks(name: string, verify: string) {
   const origin = join(home, name);
   const mine = join(home, `${name}-fork`);
   mkdirSync(origin);
@@ -2030,15 +2109,27 @@ node -e 'const fs = require("fs"); const c = JSON.parse(fs.readFileSync(".autofo
   const { ok, log } = autofork(mine, "sync");
   expect(ok).toBe(true);
   expect(log).toContain("built shout");
-  expect(log).toContain(
-    `\`${verify}\` fails ${where}, so the unproven checks an agent picked aren't kept`,
-  );
   expect(file(mine, "app.js")).toContain("name.toUpperCase()");
-  expect(JSON.parse(file(mine, ".autofork/config.json")).verify).toBeUndefined();
+  return { origin, mine, log };
 }
 
-test("checks the agent picks that fail on upstream alone aren't kept", () =>
-  pickedChecksFail("picky", "grep -q toUpperCase app.js", "on upstream alone"));
+test("checks the agent picks that fail on upstream alone are skipped by the next sync, and it ships", () => {
+  const verify = "grep -q toUpperCase app.js";
+  const { origin, mine } = pickChecks("picky", verify);
+  expect(JSON.parse(file(mine, ".autofork/config.json")).provisional).toEqual({ verify });
+  write(origin, "notes.txt", "two\n");
+  sh(origin, "git add -A && git commit -qm notes");
+  const { ok, log } = autofork(mine, "sync");
+  expect(ok).toBe(true);
+  expect(log).toContain(`\`${verify}\` fails on upstream alone, so this sync skips the checks`);
+  expect(file(mine, "notes.txt")).toBe("two\n");
+});
 
-test("checks the agent picks that fail with its patch aren't kept, and the patch ships", () =>
-  pickedChecksFail("picky-patch", "! grep -q toUpperCase app.js", "with the patches"));
+test("checks the agent picks that fail with its patch aren't kept, and the patch ships", () => {
+  const verify = "! grep -q toUpperCase app.js";
+  const { mine, log } = pickChecks("picky-patch", verify);
+  expect(log).toContain(
+    `\`${verify}\` fails with the patches, so the unproven checks an agent picked aren't kept`,
+  );
+  expect(JSON.parse(file(mine, ".autofork/config.json")).verify).toBeUndefined();
+});

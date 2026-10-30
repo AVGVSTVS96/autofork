@@ -179,13 +179,6 @@ function defaultBranch(root, upstream) {
 async function defaultFollow(root, upstream) {
   return await latestRelease(root, upstream) ? "releases" : defaultBranch(root, upstream);
 }
-var channelOf = (tag) => tag.replace(/\d+/g, "*").replace(/\*(?:\.\*)+/g, "*");
-async function channels(upstream) {
-  const published = await releases(upstream, "releases?per_page=100") ?? [];
-  return [
-    ...new Set(published.filter((release) => release.prerelease && !release.draft).map((release) => channelOf(release.tag_name)))
-  ];
-}
 function baseline(root) {
   const synced = git(root, "log", "--first-parent", "-1", "--format=%s", "-E", "--grep=^auto(fork|patch): sync ", "HEAD").split(" ").at(-1);
   const last = synced && run("git", ["rev-parse", "--verify", "--quiet", `${synced}^{commit}`], root);
@@ -293,36 +286,23 @@ function checksIn(dir) {
   } catch {}
 }
 function keepChecks(config, build, written) {
+  if (config.verify)
+    return;
   if (!written)
     return say(`the agent left ${DIR}/config.json unreadable, so the checks it picked weren't kept`);
   const before = JSON.parse(git(build.dir, "show", `${build.steps[0]}:${DIR}/config.json`));
-  if (["setup", "verify"].every((key) => written[key] === before[key]))
+  const open = ["setup", "verify"].filter((key) => !config[key]);
+  if (open.every((key) => written[key] === before[key]))
     return;
-  for (const key of ["setup", "verify"]) {
+  for (const key of open) {
     const command = written[key];
-    if (config[key] || typeof command !== "string" || !command.trim())
+    if (typeof command !== "string" || !command.trim())
       continue;
     config[key] = command;
-    build.picked = { ...build.picked, [key]: command };
+    config.provisional = { ...config.provisional, [key]: command };
   }
-}
-function addStep(config, build, id) {
-  build.steps.push(commit(build.dir, id));
-  if (build.picked)
-    checkPicked(config, build);
-}
-function checkPicked(config, build) {
-  config.provisional = { ...config.provisional, ...build.picked };
-  config.provisional = inForce(config);
-  build.picked = undefined;
-  const tip = git(build.dir, "rev-parse", "HEAD");
-  reset(build.dir, build.steps[0]);
-  build.ready = undefined;
-  const alone = passes(config, build);
-  reset(build.dir, tip);
-  build.ready = undefined;
-  if (!alone && provisional(config, build.failed.check))
-    unpick(config, build.failed.check, "on upstream alone");
+  const picked = inForce(config);
+  config.provisional = Object.keys(picked).length ? picked : undefined;
 }
 function unpick(config, check, where) {
   say(`\`${config[check]}\` fails ${where}, so the unproven checks an agent picked aren't kept`);
@@ -379,46 +359,37 @@ function heal(config, build, id, broken, patch) {
   const [doing, done] = fresh ? ["building", "built"] : ["healing", "healed"];
   const doc = patchDoc(build.dir, id);
   const wish = readFileSync(doc, "utf8").trimEnd();
-  let nudge = "";
-  let marked = [];
+  say(`${doing} ${id}`);
   try {
-    for (let attempt = 1;attempt <= 2; attempt++) {
-      say(`${doing} ${id}${attempt > 1 ? " (second try)" : ""}`);
-      if (!shell(agentCommand(config), build.dir, prompt + nudge, BOT))
-        throw new Failure(`the agent failed while ${doing} ${id}`);
-      git(build.dir, "reset", "--soft", "--quiet", step);
-      const reason = existsSync(upstreamDoc(build.dir, id)) ? readFileSync(upstreamDoc(build.dir, id), "utf8").trim() : "";
-      const why = fresh && existsSync(doc) ? readFileSync(doc, "utf8") : "";
-      const written = config.verify ? {} : checksIn(build.dir);
-      restoreControl(build.dir, step);
-      if (reason) {
-        keepChecks(config, build, written);
-        reset(build.dir, step);
-        build.upstreamHas.set(id, reason);
-        return;
-      }
-      marked = (left?.conflicted ?? []).filter((path) => {
-        const file = join(build.dir, path);
-        return existsSync(file) && MARKER.test(readFileSync(file, "utf8"));
-      });
-      if (!marked.length && workingTree(build.dir, rejects) !== before) {
-        if (why.startsWith(wish))
-          writeFileSync(doc, why);
-        keepChecks(config, build, written);
-        build.healed.set(id, done);
-        return;
-      }
-      nudge = marked.length ? `
-
-Your last attempt left conflict markers in ${marked.join(", ")}. Resolve them into what PATCH.md asks for.` : `
-
-Your last attempt exited without changing any source file. Build what PATCH.md asks for, or write ${DIR}/${id}/UPSTREAM.md if upstream already covers it.`;
+    if (!shell(agentCommand(config), build.dir, prompt, BOT))
+      throw new Failure(`the agent failed while ${doing} ${id}`);
+    git(build.dir, "reset", "--soft", "--quiet", step);
+    const reason = existsSync(upstreamDoc(build.dir, id)) ? readFileSync(upstreamDoc(build.dir, id), "utf8").trim() : "";
+    const why = fresh && existsSync(doc) ? readFileSync(doc, "utf8") : "";
+    const written = checksIn(build.dir);
+    restoreControl(build.dir, step);
+    if (reason) {
+      keepChecks(config, build, written);
+      reset(build.dir, step);
+      build.upstreamHas.set(id, reason);
+      return;
     }
+    const marked = (left?.conflicted ?? []).filter((path) => {
+      const file = join(build.dir, path);
+      return existsSync(file) && MARKER.test(readFileSync(file, "utf8"));
+    });
+    if (marked.length)
+      throw new Failure(`the agent left conflict markers in ${marked.join(", ")} while ${doing} ${id}`);
+    if (workingTree(build.dir, rejects) === before)
+      throw new Failure(`the agent changed nothing while ${doing} ${id}`);
+    if (why.startsWith(wish))
+      writeFileSync(doc, why);
+    keepChecks(config, build, written);
+    build.healed.set(id, done);
   } finally {
     for (const file of rejects)
       rmSync(join(build.dir, file), { force: true });
   }
-  throw new Failure(marked.length ? `the agent left conflict markers in ${marked.join(", ")} while ${doing} ${id}` : `the agent changed nothing while ${doing} ${id}`);
 }
 function changed(dir) {
   return git(dir, "status", "--porcelain").length > 0;
@@ -559,7 +530,7 @@ function build(root, config, base, options) {
     if (options.fold?.id === id && !apply(dir, options.fold.patch, config)) {
       throw new Failure(`your changes don't apply on top of ${id}`);
     }
-    addStep(config, build, id);
+    build.steps.push(commit(dir, id));
   }
   return build;
 }
@@ -568,7 +539,7 @@ function passesAt(config, build, commit) {
   while (!passes(config, build)) {
     if (!provisional(config, build.failed.check))
       return false;
-    unpick(config, build.failed.check, "with the patches");
+    unpick(config, build.failed.check, build.steps.indexOf(commit) > 0 ? "with the patches" : "on upstream alone");
   }
   return true;
 }
@@ -932,54 +903,30 @@ async function setup(root, upstream, chosen) {
   if ("branch" in parseFollow(follow)) {
     say(`autofork follows ${upstream}'s ${follow} branch${chosen.follow ? "" : ", since it has no releases"}.`);
   } else {
-    const others = (await channels(upstream)).filter((channel) => channel !== follow);
     say(`autofork follows ${upstream}'s ${follow === "releases" ? "" : `${follow} `}releases.`);
-    if (others.length)
-      say(`It also publishes ${others.join(", ")}. To follow one, put it in "follow" in ${DIR}/config.json.`);
   }
   if (inherited.length)
     say(`Your fork has ${inherited.length} workflow${inherited.length === 1 ? "" : "s"} copied from upstream, and they run here too. Delete the ones you don't want. autofork leaves workflows to you: it never copies upstream's new ones in, and when upstream changes one you keep, the sync's agent brings that into your copy, or opens an issue when the workflow's token can't push workflow files.`);
   if (readme)
-    say(`${readme} now says this is a personal fork kept current by autofork. To drop that line, delete it and ${DIR}/${NOTE}/.`);
+    say(`The first sync adds a line to ${readme} saying this is a personal fork kept current by autofork. To skip it, delete ${DIR}/${NOTE}/.`);
   if (drift.length)
     say(`Your branch already changes ${drift.length} file${drift.length === 1 ? "" : "s"}. Save them as a patch: write ${DIR}/<id>/PATCH.md, then autofork save <id>`);
-  return readme;
 }
 var NOTE = "fork-readme";
-var appName = (upstream) => basename(upstream).replace(/\.git$/, "");
-function withNote(readme, upstream) {
-  if (!readme.trim() || readme.includes("autofork.com"))
-    return;
-  const repo = githubRepo(upstream);
-  const link = repo ? `https://github.com/${repo}` : /^https?:\/\//.test(upstream) ? upstream.replace(/\.git$/, "") : undefined;
-  const eol = readme.includes(`\r
-`) ? `\r
-` : `
-`;
-  const lines = readme.split(eol);
-  const titled = /^\uFEFF?#\s/.test(lines[0]);
-  const name = titled && lines[0].match(/^\uFEFF?#\s+([^[\]<>`*_!]+?)[\s#]*$/)?.[1] || appName(upstream);
-  const note = `> A personal fork of ${link ? `[${name}](${link})` : name} that updates itself with [autofork](https://autofork.com). Its changes, each described in plain words, are in [\`${DIR}/\`](${DIR}).`;
-  const at = titled ? 1 : 0;
-  const block = titled ? ["", note, ...lines[1]?.trim() ? [""] : []] : [note, ""];
-  return [...lines.slice(0, at), ...block, ...lines.slice(at)].join(eol);
-}
-var noteDoc = (name) => `One line under the README's title says this is a personal fork of ${name} that updates itself with autofork, linking ${name}, https://autofork.com and this fork's \`${DIR}/\` folder. The rest of the README stays as upstream wrote it.
-
-To drop the line, delete it from the README and delete this folder, in the same commit.
-`;
 function addNote(root, upstream, base, drift) {
   const readme = git(root, "ls-tree", "--name-only", base).split(`
 `).find((file) => /^readme\.md$/i.test(file));
   if (!readme || drift.includes(readme) || existsSync(join(root, DIR, NOTE)))
     return;
-  const text = withNote(readFileSync(join(root, readme), "utf8"), upstream);
-  if (!text)
+  const text = git(root, "show", `${base}:${readme}`);
+  if (!text.trim() || text.includes("autofork.com"))
     return;
-  writeFileSync(join(root, readme), text);
+  const name = basename(upstream).replace(/\.git$/, "");
   mkdirSync(join(root, DIR, NOTE), { recursive: true });
-  writeFileSync(patchFile(root, NOTE), gitBytes(root, "diff", "--no-ext-diff", "--no-color", "--binary", "--full-index", "--src-prefix=a/", "--dst-prefix=b/", base, "--", readme));
-  writeFileSync(patchDoc(root, NOTE), noteDoc(appName(upstream)));
+  writeFileSync(patchDoc(root, NOTE), `One line under the README's title says this is a personal fork of ${name} that updates itself with autofork, linking ${name}, https://autofork.com and this fork's \`${DIR}/\` folder. The rest of the README stays as upstream wrote it.
+
+To drop the line, delete it from the README and delete this folder, in the same commit.
+`);
   return readme;
 }
 function origin(root) {
@@ -1008,7 +955,7 @@ async function init(root, args) {
     throw new Failure("usage: autofork init <owner/repo | git url> [--follow <releases | channel | branch>] [--setup <command>] [--generated <files>] [--verify <command>]");
   await setup(root, args[0], options(args));
   claim(root, args[0]);
-  say("Add a CLAUDE_CODE_OAUTH_TOKEN secret (claude setup-token), commit, and push.");
+  say("Add a CLAUDE_CODE_OAUTH_TOKEN secret (claude setup-token), commit, and push. If you pushed before the secret was set, start the first sync by hand: gh workflow run autofork.yml");
 }
 async function fork(cwd, args) {
   const upstream = args[0];
@@ -1018,18 +965,17 @@ async function fork(cwd, args) {
   if (!run("gh", ["repo", "fork", upstream, "--clone", "--default-branch-only"], cwd).ok)
     throw new Failure("gh couldn't fork it. Is the GitHub CLI installed and logged in?");
   const root = join(cwd, upstream.split("/")[1]);
-  const readme = await setup(root, upstream, chosen);
+  await setup(root, upstream, chosen);
   claim(root, upstream);
   const repo = origin(root);
   const token = process.env.CLAUDE_CODE_OAUTH_TOKEN;
-  if (token)
-    run("gh", ["secret", "set", "CLAUDE_CODE_OAUTH_TOKEN", "--repo", repo, "--body", token], root);
-  git(root, "add", DIR, ".github/workflows/autofork.yml", ...readme ? [readme] : []);
+  const secret = !!token && run("gh", ["secret", "set", "CLAUDE_CODE_OAUTH_TOKEN", "--repo", repo, "--body", token], root).ok;
+  git(root, "add", DIR, ".github/workflows/autofork.yml");
   git(root, "commit", "--quiet", "-m", `autofork: follow ${upstream}`);
   git(root, "push", "--quiet");
   say(`${repo} now keeps itself current with ${upstream}. It's cloned in ./${basename(root)}.`);
-  if (!token)
-    say(`Last step: run claude setup-token, then gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo ${repo}`);
+  if (!secret)
+    say(`Last step: run claude setup-token, then gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo ${repo}, then start its first sync: gh workflow run autofork.yml --repo ${repo}`);
 }
 async function status(root) {
   const config = await readConfig(root);
