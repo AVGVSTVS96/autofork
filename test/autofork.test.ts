@@ -271,6 +271,17 @@ test("a patch that's only a PATCH.md is built by the agent", () => {
   expect(autofork(fork, "sync").log).toContain("already up to date");
 });
 
+test("an agent that changes nothing fails the build after one run", () => {
+  patch("idle", "greet() idles.");
+  sh(fork, "git add -A && git commit -qm idle");
+  agent(`echo run >> ${join(home, "idle-runs")}`);
+  const { ok, log } = autofork(fork, "sync");
+  expect(ok).toBe(false);
+  expect(log).toContain("the agent changed nothing while building idle");
+  expect(file(home, "idle-runs")).toBe("run\n");
+  sh(fork, "git rm -rq .autofork/idle && git commit -qm 'drop idle'");
+});
+
 test("a patch upstream merged as is is paused without the agent", () => {
   commitUpstream(file(fork, "app.js"), "merge the wave");
   agent("exit 1");
