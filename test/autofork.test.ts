@@ -1939,6 +1939,54 @@ fi
   });
 });
 
+test("an unproven pick failing on a rebuilt patch doesn't get that patch blamed for the user's check", () => {
+  const origin = join(home, "blamed");
+  const mine = join(home, "blamed-fork");
+  mkdirSync(origin);
+  write(origin, "app.js", 'export const greet = (name) => "hello " + name;\n');
+  write(origin, "check.sh", "true\n");
+  sh(origin, "git init -q && git add -A && git commit -qm init");
+  sh(home, `git clone -q ${origin} blamed-fork`);
+  const runs = join(home, "blamed-runs");
+  write(
+    home,
+    "blamed-agent.sh",
+    `cat > /dev/null
+if [ -f ${runs} ]; then
+  printf 'fixed\\n' > mark.txt
+  git -c user.name=a -c user.email=a@a commit -qa --amend --no-edit
+else
+  touch ${runs}
+  sed -i 's/+ name/+ name.toUpperCase()/' app.js
+  node -e 'const fs = require("fs"); const c = JSON.parse(fs.readFileSync(".autofork/config.json")); fs.writeFileSync(".autofork/config.json", JSON.stringify({ ...c, verify: "! grep -q toUpperCase app.js" }))'
+fi
+`,
+  );
+  mkdirSync(join(mine, ".autofork/a-shout"), { recursive: true });
+  mkdirSync(join(mine, ".autofork/b-mark"), { recursive: true });
+  write(
+    mine,
+    ".autofork/config.json",
+    JSON.stringify({
+      upstream: origin,
+      agent: `sh ${join(home, "blamed-agent.sh")}`,
+      setup: "sh check.sh",
+    }),
+  );
+  write(mine, ".autofork/a-shout/PATCH.md", "greet() shouts the name.\n");
+  write(mine, ".autofork/b-mark/PATCH.md", "Marks the fork.\n");
+  write(mine, "mark.txt", "mark\n");
+  expect(autofork(mine, "save", "b-mark").ok).toBe(true);
+  sh(mine, "git add -A && git commit -qm 'shout and mark'");
+  write(origin, "check.sh", "! grep -qs mark mark.txt\n");
+  sh(origin, "git commit -qam check");
+  const { ok, log } = autofork(mine, "sync");
+  expect(log).not.toContain("which the agent built");
+  expect(log).toContain("fixing setup in the patches");
+  expect(ok).toBe(true);
+  expect(file(mine, "mark.txt")).toBe("fixed\n");
+});
+
 test("a check the user changed from the agent's pick is never dropped", () => {
   const { origin, mine, tool } = handmade("edited");
   const config = JSON.parse(file(mine, ".autofork/config.json"));

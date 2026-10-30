@@ -565,7 +565,12 @@ function build(root, config, base, options) {
 }
 function passesAt(config, build, commit) {
   reset(build.dir, commit);
-  return passes(config, build);
+  while (!passes(config, build)) {
+    if (!provisional(config, build.failed.check))
+      return false;
+    unpick(config, build.failed.check, "with the patches");
+  }
+  return true;
 }
 function verify(config, build, from) {
   if (!config.setup && !config.verify)
@@ -573,10 +578,6 @@ function verify(config, build, from) {
   try {
     if (passesAt(config, build, build.steps.at(-1)))
       return;
-    if (provisional(config, build.failed.check)) {
-      unpick(config, build.failed.check, "with the patches");
-      return verify(config, build, from);
-    }
     if (!from)
       throw new Drifted(`${build.failed.check} fails, so a patch needs rebuilding`);
     const failed = build.failed;
@@ -686,8 +687,6 @@ function fix(config, build, failed, from) {
   build.ready = undefined;
   if (!passesAt(config, build, build.steps.at(-1))) {
     const { check } = build.failed;
-    if (provisional(config, check))
-      return unpick(config, check, "with the patches");
     throw new Failure(`${check} still fails after the agent's fix: ${config[check]}`);
   }
 }
