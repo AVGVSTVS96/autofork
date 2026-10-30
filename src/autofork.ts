@@ -426,22 +426,14 @@ function keepChecks(config: Config, build: Build, written: Checks | undefined) {
       `the agent left ${DIR}/config.json unreadable, so the checks it picked weren't kept`,
     );
   const before = JSON.parse(git(build.dir, "show", `${build.steps[0]}:${DIR}/config.json`));
-  const skipped = config.provisional ?? {};
-  let picked = false;
+  if ((["setup", "verify"] as const).every((key) => written[key] === before[key])) return;
   for (const key of ["setup", "verify"] as const) {
     const command = written[key];
-    if (config[key] || command === before[key] || typeof command !== "string" || !command.trim())
-      continue;
+    if (config[key] || typeof command !== "string" || !command.trim()) continue;
     config[key] = command;
     config.provisional = { ...config.provisional, [key]: command };
-    picked = true;
   }
-  if (!picked) return;
-  const kept = (["setup", "verify"] as const).filter(
-    (key) => !config[key] && skipped[key] && written[key] === skipped[key],
-  );
-  for (const key of kept) config[key] = skipped[key];
-  config.provisional = { ...inForce(config), ...(kept.length && { failed: skipped.failed }) };
+  config.provisional = inForce(config);
 }
 
 function unpick(config: Config, check: "setup" | "verify", where: string) {
