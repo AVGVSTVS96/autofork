@@ -440,13 +440,8 @@ function keepChecks(config: Config, build: Build, written: Checks | undefined) {
   const kept = (["setup", "verify"] as const).filter(
     (key) => !config[key] && skipped[key] && written[key] === skipped[key],
   );
-  config.provisional = {
-    ...inForce(config),
-    ...(kept.length && {
-      ...Object.fromEntries(kept.map((key) => [key, skipped[key]])),
-      failed: skipped.failed,
-    }),
-  };
+  for (const key of kept) config[key] = skipped[key];
+  config.provisional = { ...inForce(config), ...(kept.length && { failed: skipped.failed }) };
 }
 
 function unpick(config: Config, check: "setup" | "verify", where: string) {

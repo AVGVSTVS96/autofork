@@ -302,13 +302,9 @@ function keepChecks(config, build, written) {
   if (!picked)
     return;
   const kept = ["setup", "verify"].filter((key) => !config[key] && skipped[key] && written[key] === skipped[key]);
-  config.provisional = {
-    ...inForce(config),
-    ...kept.length && {
-      ...Object.fromEntries(kept.map((key) => [key, skipped[key]])),
-      failed: skipped.failed
-    }
-  };
+  for (const key of kept)
+    config[key] = skipped[key];
+  config.provisional = { ...inForce(config), ...kept.length && { failed: skipped.failed } };
 }
 function unpick(config, check, where) {
   say(`\`${config[check]}\` fails ${where}, so the unproven checks an agent picked aren't kept`);

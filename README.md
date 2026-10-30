@@ -11,7 +11,7 @@ Fork something at [autofork.com](https://autofork.com), or from a terminal:
 npx github:AVGVSTVS96/autofork fork pingdotgg/t3code
 ```
 
-That forks the repo, clones it and adds the autofork workflow, plus a patch, `.autofork/fork-readme`, that's only a `PATCH.md`: the first sync's agent builds it into one line under your README's title saying it's a personal fork that updates itself with autofork. To drop it, delete the line and the folder. Until a sync with a working agent builds it, the fork waits rather than following upstream without it, so a fork you want kept current by git alone can delete the folder. Set `CLAUDE_CODE_OAUTH_TOKEN` first (`claude setup-token` prints one) and it adds that secret too. Already have a fork? Run `init owner/repo` inside it.
+That forks the repo, clones it and adds the autofork workflow, plus a patch, `.autofork/fork-readme`, that's only a `PATCH.md`: the first sync's agent builds it into one line under your README's title saying it's a personal fork that updates itself with autofork. To drop it, delete the line and the folder. Until a sync with a working agent builds it, the fork doesn't follow upstream: its syncs wait, or fail without an agent token. A fork you want kept current by git alone can delete the folder. Set `CLAUDE_CODE_OAUTH_TOKEN` first (`claude setup-token` prints one) and it adds that secret too. Already have a fork? Run `init owner/repo` inside it.
 
 ## Patches
 
