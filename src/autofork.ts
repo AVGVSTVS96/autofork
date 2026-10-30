@@ -739,7 +739,7 @@ function passesAt(config: Fork, build: Build, commit: string) {
     unpick(
       config,
       build.failed!.check,
-      commit === build.steps[0] ? "on upstream alone" : "with the patches",
+      build.steps.indexOf(commit) > 0 ? "with the patches" : "on upstream alone",
     );
   }
   return true;
@@ -1210,7 +1210,7 @@ async function setup(root: string, upstream: string, chosen: ReturnType<typeof o
     );
   await fetchUpstream(root, config);
   const { base, drift } = check(root, { ...config, patches: [] }, workingTree(root));
-  const readme = addNote(root, upstream, base);
+  const readme = addNote(root, upstream, base, drift);
   const inherited = git(root, "ls-files", ".github/workflows")
     .split("\n")
     .filter((file) => file && !file.endsWith("/autofork.yml"));
@@ -1237,11 +1237,11 @@ async function setup(root: string, upstream: string, chosen: ReturnType<typeof o
 
 const NOTE = "fork-readme";
 
-function addNote(root: string, upstream: string, base: string) {
+function addNote(root: string, upstream: string, base: string, drift: string[]) {
   const readme = git(root, "ls-tree", "--name-only", base)
     .split("\n")
     .find((file) => /^readme\.md$/i.test(file));
-  if (!readme || existsSync(join(root, DIR, NOTE))) return;
+  if (!readme || drift.includes(readme) || existsSync(join(root, DIR, NOTE))) return;
   const name = basename(upstream).replace(/\.git$/, "");
   mkdirSync(join(root, DIR, NOTE), { recursive: true });
   writeFileSync(
@@ -1315,7 +1315,7 @@ async function fork(cwd: string, args: string[]) {
   say(`${repo} now keeps itself current with ${upstream}. It's cloned in ./${basename(root)}.`);
   if (!token)
     say(
-      `Last step: run claude setup-token, then gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo ${repo}`,
+      `Last step: run claude setup-token, then gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo ${repo}, then start its first sync: gh workflow run autofork.yml --repo ${repo}`,
     );
 }
 

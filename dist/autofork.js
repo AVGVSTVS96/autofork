@@ -538,7 +538,7 @@ function passesAt(config, build, commit) {
   while (!passes(config, build)) {
     if (!provisional(config, build.failed.check))
       return false;
-    unpick(config, build.failed.check, commit === build.steps[0] ? "on upstream alone" : "with the patches");
+    unpick(config, build.failed.check, build.steps.indexOf(commit) > 0 ? "with the patches" : "on upstream alone");
   }
   return true;
 }
@@ -896,7 +896,7 @@ async function setup(root, upstream, chosen) {
     writeFileSync(path, workflow(git(root, "branch", "--show-current") || defaultBranch(root, upstream)));
   await fetchUpstream(root, config);
   const { base, drift } = check(root, { ...config, patches: [] }, workingTree(root));
-  const readme = addNote(root, upstream, base);
+  const readme = addNote(root, upstream, base, drift);
   const inherited = git(root, "ls-files", ".github/workflows").split(`
 `).filter((file) => file && !file.endsWith("/autofork.yml"));
   if ("branch" in parseFollow(follow)) {
@@ -912,10 +912,10 @@ async function setup(root, upstream, chosen) {
     say(`Your branch already changes ${drift.length} file${drift.length === 1 ? "" : "s"}. Save them as a patch: write ${DIR}/<id>/PATCH.md, then autofork save <id>`);
 }
 var NOTE = "fork-readme";
-function addNote(root, upstream, base) {
+function addNote(root, upstream, base, drift) {
   const readme = git(root, "ls-tree", "--name-only", base).split(`
 `).find((file) => /^readme\.md$/i.test(file));
-  if (!readme || existsSync(join(root, DIR, NOTE)))
+  if (!readme || drift.includes(readme) || existsSync(join(root, DIR, NOTE)))
     return;
   const name = basename(upstream).replace(/\.git$/, "");
   mkdirSync(join(root, DIR, NOTE), { recursive: true });
@@ -972,7 +972,7 @@ async function fork(cwd, args) {
   git(root, "push", "--quiet");
   say(`${repo} now keeps itself current with ${upstream}. It's cloned in ./${basename(root)}.`);
   if (!token)
-    say(`Last step: run claude setup-token, then gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo ${repo}`);
+    say(`Last step: run claude setup-token, then gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo ${repo}, then start its first sync: gh workflow run autofork.yml --repo ${repo}`);
 }
 async function status(root) {
   const config = await readConfig(root);
