@@ -2015,7 +2015,7 @@ test("a check the user changed from the agent's pick is never dropped", () => {
   expect(sh(mine, "git rev-parse HEAD")).toBe(head);
 });
 
-function pickedChecksFail(name: string, verify: string, where: string) {
+function pickChecks(name: string, verify: string) {
   const origin = join(home, name);
   const mine = join(home, `${name}-fork`);
   mkdirSync(origin);
@@ -2043,15 +2043,27 @@ node -e 'const fs = require("fs"); const c = JSON.parse(fs.readFileSync(".autofo
   const { ok, log } = autofork(mine, "sync");
   expect(ok).toBe(true);
   expect(log).toContain("built shout");
-  expect(log).toContain(
-    `\`${verify}\` fails ${where}, so the unproven checks an agent picked aren't kept`,
-  );
   expect(file(mine, "app.js")).toContain("name.toUpperCase()");
-  expect(JSON.parse(file(mine, ".autofork/config.json")).verify).toBeUndefined();
+  return { origin, mine, log };
 }
 
-test("checks the agent picks that fail on upstream alone aren't kept", () =>
-  pickedChecksFail("picky", "grep -q toUpperCase app.js", "on upstream alone"));
+test("checks the agent picks that fail on upstream alone are skipped by the next sync, and it ships", () => {
+  const verify = "grep -q toUpperCase app.js";
+  const { origin, mine } = pickChecks("picky", verify);
+  expect(JSON.parse(file(mine, ".autofork/config.json")).provisional).toEqual({ verify });
+  write(origin, "notes.txt", "two\n");
+  sh(origin, "git add -A && git commit -qm notes");
+  const { ok, log } = autofork(mine, "sync");
+  expect(ok).toBe(true);
+  expect(log).toContain(`\`${verify}\` fails on upstream alone, so this sync skips the checks`);
+  expect(file(mine, "notes.txt")).toBe("two\n");
+});
 
-test("checks the agent picks that fail with its patch aren't kept, and the patch ships", () =>
-  pickedChecksFail("picky-patch", "! grep -q toUpperCase app.js", "with the patches"));
+test("checks the agent picks that fail with its patch aren't kept, and the patch ships", () => {
+  const verify = "! grep -q toUpperCase app.js";
+  const { mine, log } = pickChecks("picky-patch", verify);
+  expect(log).toContain(
+    `\`${verify}\` fails with the patches, so the unproven checks an agent picked aren't kept`,
+  );
+  expect(JSON.parse(file(mine, ".autofork/config.json")).verify).toBeUndefined();
+});

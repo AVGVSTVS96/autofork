@@ -291,31 +291,17 @@ function keepChecks(config, build, written) {
   const before = JSON.parse(git(build.dir, "show", `${build.steps[0]}:${DIR}/config.json`));
   if (["setup", "verify"].every((key) => written[key] === before[key]))
     return;
+  let picked = false;
   for (const key of ["setup", "verify"]) {
     const command = written[key];
     if (config[key] || typeof command !== "string" || !command.trim())
       continue;
     config[key] = command;
-    build.picked = { ...build.picked, [key]: command };
+    config.provisional = { ...config.provisional, [key]: command };
+    picked = true;
   }
-}
-function addStep(config, build, id) {
-  build.steps.push(commit(build.dir, id));
-  if (build.picked)
-    checkPicked(config, build);
-}
-function checkPicked(config, build) {
-  config.provisional = { ...config.provisional, ...build.picked };
-  config.provisional = inForce(config);
-  build.picked = undefined;
-  const tip = git(build.dir, "rev-parse", "HEAD");
-  reset(build.dir, build.steps[0]);
-  build.ready = undefined;
-  const alone = passes(config, build);
-  reset(build.dir, tip);
-  build.ready = undefined;
-  if (!alone && provisional(config, build.failed.check))
-    unpick(config, build.failed.check, "on upstream alone");
+  if (picked)
+    config.provisional = inForce(config);
 }
 function unpick(config, check, where) {
   say(`\`${config[check]}\` fails ${where}, so the unproven checks an agent picked aren't kept`);
@@ -543,7 +529,7 @@ function build(root, config, base, options) {
     if (options.fold?.id === id && !apply(dir, options.fold.patch, config)) {
       throw new Failure(`your changes don't apply on top of ${id}`);
     }
-    addStep(config, build, id);
+    build.steps.push(commit(dir, id));
   }
   return build;
 }
@@ -552,7 +538,7 @@ function passesAt(config, build, commit) {
   while (!passes(config, build)) {
     if (!provisional(config, build.failed.check))
       return false;
-    unpick(config, build.failed.check, "with the patches");
+    unpick(config, build.failed.check, commit === build.steps[0] ? "on upstream alone" : "with the patches");
   }
   return true;
 }

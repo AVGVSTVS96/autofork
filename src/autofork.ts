@@ -63,7 +63,6 @@ type Build = {
   ready?: string;
   rebuilt?: string;
   failed?: Failed;
-  picked?: Pick<Config, "setup" | "verify">;
   proven?: Pick<Config, "setup" | "verify">;
 };
 
@@ -428,31 +427,15 @@ function keepChecks(config: Config, build: Build, written: Checks | undefined) {
     );
   const before = JSON.parse(git(build.dir, "show", `${build.steps[0]}:${DIR}/config.json`));
   if ((["setup", "verify"] as const).every((key) => written[key] === before[key])) return;
+  let picked = false;
   for (const key of ["setup", "verify"] as const) {
     const command = written[key];
     if (config[key] || typeof command !== "string" || !command.trim()) continue;
     config[key] = command;
-    build.picked = { ...build.picked, [key]: command };
+    config.provisional = { ...config.provisional, [key]: command };
+    picked = true;
   }
-}
-
-function addStep(config: Fork, build: Build, id: string) {
-  build.steps.push(commit(build.dir, id));
-  if (build.picked) checkPicked(config, build);
-}
-
-function checkPicked(config: Fork, build: Build) {
-  config.provisional = { ...config.provisional, ...build.picked };
-  config.provisional = inForce(config);
-  build.picked = undefined;
-  const tip = git(build.dir, "rev-parse", "HEAD");
-  reset(build.dir, build.steps[0]);
-  build.ready = undefined;
-  const alone = passes(config, build);
-  reset(build.dir, tip);
-  build.ready = undefined;
-  if (!alone && provisional(config, build.failed!.check))
-    unpick(config, build.failed!.check, "on upstream alone");
+  if (picked) config.provisional = inForce(config);
 }
 
 function unpick(config: Config, check: "setup" | "verify", where: string) {
@@ -744,7 +727,7 @@ function build(
     if (options.fold?.id === id && !apply(dir, options.fold.patch, config)) {
       throw new Failure(`your changes don't apply on top of ${id}`);
     }
-    addStep(config, build, id);
+    build.steps.push(commit(dir, id));
   }
   return build;
 }
@@ -753,7 +736,11 @@ function passesAt(config: Fork, build: Build, commit: string) {
   reset(build.dir, commit);
   while (!passes(config, build)) {
     if (!provisional(config, build.failed!.check)) return false;
-    unpick(config, build.failed!.check, "with the patches");
+    unpick(
+      config,
+      build.failed!.check,
+      commit === build.steps[0] ? "on upstream alone" : "with the patches",
+    );
   }
   return true;
 }
