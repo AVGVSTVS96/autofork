@@ -109,7 +109,14 @@ function writeConfig(dir, { upstream, follow, setup, generated, verify, agent, g
   mkdirSync(join(dir, DIR), { recursive: true });
   writeFileSync(configFile(dir), `${JSON.stringify({ upstream, follow, setup, generated, verify, agent, green }, null, 2)}
 `);
-  writeFileSync(join(dir, DIR, ".gitignore"), `!*.patch
+  keepPatches(dir);
+}
+function keepPatches(dir) {
+  const file = join(dir, DIR, ".gitignore");
+  if (!existsSync(file))
+    writeFileSync(file, `!*.patch
+!*.md
+!*.json
 `);
 }
 function githubRepo(upstream) {
@@ -249,7 +256,10 @@ function healPrompt(config, build, id, broken) {
       `${DIR}/${id}/${id}.patch is how it was done before. Use it as a guide, not as text to force in.`
     ],
     "Build it on the current source, the smallest change that fully does what PATCH.md says. Build on what upstream has now: where upstream has its own version of what the patch touches, change that rather than bringing the old one back. Follow upstream's code and conventions, and leave everything else alone.",
-    `Run upstream's own checks for the code you touched${config.verify ? `, and \`${config.verify}\`, which the sync has to pass` : ""}.${config.setup ? ` Dependencies are installed: \`${config.setup}\` ran here, so run it again if you change them.` : ""} Fix what your change breaks.${after.length ? ` Patches after this one aren't applied yet: ${after.join(", ")}. Each goes on top of yours, so leave what its PATCH.md asks for to it.` : ""}`,
+    ...config.verify ? [] : [
+      `This fork has no check yet. Find how upstream's CI installs dependencies and checks a build (its workflows are in \`git show ${build.source}:.github/workflows\`; this checkout's are the fork's own), and write ${config.setup ? `the check to ${DIR}/config.json as "verify"` : `those commands to ${DIR}/config.json as "setup" and "verify"`}. Every sync runs ${config.setup ? "it" : "them"} on a fresh machine like this one, each as one string in its own \`sh -c\` (join steps with \`&&\`), so ${config.setup ? `\`verify\` can use only what \`${config.setup}\` installs` : "`setup` installs any tool they need, including what you installed by hand, outside this checkout or where git ignores it"}: after \`setup\` the sync puts the checkout back as git has it. It runs \`verify\` on upstream alone to tell when upstream broke itself, so it has to pass there too.`
+    ],
+    `Run upstream's own checks for the code you touched, and ${config.verify ? `\`${config.verify}\`` : "your `verify`"}, which the sync has to pass.${config.setup ? ` Dependencies are installed: \`${config.setup}\` ran here, so run it again if you change them.` : ""} Fix what your change breaks.${after.length ? ` Patches after this one aren't applied yet: ${after.join(", ")}. Each goes on top of yours, so leave what its PATCH.md asks for to it.` : ""}`,
     ...fresh ? [
       `Add a short paragraph to the end of ${DIR}/${id}/PATCH.md on why it's built the way it is, for whoever rebuilds it after upstream moves. Keep what's there as it is.`
     ] : []
@@ -261,7 +271,7 @@ This checkout is upstream at ${build.source}${before.length ? `, with ${before.j
 ${steps.map((step, index) => `${index + 1}. ${step}`).join(`
 `)}
 
-Don't edit anything ${fresh ? "else " : ""}in ${DIR}/ or ${WORKFLOWS}/, and don't commit. Leave only your source change: remove anything your checks generated that git would pick up${config.generated?.length ? `, but leave ${config.generated.join(", ")}, which the sync rebuilds` : ""}.
+Don't edit anything ${fresh || !config.verify ? "else " : ""}in ${DIR}/ or ${WORKFLOWS}/, and don't commit. Leave only your source change: remove anything your checks generated that git would pick up${config.generated?.length ? `, but leave ${config.generated.join(", ")}, which the sync rebuilds` : ""}.
 If upstream already does what PATCH.md asks, or something close enough that building it would duplicate upstream's own version, write one line saying what upstream does to ${DIR}/${id}/UPSTREAM.md, and the sync leaves the patch out.`;
 }
 var installed = (bin) => run("sh", ["-c", `command -v ${bin}`], ".").ok;
@@ -275,13 +285,59 @@ function agentCommand(config) {
   const claude = installed("claude") ? "claude" : "npx -y @anthropic-ai/claude-code";
   return `${claude} -p --dangerously-skip-permissions`;
 }
+function checksIn(dir) {
+  try {
+    const written = JSON.parse(readFileSync(configFile(dir), "utf8"));
+    if (written && typeof written === "object")
+      return written;
+  } catch {}
+}
+function keepChecks(config, build, written) {
+  if (!written)
+    return say(`the agent left ${DIR}/config.json unreadable, so the checks it picked weren't kept`);
+  const before = JSON.parse(git(build.dir, "show", `${build.steps[0]}:${DIR}/config.json`));
+  if (["setup", "verify"].every((key) => written[key] === before[key]))
+    return;
+  for (const key of ["setup", "verify"]) {
+    const command = written[key];
+    if (config[key] || typeof command !== "string" || !command.trim())
+      continue;
+    config[key] = command;
+    build.picked = { ...build.picked, [key]: command };
+  }
+}
+function addStep(config, build, id) {
+  build.steps.push(commit(build.dir, id));
+  if (build.picked)
+    checkPicked(config, build);
+}
+function checkPicked(config, build) {
+  config.provisional = { ...config.provisional, ...build.picked };
+  config.provisional = inForce(config);
+  build.picked = undefined;
+  const tip = git(build.dir, "rev-parse", "HEAD");
+  reset(build.dir, build.steps[0]);
+  build.ready = undefined;
+  const alone = passes(config, build);
+  reset(build.dir, tip);
+  build.ready = undefined;
+  if (!alone && provisional(config, build.failed.check))
+    unpick(config, build.failed.check, "on upstream alone");
+}
+function unpick(config, check, where) {
+  say(`\`${config[check]}\` fails ${where}, so the unproven checks an agent picked aren't kept`);
+  for (const key of ["setup", "verify"])
+    if (provisional(config, key))
+      delete config[key];
+  delete config.provisional;
+}
 function restoreControl(dir, base) {
   git(dir, "rm", "-rq", "--cached", "--ignore-unmatch", "--", ...CONTROL);
   const owned = git(dir, "ls-tree", "--name-only", base, "--", ...CONTROL).split(`
 `).filter(Boolean);
   if (owned.length)
     git(dir, "checkout", base, "--", ...owned);
-  git(dir, "clean", "-fdq", "--", ...CONTROL);
+  git(dir, "clean", "-fdxq", "--", ...CONTROL);
 }
 function workflowsBehind(root, base, source) {
   const files = (...args) => git(root, "diff", "--name-only", "--no-renames", ...args, "--", WORKFLOWS).split(`
@@ -333,8 +389,10 @@ function heal(config, build, id, broken, patch) {
       git(build.dir, "reset", "--soft", "--quiet", step);
       const reason = existsSync(upstreamDoc(build.dir, id)) ? readFileSync(upstreamDoc(build.dir, id), "utf8").trim() : "";
       const why = fresh && existsSync(doc) ? readFileSync(doc, "utf8") : "";
+      const written = config.verify ? {} : checksIn(build.dir);
       restoreControl(build.dir, step);
       if (reason) {
+        keepChecks(config, build, written);
         reset(build.dir, step);
         build.upstreamHas.set(id, reason);
         return;
@@ -346,6 +404,7 @@ function heal(config, build, id, broken, patch) {
       if (!marked.length && workingTree(build.dir, rejects) !== before) {
         if (why.startsWith(wish))
           writeFileSync(doc, why);
+        keepChecks(config, build, written);
         build.healed.set(id, done);
         return;
       }
@@ -366,6 +425,9 @@ function changed(dir) {
 }
 function commit(dir, message) {
   git(dir, "add", "-A");
+  const hidden = git(dir, "ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--", DIR).split("\x00").filter((path) => /\.(patch|md|json)$|\/\.gitignore$/.test(path));
+  if (hidden.length)
+    git(dir, "add", "-f", "--", ...hidden);
   gitWith(dir, BOT, "commit", "--quiet", "--no-verify", "--allow-empty", "-m", message);
   return git(dir, "rev-parse", "HEAD");
 }
@@ -480,6 +542,8 @@ function build(root, config, base, options) {
     healed: new Map,
     upstreamHas: new Map
   };
+  if (options.wait)
+    settle(config, build);
   for (const id of config.patches) {
     const file = patchFile(dir, id);
     if (options.wait && !options.healFrom && isEmpty(file))
@@ -495,13 +559,18 @@ function build(root, config, base, options) {
     if (options.fold?.id === id && !apply(dir, options.fold.patch, config)) {
       throw new Failure(`your changes don't apply on top of ${id}`);
     }
-    build.steps.push(commit(dir, id));
+    addStep(config, build, id);
   }
   return build;
 }
 function passesAt(config, build, commit) {
   reset(build.dir, commit);
-  return passes(config, build);
+  while (!passes(config, build)) {
+    if (!provisional(config, build.failed.check))
+      return false;
+    unpick(config, build.failed.check, "with the patches");
+  }
+  return true;
 }
 function verify(config, build, from) {
   if (!config.setup && !config.verify)
@@ -621,7 +690,49 @@ function fix(config, build, failed, from) {
     throw new Failure(`${check} still fails after the agent's fix: ${config[check]}`);
   }
 }
+var provisional = (config, check) => !!config[check] && config.provisional?.[check] === config[check] && (check === "verify" || !config.generated?.length && (!config.verify || provisional(config, "verify")));
+var inForce = (config) => Object.fromEntries(["setup", "verify"].filter((key) => provisional(config, key)).map((key) => [key, config[key]]));
+function settle(config, build) {
+  const picked = inForce(config);
+  const failed = config.provisional?.failed;
+  config.provisional = Object.keys(picked).length ? { ...picked, failed } : undefined;
+  if (!config.provisional)
+    return;
+  const passed = passes(config, build);
+  reset(build.dir);
+  if (passed) {
+    config.provisional = build.proven = picked;
+    return;
+  }
+  const { check } = build.failed;
+  build.failed = undefined;
+  if (!(check in picked))
+    return;
+  if (failed && failed !== short(build.source)) {
+    say(`\`${config[check]}\` fails on upstream alone in a second sync, so the checks an agent picked are dropped and the next agent run picks new ones`);
+    delete config.provisional;
+  } else {
+    say(`\`${config[check]}\` fails on upstream alone, so this sync skips the checks an agent picked, and the next one drops them if they fail there again`);
+    config.provisional.failed ??= short(build.source);
+  }
+  for (const key of Object.keys(picked))
+    delete config[key];
+}
+function saveConfig(target, { follow, setup, verify, provisional }) {
+  const saved = JSON.parse(readFileSync(configFile(target), "utf8"));
+  const config = {
+    ...saved,
+    follow,
+    setup: setup ?? provisional?.setup,
+    verify: verify ?? provisional?.verify,
+    provisional
+  };
+  if (JSON.stringify(config) !== JSON.stringify(saved))
+    writeFileSync(configFile(target), `${JSON.stringify(config, null, 2)}
+`);
+}
 function refresh(target, config, build) {
+  keepPatches(target);
   config.patches.forEach((id, index) => {
     const diff = gitBytes(build.dir, "diff-tree", "-p", "--binary", "--full-index", build.steps[index], build.steps[index + 1], "--", ...sourcePaths(config));
     if (diff.length || existsSync(patchFile(target, id)))
@@ -672,11 +783,11 @@ async function sync(root, args) {
   const key = `${short(source)}-${short(git(root, "rev-parse", "HEAD"))}`;
   output({ key });
   if (flag(args, "--skip") === key) {
-    say(`already failed on upstream ${short(source)} with this fork, skipping until either changes`);
+    say(`autofork: already failed on upstream ${short(source)} with this fork, skipping until either changes`);
     return output({ result: "skipped" });
   }
   if (base === source && config.patches.every((id) => !isEmpty(patchFile(root, id)))) {
-    say(`already up to date with ${config.upstream} at ${short(source)}`);
+    say(`autofork: already up to date with ${config.upstream} at ${short(source)}`);
     return output({ result: "current" });
   }
   const { drift } = check(root, config, "HEAD", base);
@@ -706,13 +817,18 @@ Where one is just an old copy of upstream's, take upstream's first: git checkout
     } catch (error) {
       if (!(error instanceof Drifted))
         throw error;
-      say(`${error.message}. The next run that heals rebuilds it.`);
+      say(`autofork: ${error.message}. The next run that heals rebuilds it.`);
       return output({ result: "waiting" });
     }
+    if (result.proven) {
+      const left = Object.entries(inForce(config)).filter(([key, command]) => result.proven[key] !== command);
+      config.provisional = left.length ? Object.fromEntries(left) : undefined;
+    }
+    saveConfig(result.dir, config);
     refresh(result.dir, config, result);
     const tree = git(result.dir, "rev-parse", `${commit(result.dir, "refresh")}^{tree}`);
     if (tree === git(root, "rev-parse", "HEAD^{tree}") && !behind.length) {
-      say("already up to date");
+      say("autofork: already up to date");
       return output({ result: "current" });
     }
     const head = git(root, "rev-parse", "HEAD");
