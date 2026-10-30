@@ -155,6 +155,14 @@ test("a drifted patch waits for a run that heals", () => {
   expect(sh(fork, "git rev-parse HEAD")).toBe(head);
 });
 
+test("an agent that leaves conflict markers fails the heal after one run", () => {
+  agent(`echo run >> ${join(home, "runs")}`);
+  const { ok, log } = autofork(fork, "sync");
+  expect(ok).toBe(false);
+  expect(log).toContain("the agent left conflict markers in app.js while healing shout");
+  expect(file(home, "runs")).toBe("run\n");
+});
+
 test("a drifted patch is healed from git's conflict markers and its PATCH.md", () => {
   agent(
     `grep -q '^<<<<<<< ours' app.js || exit 1\nprintf 'export function greet(name) {\\n  return "hi " + name.toUpperCase();\\n}\\n' > app.js`,
@@ -324,33 +332,40 @@ test("a fork ahead of upstream's newest release stays where it is", () => {
   expect(file(fork, "notes.txt")).toBe("five\n");
 });
 
-test("init puts a note under the README's title as a saved patch, which later syncs apply without the agent", () => {
+test("init leaves the README's note to the first sync's agent, and later syncs apply it without the agent", () => {
   const origin = join(home, "demo");
   const mine = join(home, "demo-fork");
   mkdirSync(origin);
   sh(origin, "git init -q");
-  write(origin, "README.md", "# Demo\n\nDemo does things.\n\n## Install\n\nRun it.\n");
+  const readme = "# Demo\n\nDemo does things.\n\n## Install\n\nRun it.\n";
+  write(origin, "README.md", readme);
   sh(origin, "git add -A && git commit -qm init");
   sh(home, `git clone -q ${origin} demo-fork`);
   const { ok, log } = autofork(mine, "init", origin);
   expect(ok).toBe(true);
-  expect(log).toContain("README.md now says this is a personal fork");
-  expect(file(mine, "README.md")).toBe(
-    "# Demo\n\n> A personal fork of Demo that updates itself with [autofork](https://autofork.com). Its changes, each described in plain words, are in [`.autofork/`](.autofork).\n\nDemo does things.\n\n## Install\n\nRun it.\n",
-  );
-  expect(file(mine, ".autofork/fork-readme/PATCH.md")).toContain("delete this folder");
-  write(
-    mine,
-    ".autofork/config.json",
-    `${JSON.stringify({ ...JSON.parse(file(mine, ".autofork/config.json")), agent: "exit 1" }, null, 2)}\n`,
-  );
-  sh(mine, "git add -A && git commit -qm 'track upstream'");
-  write(origin, "README.md", "# Demo\n\nDemo does things.\n\n## Install\n\nRun it with care.\n");
+  expect(log).toContain("The first sync adds a line to README.md");
+  expect(file(mine, "README.md")).toBe(readme);
+  expect(sh(mine, "ls .autofork/fork-readme")).toBe("PATCH.md");
+  expect(file(mine, ".autofork/fork-readme/PATCH.md")).toContain("personal fork of demo");
+  const useAgent = (agent: string) => {
+    const config = JSON.parse(file(mine, ".autofork/config.json"));
+    write(mine, ".autofork/config.json", `${JSON.stringify({ ...config, agent }, null, 2)}\n`);
+    sh(mine, "git add -A && git commit -qm 'use test agent'");
+  };
+  const noted = readme.replace("\n\n", "\n\n> A personal fork of Demo.\n\n");
+  write(home, "note-agent.sh", `cat > /dev/null\ncat > README.md <<'EOF'\n${noted}EOF\n`);
+  useAgent(`sh ${join(home, "note-agent.sh")}`);
+  const built = autofork(mine, "sync");
+  expect(built.ok).toBe(true);
+  expect(built.log).toContain("built fork-readme");
+  expect(file(mine, "README.md")).toContain("# Demo\n\n> A personal fork of Demo.\n");
+  useAgent("exit 1");
+  write(origin, "README.md", readme.replace("Run it.", "Run it with care."));
   sh(origin, "git commit -qam install");
   const synced = autofork(mine, "sync");
   expect(synced.ok).toBe(true);
   expect(synced.log).not.toContain("building");
-  expect(file(mine, "README.md")).toContain("> A personal fork of Demo");
+  expect(file(mine, "README.md")).toContain("> A personal fork of Demo.");
   expect(file(mine, "README.md")).toContain("Run it with care.");
 });
 
@@ -429,9 +444,7 @@ test("a fork can follow one channel of upstream's releases, named by its tags", 
     "init",
     "acme/nightly",
   );
-  expect(init.log).toContain(
-    "autofork follows acme/nightly's releases.\nIt also publishes v*-preview.*, v*-nightly.*.",
-  );
+  expect(init.log).toContain("autofork follows acme/nightly's releases.");
   const config = JSON.parse(file(mine, ".autofork/config.json"));
   write(
     mine,

@@ -8,7 +8,7 @@ List every place the app or its build reads releases from upstream's repo: the u
 
 ## 2. Follow the channel the user installs
 
-Set `follow` to the channel the user runs. `init` lists the channels upstream publishes; pick one by its tag pattern, like `"v*-nightly.*"`, or `"releases"` for stable. The fork releases each build under the same tag as the upstream release it's built on, so the updater compares versions the way it does upstream.
+Set `follow` to the channel the user runs. `gh release list -R owner/repo` shows the channels upstream publishes; pick one by its tag pattern, like `"v*-nightly.*"`, or `"releases"` for stable. The fork releases each build under the same tag as the upstream release it's built on, so the updater compares versions the way it does upstream.
 
 ## 3. Point the updater at the fork
 

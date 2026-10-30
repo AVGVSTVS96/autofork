@@ -11,7 +11,7 @@ Fork something at [autofork.com](https://autofork.com), or from a terminal:
 npx github:AVGVSTVS96/autofork fork pingdotgg/t3code
 ```
 
-That forks the repo, clones it and adds the autofork workflow, plus one line under your README's title saying it's a personal fork that updates itself with autofork. That line is a patch like any other, `.autofork/fork-readme`; to drop it, delete the line and the folder. Set `CLAUDE_CODE_OAUTH_TOKEN` first (`claude setup-token` prints one) and it adds that secret too. Already have a fork? Run `init owner/repo` inside it.
+That forks the repo, clones it and adds the autofork workflow, plus a patch, `.autofork/fork-readme`, that's only a `PATCH.md`: the first sync's agent builds it into one line under your README's title saying it's a personal fork that updates itself with autofork. To drop it, delete the line and the folder. Set `CLAUDE_CODE_OAUTH_TOKEN` first (`claude setup-token` prints one) and it adds that secret too. Already have a fork? Run `init owner/repo` inside it.
 
 ## Patches
 
@@ -75,7 +75,7 @@ Commit straight to your fork and the workflow leaves it alone until upstream mov
 
 `.github/workflows/` is your fork's own, and the rest of `.github/` syncs like any other code: a change your fork makes there is a patch, like any other. When upstream changes a workflow your fork keeps a copy of, the sync's agent brings over what your copy needs and keeps what it does differently. Pushing that takes a token that can push workflow files, which a workflow's own GitHub token can't. Forks made on autofork.com get one from [autofork's GitHub app](https://github.com/apps/autofork-app). For a fork you set up yourself, install the app on it and give the autofork step `workflow-token-url: https://autofork.com/api/github/token` and the workflow `id-token: write`. Code the sync runs (setup, verify, the agent) can reach that token too, so it can push workflow files as well as code ([#10](https://github.com/AVGVSTVS96/autofork/issues/10)). Without one, autofork opens an issue instead, so you can bring the change over or delete your copy. A run with `heal: false` leaves the change for the next run that heals. If the token can be had at the start of a run but not at the push, the run fails, nothing is pushed, and the next run tries again.
 
-To follow a channel like nightlies, put its tag pattern in `follow`, like `"v*-nightly.*"`. The fork then moves to the newest release whose tag matches, and `init` lists the channels upstream publishes. To follow a branch instead, set `"follow": "main"`. Every upstream commit then gets the same treatment.
+To follow a channel like nightlies, put its tag pattern in `follow`, like `"v*-nightly.*"`. The fork then moves to the newest release whose tag matches. To follow a branch instead, set `"follow": "main"`. Every upstream commit then gets the same treatment.
 
 An app that updates itself, like a desktop app, updates from upstream's releases until the fork publishes its own. The skill's [release steps](skills/autofork/releases.md) set that up once: a release workflow that runs after each sync, the updater pointed at the fork, and builds signed so they can update without upstream's keys or certificates. [My T3 Code fork](https://github.com/AVGVSTVS96/t3code/releases) works this way.
 
