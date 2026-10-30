@@ -427,10 +427,11 @@ function keepChecks(config: Config, build: Build, written: Checks | undefined) {
       `the agent left ${DIR}/config.json unreadable, so the checks it picked weren't kept`,
     );
   const before = JSON.parse(git(build.dir, "show", `${build.steps[0]}:${DIR}/config.json`));
-  if ((["setup", "verify"] as const).every((key) => written[key] === before[key])) return;
-  for (const key of ["setup", "verify"] as const) {
+  const open = (["setup", "verify"] as const).filter((key) => !config[key]);
+  if (open.every((key) => written[key] === before[key])) return;
+  for (const key of open) {
     const command = written[key];
-    if (config[key] || typeof command !== "string" || !command.trim()) continue;
+    if (typeof command !== "string" || !command.trim()) continue;
     config[key] = command;
     config.provisional = { ...config.provisional, [key]: command };
   }
@@ -1292,7 +1293,9 @@ async function init(root: string, args: string[]) {
     );
   await setup(root, args[0], options(args));
   claim(root, args[0]);
-  say("Add a CLAUDE_CODE_OAUTH_TOKEN secret (claude setup-token), commit, and push.");
+  say(
+    "Add a CLAUDE_CODE_OAUTH_TOKEN secret (claude setup-token), commit, and push. If you pushed before the secret was set, start the first sync by hand: gh workflow run autofork.yml",
+  );
 }
 
 async function fork(cwd: string, args: string[]) {
@@ -1309,13 +1312,15 @@ async function fork(cwd: string, args: string[]) {
   claim(root, upstream);
   const repo = origin(root);
   const token = process.env.CLAUDE_CODE_OAUTH_TOKEN;
-  if (token)
-    run("gh", ["secret", "set", "CLAUDE_CODE_OAUTH_TOKEN", "--repo", repo, "--body", token], root);
+  const secret =
+    !!token &&
+    run("gh", ["secret", "set", "CLAUDE_CODE_OAUTH_TOKEN", "--repo", repo, "--body", token], root)
+      .ok;
   git(root, "add", DIR, ".github/workflows/autofork.yml");
   git(root, "commit", "--quiet", "-m", `autofork: follow ${upstream}`);
   git(root, "push", "--quiet");
   say(`${repo} now keeps itself current with ${upstream}. It's cloned in ./${basename(root)}.`);
-  if (!token)
+  if (!secret)
     say(
       `Last step: run claude setup-token, then gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo ${repo}, then start its first sync: gh workflow run autofork.yml --repo ${repo}`,
     );

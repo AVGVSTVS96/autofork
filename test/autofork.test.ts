@@ -1671,6 +1671,26 @@ test("an agent that picks one check in a sync that skipped them picks the set it
   expect(config.provisional).toEqual({ setup: "true", verify: `test -f ${tool}` });
 });
 
+test("an agent that edits only the user's setup in a sync that skipped its verify leaves that pick's strike alone", () => {
+  const { origin, mine, tool } = handmade("ownsetup");
+  const config = JSON.parse(file(mine, ".autofork/config.json"));
+  write(mine, ".autofork/config.json", JSON.stringify({ ...config, setup: "true" }));
+  sh(mine, "git commit -qam 'my setup'");
+  write(origin, "app.js", 'export const greet = (name) => "hi " + name;\n');
+  sh(origin, "git commit -qam hi");
+  write(
+    home,
+    "ownsetup-agent.sh",
+    `cat > /dev/null\ntouch ${tool}\nprintf 'export const greet = (name) => "hi " + name.toUpperCase();\\n' > app.js\nnode -e 'const fs = require("fs"); const c = JSON.parse(fs.readFileSync(".autofork/config.json")); fs.writeFileSync(".autofork/config.json", JSON.stringify({ ...c, setup: "true && true" }))'\n`,
+  );
+  const { ok, log } = autofork(mine, "sync");
+  expect(ok).toBe(true);
+  expect(log).toContain("skips the checks an agent picked");
+  const saved = JSON.parse(file(mine, ".autofork/config.json"));
+  expect(saved).toMatchObject({ setup: "true", verify: `test -f ${tool}` });
+  expect(saved.provisional.failed).toBe(sh(origin, "git rev-parse HEAD").slice(0, 12));
+});
+
 test("an agent's setup counts as the user's once they own verify, so it's never skipped", () => {
   const { origin, mine, tool } = handmade("leftover");
   const config = JSON.parse(file(mine, ".autofork/config.json"));
