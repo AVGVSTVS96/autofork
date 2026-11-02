@@ -584,7 +584,7 @@ function claudeSpend(out: Buffer): Spend {
     return {};
   }
   if (!report || typeof report !== "object") return {};
-  for (const line of [report.result, ...(report.errors ?? [])])
+  for (const line of [report.result, ...(Array.isArray(report.errors) ? report.errors : [])])
     if (typeof line === "string") say(line);
   const models = Object.entries(
     (report.modelUsage ?? {}) as Record<string, Record<string, number>>,
@@ -596,7 +596,9 @@ function claudeSpend(out: Buffer): Spend {
     );
   return {
     cost: typeof report.total_cost_usd === "number" ? report.total_cost_usd : undefined,
-    model: models.sort(([, a], [, b]) => b.costUSD - a.costUSD)[0]?.[0],
+    model: models.sort(
+      ([, a], [, b]) => (Number(b.costUSD) || 0) - (Number(a.costUSD) || 0),
+    )[0]?.[0],
     inputTokens: sum("inputTokens", "cacheReadInputTokens", "cacheCreationInputTokens"),
     outputTokens: sum("outputTokens"),
   };
@@ -613,19 +615,16 @@ async function codexSpend(out: Buffer): Promise<Spend> {
       if (line.trim()) say(line);
       continue;
     }
+    if (!event || typeof event !== "object") continue;
     if (event.type === "thread.started") thread = event.thread_id;
     const said = event.type === "item.completed" ? event.item?.text : event.message;
     if (typeof said === "string") say(said);
     if (event.type === "turn.failed" && event.error?.message) say(event.error.message);
-    if (event.type === "turn.completed") {
-      used ??= {};
-      for (const [key, count] of Object.entries(event.usage ?? {}))
-        used[key] = (used[key] ?? 0) + (Number(count) || 0);
-    }
+    if (event.type === "turn.completed") used = event.usage;
   }
-  if (!used) return {};
+  if (!used || !Object.values(used).some((count) => Number(count) > 0)) return {};
   const model = thread && codexModel(thread);
-  const tokens = (key: string) => used[key] ?? 0;
+  const tokens = (key: string) => Number(used![key]) || 0;
   const spend = {
     model,
     inputTokens: tokens("input_tokens"),
@@ -1003,6 +1002,7 @@ async function build(
     }
     build.steps.push(commit(dir, id));
   }
+  build.reserved = 0;
   return build;
 }
 
@@ -1384,6 +1384,7 @@ async function sync(root: string, args: string[]) {
     output({ result: "synced", ...(tag && source === tip ? { tag } : {}) });
   } finally {
     cleanup(root, scratch(root));
+    for (const [file, kept] of tallies) writeFileSync(file, `${JSON.stringify(kept, null, 2)}\n`);
   }
 }
 

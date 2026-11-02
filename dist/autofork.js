@@ -423,14 +423,14 @@ function claudeSpend(out) {
   }
   if (!report || typeof report !== "object")
     return {};
-  for (const line of [report.result, ...report.errors ?? []])
+  for (const line of [report.result, ...Array.isArray(report.errors) ? report.errors : []])
     if (typeof line === "string")
       say(line);
   const models = Object.entries(report.modelUsage ?? {});
   const sum = (...keys) => models.reduce((total, [, usage]) => keys.reduce((sum, key) => sum + (Number(usage[key]) || 0), total), 0);
   return {
     cost: typeof report.total_cost_usd === "number" ? report.total_cost_usd : undefined,
-    model: models.sort(([, a], [, b]) => b.costUSD - a.costUSD)[0]?.[0],
+    model: models.sort(([, a], [, b]) => (Number(b.costUSD) || 0) - (Number(a.costUSD) || 0))[0]?.[0],
     inputTokens: sum("inputTokens", "cacheReadInputTokens", "cacheCreationInputTokens"),
     outputTokens: sum("outputTokens")
   };
@@ -448,6 +448,8 @@ async function codexSpend(out) {
         say(line);
       continue;
     }
+    if (!event || typeof event !== "object")
+      continue;
     if (event.type === "thread.started")
       thread = event.thread_id;
     const said = event.type === "item.completed" ? event.item?.text : event.message;
@@ -455,16 +457,13 @@ async function codexSpend(out) {
       say(said);
     if (event.type === "turn.failed" && event.error?.message)
       say(event.error.message);
-    if (event.type === "turn.completed") {
-      used ??= {};
-      for (const [key, count] of Object.entries(event.usage ?? {}))
-        used[key] = (used[key] ?? 0) + (Number(count) || 0);
-    }
+    if (event.type === "turn.completed")
+      used = event.usage;
   }
-  if (!used)
+  if (!used || !Object.values(used).some((count) => Number(count) > 0))
     return {};
   const model = thread && codexModel(thread);
-  const tokens = (key) => used[key] ?? 0;
+  const tokens = (key) => Number(used[key]) || 0;
   const spend = {
     model,
     inputTokens: tokens("input_tokens"),
@@ -765,6 +764,7 @@ async function build(root, config, base, options) {
     }
     build.steps.push(commit(dir, id));
   }
+  build.reserved = 0;
   return build;
 }
 function passesAt(config, build, commit) {
@@ -1054,6 +1054,9 @@ Where one is just an old copy of upstream's, take upstream's first: git checkout
     output({ result: "synced", ...tag && source === tip ? { tag } : {} });
   } finally {
     cleanup(root, scratch(root));
+    for (const [file, kept] of tallies)
+      writeFileSync(file, `${JSON.stringify(kept, null, 2)}
+`);
   }
 }
 async function save(root, args) {
