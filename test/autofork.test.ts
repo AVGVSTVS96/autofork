@@ -2251,7 +2251,7 @@ test("a sync waits before paying for any rebuild when the month has no room for 
 
   const never = sync({ rebuilds: 1 });
   expect(never.log).toContain(
-    'one, two wait: it needs 2 rebuilds and 0 of this month\'s 1 rebuild is left. It needs higher "limits" in .autofork/config.json.',
+    'one, two wait: it needs 2 rebuilds and 0 of this month\'s 1 rebuild are left. It needs higher "limits" in .autofork/config.json.',
   );
 
   writeFileSync(ledger, JSON.stringify({ month: "2000-01", rebuilds: [old] }));
