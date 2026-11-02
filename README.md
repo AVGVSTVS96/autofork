@@ -95,7 +95,7 @@ The month's count lives in the action's Actions cache, which only the fork's wor
 
 ## On time
 
-GitHub runs the workflow on its `cron` line, every 15 minutes unless you pick another with `--every 5m|15m|1h|1d` on `fork` or `init`, but its scheduled runs can start hours late. Runs are free on public repos, and a fork of a public repo is public; on a private repo each run bills at least a minute of Actions, so every 15 minutes is about 2,900 minutes a month, and `--every 1h` may suit it better. To have your fork synced within a minute of upstream changing:
+GitHub runs the workflow on its `cron` line, every 15 minutes unless you pick another with `--every 5m|15m|1h|1d` on `fork` or `init`, but its scheduled runs can start hours late. The presets start a few minutes past the hour, when GitHub's scheduler is less busy. Runs are free on public repos, and a fork of a public repo is public; on a private repo each run bills at least a minute of Actions, so every 15 minutes is about 2,900 minutes a month, and `--every 1h` may suit it better. To have your fork synced within a minute of upstream changing:
 
 ```sh
 npx github:AVGVSTVS96/autofork link

@@ -27,8 +27,8 @@ delete process.env.AUTOFORK_LEDGER;
 var SITE = process.env.AUTOFORK_URL ?? "https://autofork.com";
 var LIMITS = { rebuilds: 10, month: 200, rebuild: 20 };
 var EVERY = {
-  "5m": "*/5 * * * *",
-  "15m": "*/15 * * * *",
+  "5m": "2-59/5 * * * *",
+  "15m": "7-59/15 * * * *",
   "1h": "17 * * * *",
   "1d": "17 6 * * *"
 };

@@ -2220,7 +2220,7 @@ test("init and fork write the limits, the schedule --every picks, id-token: writ
   expect(workflow).toContain("  id-token: write\n");
   sh(mine, "rm -rf .autofork .github");
   autofork(mine, "init", origin);
-  expect(file(mine, ".github/workflows/autofork.yml")).toContain('- cron: "*/15 * * * *"');
+  expect(file(mine, ".github/workflows/autofork.yml")).toContain('- cron: "7-59/15 * * * *"');
 });
 
 test("a sync waits before paying for any rebuild when the month has no room for all it needs", () => {
