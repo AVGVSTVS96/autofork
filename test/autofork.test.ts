@@ -2208,7 +2208,7 @@ test("init and fork write the limits, the schedule --every picks, id-token: writ
   const { ok, log } = autofork(mine, "init", origin, "--every", "1h");
   expect(ok).toBe(true);
   expect(log).toContain(
-    "GitHub's timer can run hours late. Run it on time and track spend: autofork link",
+    "GitHub's timer can run hours late. Run it on time and track spend: npx github:AVGVSTVS96/autofork link",
   );
   expect(JSON.parse(file(mine, ".autofork/config.json")).limits).toEqual({
     rebuilds: 10,
@@ -2244,7 +2244,7 @@ test("a sync waits before paying for any rebuild when the month has no room for 
   expect(waiting.ok).toBe(true);
   expect(waiting.output.result).toBe("waiting");
   expect(waiting.log).toMatch(
-    /autofork: one, two wait: it needs 2 rebuilds and 1 of this month's 2 rebuilds are left\. It runs \w{3} 1, or raise "limits" in \.autofork\/config\.json\.\n$/,
+    /autofork: one, two wait: it needs 2 rebuilds and 1 of this month's 2 rebuilds is left\. It runs \w{3} 1, or raise "limits" in \.autofork\/config\.json\.\n$/,
   );
   expect(existsSync(runs)).toBe(false);
   expect(sh(mine, "git rev-parse HEAD")).toBe(head);

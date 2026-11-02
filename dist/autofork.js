@@ -325,7 +325,7 @@ async function site(path, body) {
 var tallies = new Map;
 function tally(file) {
   const month = new Date().toISOString().slice(0, 7);
-  if (!tallies.has(file)) {
+  if (tallies.get(file)?.month !== month) {
     let saved;
     try {
       saved = JSON.parse(readFileSync(file, "utf8"));
@@ -337,10 +337,11 @@ function tally(file) {
 var usd = (amount) => `$${Number.isInteger(amount) ? amount : amount.toFixed(2)}`;
 async function room(config, dir, count = 1) {
   const limits = { ...LIMITS };
+  const set = config.limits ?? {};
   for (const key of Object.keys(LIMITS)) {
-    limits[key] = config.limits?.[key] ?? LIMITS[key];
+    limits[key] = set[key] ?? LIMITS[key];
     const value = limits[key];
-    if (typeof value !== "number" || value < 0 || key === "rebuild" && !value)
+    if (typeof set !== "object" || typeof value !== "number" || value < 0 || key === "rebuild" && !value)
       throw new Failure(`"limits" in ${DIR}/config.json takes numbers, like ${JSON.stringify(LIMITS)}`);
   }
   const file = LEDGER ?? `${dir}-ledger.json`;
@@ -358,12 +359,17 @@ async function room(config, dir, count = 1) {
   next.setUTCMonth(next.getUTCMonth() + 1, 1);
   const month = next.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
   const some = count === 1 ? "a rebuild" : `${count} rebuilds`;
-  const why = rebuilds + count > limits.rebuilds ? `${count === 1 ? "" : `it needs ${some} and `}${Math.max(0, limits.rebuilds - rebuilds)} of this month's ${limits.rebuilds} rebuild${limits.rebuilds === 1 ? " is" : "s are"} left` : `${usd(Math.max(0, limits.month - spent))} left of this month's ${usd(limits.month)} and ${some} may cost ${usd(cost)}`;
+  const left = Math.max(0, limits.rebuilds - rebuilds);
+  const why = rebuilds + count > limits.rebuilds ? `${count === 1 ? "" : `it needs ${some} and `}${left} of this month's ${limits.rebuilds} rebuild${limits.rebuilds === 1 ? "" : "s"} ${left === 1 ? "is" : "are"} left` : `${usd(Math.max(0, limits.month - spent))} left of this month's ${usd(limits.month)} and ${some} may cost ${usd(cost)}`;
   const when = count > limits.rebuilds || cost > limits.month ? `It needs higher "limits" in ${DIR}/config.json.` : `It runs ${month} 1, or raise "limits" in ${DIR}/config.json.`;
   return { limits, file, local, full: `${why}. ${when}` };
 }
-async function agent(config, dir, what, prompt, env, reserved = false) {
-  const { limits, file, local, full } = await room(config, dir);
+async function agent(config, build, what, prompt, env, heal = false) {
+  const dir = build.dir;
+  const reserved = heal && !!build.reserved;
+  if (reserved)
+    build.reserved--;
+  const { limits, file, local, full } = await room(config, dir, 1 + (build.reserved ?? 0));
   if (full && !reserved)
     throw new Waiting(`${what} waits: ${full}`);
   const { agent, command } = agentCommand(config, limits.rebuild);
@@ -415,6 +421,8 @@ function claudeSpend(out) {
     process.stderr.write(out);
     return {};
   }
+  if (!report || typeof report !== "object")
+    return {};
   for (const line of [report.result, ...report.errors ?? []])
     if (typeof line === "string")
       say(line);
@@ -463,7 +471,7 @@ async function codexSpend(out) {
     outputTokens: tokens("output_tokens")
   };
   const price = model ? await prices(model) : undefined;
-  if (!price) {
+  if (!price || !(Number(price.input_cost_per_token) > 0)) {
     say(`couldn't price ${model ?? "Codex's model"}, so this rebuild counts at its cap`);
     return spend;
   }
@@ -536,7 +544,7 @@ async function updateWorkflows(config, build, files, range) {
   const own = `${WORKFLOWS}/autofork.yml`;
   const rest = [".", `:(exclude)${WORKFLOWS}`];
   say(`bringing upstream's changes into ${files.join(", ")}`);
-  const ran = await agent(config, build.dir, "workflow update", `You are keeping a patched fork of ${config.upstream} in sync. The workflows in ${WORKFLOWS}/ are the fork's own copies, and upstream changed ${files.join(", ")}: git diff ${range} -- ${WORKFLOWS}
+  const ran = await agent(config, build, "workflow update", `You are keeping a patched fork of ${config.upstream} in sync. The workflows in ${WORKFLOWS}/ are the fork's own copies, and upstream changed ${files.join(", ")}: git diff ${range} -- ${WORKFLOWS}
 
 Bring into this fork's copies what it needs from those changes, and keep what the fork does differently. Add a workflow only where upstream split or renamed one the fork keeps. Only what you change in ${WORKFLOWS}/ is kept, except autofork.yml, and the sync commits it.`).catch((error) => {
     if (!(error instanceof Waiting))
@@ -572,10 +580,7 @@ async function heal(config, build, id, broken, patch) {
   const wish = readFileSync(doc, "utf8").trimEnd();
   say(`${doing} ${id}`);
   try {
-    const reserved = !!build.reserved;
-    if (reserved)
-      build.reserved--;
-    if (!await agent(config, build.dir, id, prompt, BOT, reserved))
+    if (!await agent(config, build, id, prompt, BOT, true))
       throw new Failure(`the agent failed while ${doing} ${id}`);
     git(build.dir, "reset", "--soft", "--quiet", step);
     const reason = existsSync(upstreamDoc(build.dir, id)) ? readFileSync(upstreamDoc(build.dir, id), "utf8").trim() : "";
@@ -848,7 +853,7 @@ async function fix(config, build, failed, from) {
     prepared(config, build);
   say(`fixing ${failed.check} in the patches`);
   const prompt = fixPrompt(config, build, ids, failed, from);
-  if (!await agent(config, build.dir, `${failed.check} fix`, prompt, BOT))
+  if (!await agent(config, build, `${failed.check} fix`, prompt, BOT))
     throw new Failure(`the agent failed while fixing ${failed.check}`);
   const pausing = new Set;
   for (const id of ids) {
@@ -948,9 +953,9 @@ To keep yours, say in PATCH.md how it differs from upstream's, delete this file 
 `);
   }
 }
-function cleanup(root, build) {
-  if (build)
-    run("git", ["worktree", "remove", "--force", build.dir], root);
+function cleanup(root, dir) {
+  if (dir)
+    run("git", ["worktree", "remove", "--force", dir], root);
 }
 function workingTree(root, skip = []) {
   const gitDir = git(root, "rev-parse", "--path-format=absolute", "--git-dir");
@@ -969,7 +974,7 @@ async function check(root, config, against, base = baseline(root)) {
     return { base, rebuilt: rebuilt.steps.at(-1), drift: drift.split(`
 `).filter(Boolean) };
   } finally {
-    cleanup(root, rebuilt);
+    cleanup(root, rebuilt.dir);
   }
 }
 async function sync(root, args) {
@@ -1048,7 +1053,7 @@ Where one is just an old copy of upstream's, take upstream's first: git checkout
     say(message);
     output({ result: "synced", ...tag && source === tip ? { tag } : {} });
   } finally {
-    cleanup(root, result);
+    cleanup(root, scratch(root));
   }
 }
 async function save(root, args) {
@@ -1073,7 +1078,7 @@ async function save(root, args) {
     say(`saved ${drift.length} file${drift.length === 1 ? "" : "s"} to ${DIR}/${id}. Commit and push.`);
   } finally {
     rmSync(fold, { force: true });
-    cleanup(root, result);
+    cleanup(root, result.dir);
   }
 }
 var workflow = (branch, cron) => `name: autofork
@@ -1226,9 +1231,9 @@ async function fork(cwd, args) {
   say(`${repo} now keeps itself current with ${upstream}. It's cloned in ./${basename(root)}.`);
   if (!secret)
     say(`Last step: run claude setup-token, then gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo ${repo}, then start its first sync: gh workflow run autofork.yml --repo ${repo}`);
-  say(LINK.replace("autofork link", `cd ${basename(root)} && autofork link`));
+  say(LINK.replace("npx", `cd ${basename(root)} && npx`));
 }
-var LINK = "GitHub's timer can run hours late. Run it on time and track spend: autofork link";
+var LINK = "GitHub's timer can run hours late. Run it on time and track spend: npx github:AVGVSTVS96/autofork link";
 async function linked(owner, name) {
   const response = await fetch(`${SITE}/api/link`, {
     method: "POST",
@@ -1241,7 +1246,7 @@ async function linked(owner, name) {
   const text = await response?.text().catch(() => {
     return;
   });
-  if (!response || text === undefined || response.status >= 500)
+  if (!response || text === undefined || response.status >= 500 || response.status === 429)
     return;
   try {
     if (response.ok)
