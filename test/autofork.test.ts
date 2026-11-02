@@ -23,10 +23,26 @@ writeFileSync(gitconfig, `[url "${github}/"]\n\tinsteadOf = https://github.com/\
 const fakeApi = join(home, "fake-api.mjs");
 writeFileSync(
   fakeApi,
-  `globalThis.fetch = async (url) => {
+  `import { appendFileSync, readFileSync } from "node:fs";
+globalThis.fetch = async (url, init = {}) => {
+  url = String(url);
   const latest = process.env.LATEST_RELEASE;
-  if (latest && String(url).endsWith("/releases/latest")) return new Response(JSON.stringify({ tag_name: latest }));
-  if (process.env.RELEASES && String(url).includes("/releases?")) return new Response(process.env.RELEASES);
+  if (latest && url.endsWith("/releases/latest")) return new Response(JSON.stringify({ tag_name: latest }));
+  if (process.env.RELEASES && url.includes("/releases?")) return new Response(process.env.RELEASES);
+  if (process.env.PRICES && url.endsWith("/model_prices_and_context_window.json")) return new Response(process.env.PRICES);
+  if (url.startsWith("https://token.test/")) return Response.json({ value: "oidc-" + new URL(url).searchParams.get("audience") });
+  if (url.startsWith("https://site.test/")) {
+    const path = url.slice("https://site.test".length);
+    const log = process.env.SITE_LOG;
+    let calls = 0;
+    try { calls = readFileSync(log, "utf8").split("\\n").filter((line) => line.includes('"' + path + '"')).length; } catch {}
+    const body = init.body && JSON.parse(init.body);
+    appendFileSync(log, JSON.stringify({ method: init.method ?? "GET", path, auth: init.headers?.authorization, body }) + "\\n");
+    if (path === "/api/ledger" && !body) return process.env.SITE_TOTALS ? new Response(process.env.SITE_TOTALS) : new Response("{}", { status: 404 });
+    if (path === "/api/ledger") return Response.json({ id: "row-1" }, { status: 201 });
+    if (path === "/api/ledger/close") return new Response(null, { status: 204 });
+    if (path === "/api/link") return Response.json({ linked: calls >= Number(process.env.LINK_AFTER ?? 0), cron: null });
+  }
   return new Response("{}", { status: 404 });
 };
 `,
@@ -42,12 +58,19 @@ function autofork(cwd: string, ...args: string[]) {
   return autoforkWith({}, cwd, ...args);
 }
 
+let calls = 0;
+
 function autoforkWith(extra: NodeJS.ProcessEnv, cwd: string, ...args: string[]) {
   const outputs = join(home, "github-output");
   writeFileSync(outputs, "");
   const result = spawnSync("node", ["--import", fakeApi, cli, ...args], {
     cwd,
-    env: { ...env, ...extra, GITHUB_OUTPUT: outputs },
+    env: {
+      ...env,
+      AUTOFORK_LEDGER: join(home, `ledger-${++calls}.json`),
+      ...extra,
+      GITHUB_OUTPUT: outputs,
+    },
     encoding: "utf8",
   });
   const output = Object.fromEntries(
@@ -487,7 +510,7 @@ test("a fork can follow one channel of upstream's releases, named by its tags", 
   expect(file(mine, "notes.txt")).toBe("two\n");
 });
 
-test("init turns on Actions and issues for the fork origin points to, not the upstream gh picks", () => {
+test("init turns on Actions and issues for the fork origin points to, not the upstream gh picks, and checks a private fork hourly", () => {
   const bin = join(home, "bin");
   mkdirSync(bin, { recursive: true });
   writeFileSync(
@@ -496,6 +519,7 @@ test("init turns on Actions and issues for the fork origin points to, not the up
 echo "$*" >> ${home}/gh.log
 case "$*" in
   "repo view"*) echo acme/app ;;
+  "api repos/me/app --jq .private") echo true ;;
   "api repos/me/app") echo '{"fork":true,"owner":{"login":"me"},"parent":{"full_name":"acme/app","description":"An app"}}' ;;
   "api users/me") echo '{"type":"User","name":"Ada Lovelace"}' ;;
   *) echo '{}' ;;
@@ -507,13 +531,15 @@ esac
     home,
     `git clone -q ${join(github, "acme/app.git")} mine && git -C mine remote set-url origin git@github.com:me/app.git`,
   );
-  const { ok } = autoforkWith(
+  const { ok, log } = autoforkWith(
     { PATH: `${bin}:${process.env.PATH}` },
     join(home, "mine"),
     "init",
     "acme/app",
   );
   expect(ok).toBe(true);
+  expect(log).toContain("This repo is private");
+  expect(file(join(home, "mine"), ".github/workflows/autofork.yml")).toContain("17 * * * *");
   const calls = file(home, "gh.log");
   expect(calls).toContain("api -X PUT repos/me/app/actions/permissions -F enabled=true");
   expect(calls).toContain("repo edit me/app --enable-issues");
@@ -2132,4 +2158,335 @@ test("checks the agent picks that fail with its patch aren't kept, and the patch
     `\`${verify}\` fails with the patches, so the unproven checks an agent picked aren't kept`,
   );
   expect(JSON.parse(file(mine, ".autofork/config.json")).verify).toBeUndefined();
+});
+
+function spendFork(name: string, limits?: object) {
+  const origin = join(home, name);
+  const mine = join(home, `${name}-fork`);
+  mkdirSync(origin);
+  sh(
+    origin,
+    "git init -q && echo 'export const app = 1;' > app.js && git add -A && git commit -qm init",
+  );
+  sh(home, `git clone -q ${origin} ${name}-fork`);
+  expect(autofork(mine, "init", origin, "--verify", "true").ok).toBe(true);
+  if (limits) {
+    const config = JSON.parse(file(mine, ".autofork/config.json"));
+    write(mine, ".autofork/config.json", JSON.stringify({ ...config, limits }));
+  }
+  sh(mine, "git add -A && git commit -qm 'track upstream'");
+  return mine;
+}
+
+function wish(mine: string, id: string, agent?: string) {
+  mkdirSync(join(mine, ".autofork", id), { recursive: true });
+  write(mine, `.autofork/${id}/PATCH.md`, `app.js says ${id}.\n`);
+  const config = JSON.parse(file(mine, ".autofork/config.json"));
+  write(mine, ".autofork/config.json", JSON.stringify({ ...config, agent }));
+  sh(mine, `git add -A && git commit -qm ${id}`);
+}
+
+const stub = (dir: string, name: string, script: string) => {
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, name), `#!/bin/sh\n${script}\n`, { mode: 0o755 });
+};
+
+test("init and fork write the limits, the schedule --every picks, id-token: write and the line about linking", () => {
+  const origin = join(home, "timed");
+  mkdirSync(origin);
+  sh(origin, "git init -q && echo one > app.js && git add -A && git commit -qm init");
+  sh(home, `git clone -q ${origin} timed-fork`);
+  const mine = join(home, "timed-fork");
+  expect(autofork(mine, "init", origin, "--every", "2h").log).toContain(
+    "--every takes 5m, 15m, 1h, 1d, not 2h",
+  );
+  const { ok, log } = autofork(mine, "init", origin, "--every", "1h");
+  expect(ok).toBe(true);
+  expect(log).toContain(
+    "GitHub's timer can run hours late. Run it on time and track spend: npx github:AVGVSTVS96/autofork link",
+  );
+  expect(JSON.parse(file(mine, ".autofork/config.json")).limits).toEqual({
+    rebuilds: 10,
+    month: 200,
+    rebuild: 20,
+  });
+  const workflow = file(mine, ".github/workflows/autofork.yml");
+  expect(workflow).toContain('- cron: "17 * * * *"');
+  expect(workflow).toContain("  id-token: write\n");
+  sh(mine, "rm -rf .autofork .github");
+  autofork(mine, "init", origin);
+  expect(file(mine, ".github/workflows/autofork.yml")).toContain('- cron: "7-59/15 * * * *"');
+});
+
+test("a sync waits before paying for any rebuild when the month has no room for all it needs", () => {
+  const mine = spendFork("capped", { rebuilds: 2 });
+  const ledger = join(home, "capped-ledger.json");
+  const runs = join(home, "capped-runs");
+  const month = new Date().toISOString().slice(0, 7);
+  const old = { patch: "old", agent: "claude", cap: 20, cost: 3, status: "done", at: "" };
+  writeFileSync(ledger, JSON.stringify({ month, rebuilds: [old] }));
+  const build = `id=$(grep -o 'Patch "[a-z]*"' | cut -d'"' -f2)\necho $id >> ${runs}\necho "// $id" >> app.js`;
+  wish(mine, "one", build);
+  wish(mine, "two", build);
+  const head = sh(mine, "git rev-parse HEAD");
+  const sync = (limits: object) => {
+    const config = JSON.parse(file(mine, ".autofork/config.json"));
+    write(mine, ".autofork/config.json", JSON.stringify({ ...config, limits }));
+    sh(mine, "git diff --quiet || git commit -qam limits");
+    return autoforkWith({ AUTOFORK_LEDGER: ledger }, mine, "sync");
+  };
+  const waiting = autoforkWith({ AUTOFORK_LEDGER: ledger }, mine, "sync");
+  expect(waiting.ok).toBe(true);
+  expect(waiting.output.result).toBe("waiting");
+  expect(waiting.log).toMatch(
+    /autofork: one, two wait: 2 rebuilds won't fit in this month's 2 \(1 used\)\. It runs \w{3} 1 \(UTC\), or raise "rebuilds" in "limits" in \.autofork\/config\.json\.\n$/,
+  );
+  expect(existsSync(runs)).toBe(false);
+  expect(sh(mine, "git rev-parse HEAD")).toBe(head);
+
+  const never = sync({ rebuilds: 1 });
+  expect(never.log).toContain(
+    'one, two wait: 2 rebuilds won\'t fit in this month\'s 1 (1 used). It needs you to raise "rebuilds" in "limits" in .autofork/config.json.',
+  );
+  expect(existsSync(runs)).toBe(false);
+
+  writeFileSync(ledger, JSON.stringify({ month: "2000-01", rebuilds: [old] }));
+  const built = sync({ rebuilds: 2 });
+  expect(built.output).toMatchObject({ result: "synced", ledger: "changed" });
+  expect(built.log).toContain("one cost up to $20");
+  expect(file(home, "capped-runs")).toBe("one\ntwo\n");
+  expect(JSON.parse(file(home, "capped-ledger.json")).rebuilds).toMatchObject([
+    { patch: "one", agent: "custom", cap: 20, cost: 20, status: "done" },
+    { patch: "two", agent: "custom", cap: 20, cost: 20, status: "done" },
+  ]);
+});
+
+test("a rebuild waits when a whole rebuild's cap no longer fits under the month's, and names every limit that's short", () => {
+  const mine = spendFork("broke", { month: 30 });
+  const ledger = join(home, "broke-ledger.json");
+  const month = new Date().toISOString().slice(0, 7);
+  const row = { patch: "old", agent: "claude", cap: 20, status: "done", at: "" };
+  writeFileSync(ledger, JSON.stringify({ month, rebuilds: [{ ...row, cost: 9.5 }] }));
+  wish(mine, "three", "echo '// three' >> app.js");
+  const fits = autoforkWith({ AUTOFORK_LEDGER: ledger }, mine, "sync");
+  expect(fits.output.result).toBe("synced");
+  wish(mine, "four", "echo '// four' >> app.js");
+  writeFileSync(ledger, JSON.stringify({ month, rebuilds: [{ ...row, cost: 15 }] }));
+  const { log, output } = autoforkWith({ AUTOFORK_LEDGER: ledger }, mine, "sync");
+  expect(output.result).toBe("waiting");
+  expect(log).toContain(
+    "autofork: four waits: a rebuild may cost $20 and $15 of this month's $30 is left. It runs",
+  );
+  write(
+    mine,
+    ".autofork/config.json",
+    JSON.stringify({
+      ...JSON.parse(file(mine, ".autofork/config.json")),
+      limits: { month: 30, rebuilds: 1 },
+    }),
+  );
+  sh(mine, "git commit -qam 'one rebuild a month'");
+  expect(autoforkWith({ AUTOFORK_LEDGER: ledger }, mine, "sync").log).toMatch(
+    /four waits: a rebuild won't fit in this month's 1 \(1 used\), and a rebuild may cost \$20 and \$15 of this month's \$30 is left\. It runs \w{3} 1 \(UTC\), or raise "rebuilds" and "month" in "limits"/,
+  );
+  write(
+    mine,
+    ".autofork/config.json",
+    JSON.stringify({
+      ...JSON.parse(file(mine, ".autofork/config.json")),
+      limits: { month: "lots" },
+    }),
+  );
+  sh(mine, "git commit -qam 'bad limits'");
+  expect(autoforkWith({ AUTOFORK_LEDGER: ledger }, mine, "sync").log).toContain(
+    '"limits" in .autofork/config.json takes numbers',
+  );
+});
+
+test("Claude runs with this rebuild's cap, its own cost goes to the site, and the site's totals hold the limits", () => {
+  const mine = spendFork("billed");
+  const bin = join(home, "billed-bin");
+  stub(
+    bin,
+    "claude",
+    `cat > /dev/null
+echo "$*" > ${home}/claude-args
+env > ${home}/claude-env
+echo '// built' >> app.js
+echo '{"type":"result","subtype":"success","is_error":false,"result":"built it","total_cost_usd":1.25,"modelUsage":{"claude-opus-5-5":{"inputTokens":10,"outputTokens":20,"cacheReadInputTokens":100,"cacheCreationInputTokens":5,"costUSD":1.2},"claude-haiku-5-5":{"inputTokens":1,"outputTokens":2,"cacheReadInputTokens":0,"cacheCreationInputTokens":0,"costUSD":0.05}}}'`,
+  );
+  const siteLog = join(home, "billed-site.log");
+  const site = {
+    PATH: `${bin}:${process.env.PATH}`,
+    CLAUDE_CODE_OAUTH_TOKEN: "token",
+    ACTIONS_ID_TOKEN_REQUEST_URL: "https://token.test/?run=1",
+    ACTIONS_ID_TOKEN_REQUEST_TOKEN: "request",
+    AUTOFORK_URL: "https://site.test",
+    SITE_LOG: siteLog,
+  };
+  wish(mine, "five");
+  const { ok, log } = autoforkWith(
+    { ...site, SITE_TOTALS: '{"rebuilds":3,"spent":40}' },
+    mine,
+    "sync",
+  );
+  expect(ok).toBe(true);
+  expect(log).toContain("built it\nfive cost $1.25\n");
+  expect(file(home, "claude-args")).toContain(
+    "-p --dangerously-skip-permissions --output-format json --max-budget-usd 20",
+  );
+  expect(file(home, "claude-env")).not.toContain("ACTIONS_ID_TOKEN_REQUEST");
+  const calls = file(home, "billed-site.log")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  expect(calls).toEqual([
+    { method: "GET", path: "/api/ledger", auth: "Bearer oidc-autofork" },
+    { method: "GET", path: "/api/ledger", auth: "Bearer oidc-autofork" },
+    {
+      method: "POST",
+      path: "/api/ledger",
+      auth: "Bearer oidc-autofork",
+      body: { patch: "five", agent: "claude", cap: 20 },
+    },
+    {
+      method: "POST",
+      path: "/api/ledger/close",
+      auth: "Bearer oidc-autofork",
+      body: {
+        id: "row-1",
+        status: "done",
+        cost: 1.25,
+        model: "claude-opus-5-5",
+      },
+    },
+  ]);
+
+  wish(mine, "six");
+  const capped = autoforkWith({ ...site, SITE_TOTALS: '{"rebuilds":3,"spent":190}' }, mine, "sync");
+  expect(capped.output.result).toBe("waiting");
+  expect(capped.log).toContain(
+    "six waits: a rebuild may cost $20 and $10 of this month's $200 is left",
+  );
+});
+
+test("Codex's tokens are priced from LiteLLM's table for the model its session used", () => {
+  const mine = spendFork("priced");
+  const bin = join(home, "priced-bin");
+  const codexHome = join(home, "priced-codex");
+  mkdirSync(codexHome);
+  write(codexHome, "auth.json", "{}");
+  stub(
+    bin,
+    "codex",
+    `cat > /dev/null
+echo "$*" > ${home}/codex-args
+mkdir -p "$CODEX_HOME/sessions/2026/11/01"
+echo '{"type":"turn_context","payload":{"model":"gpt-test"}}' > "$CODEX_HOME/sessions/2026/11/01/rollout-2026-11-01-thread-9.jsonl"
+echo '// built' >> app.js
+echo '{"type":"thread.started","thread_id":"thread-9"}'
+echo '{"type":"item.completed","item":{"type":"agent_message","text":"built it"}}'
+echo '{"type":"turn.completed","usage":{"input_tokens":1000,"cached_input_tokens":400,"cache_write_input_tokens":100,"output_tokens":50}}'`,
+  );
+  const ledger = join(home, "priced-ledger.json");
+  wish(mine, "seven");
+  const { ok, log } = autoforkWith(
+    {
+      PATH: `${bin}:${process.env.PATH}`,
+      CLAUDE_CODE_OAUTH_TOKEN: "",
+      CODEX_HOME: codexHome,
+      AUTOFORK_LEDGER: ledger,
+      PRICES: JSON.stringify({
+        "gpt-test": {
+          input_cost_per_token: 0.001,
+          cache_read_input_token_cost: 0.0001,
+          cache_creation_input_token_cost: 0.002,
+          output_cost_per_token: 0.01,
+        },
+      }),
+    },
+    mine,
+    "sync",
+  );
+  expect(ok).toBe(true);
+  expect(file(home, "codex-args")).toContain("exec --json");
+  expect(log).toContain("built it\nseven cost $1.24\n");
+  const [row] = JSON.parse(file(home, "priced-ledger.json")).rebuilds;
+  expect(row).toMatchObject({ patch: "seven", agent: "codex", status: "done" });
+  expect(row.cost).toBeCloseTo(1.24);
+});
+
+test("link opens the site's page once the config is pushed, and waits until the fork is linked", () => {
+  const app = join(github, "me/linked.git");
+  mkdirSync(app, { recursive: true });
+  sh(app, "git init -q --bare");
+  const mine = join(home, "linked");
+  mkdirSync(mine);
+  sh(mine, "git init -q && echo one > app.js && git add -A && git commit -qm init");
+  sh(mine, "git remote add origin https://github.com/me/linked && git push -q origin main");
+  sh(app, "git symbolic-ref HEAD refs/heads/main");
+  const bin = join(home, "link-bin");
+  stub(bin, "xdg-open", `echo "$1" >> ${home}/opened`);
+  stub(bin, "open", `echo "$1" >> ${home}/opened`);
+  const siteLog = join(home, "link-site.log");
+  const linking = (after: number) =>
+    autoforkWith(
+      {
+        PATH: `${bin}:${process.env.PATH}`,
+        AUTOFORK_URL: "https://site.test",
+        SITE_LOG: siteLog,
+        LINK_AFTER: String(after),
+      },
+      mine,
+      "link",
+    );
+  const early = linking(9);
+  expect(early.ok).toBe(false);
+  expect(early.log).toContain("push .autofork/config.json to me/linked's default branch first");
+  mkdirSync(join(mine, ".autofork"));
+  write(mine, ".autofork/config.json", "{}");
+  sh(mine, "git add -A && git commit -qm config && git push -q origin main");
+  const { ok, log } = linking(2);
+  expect(ok).toBe(true);
+  expect(log).toContain("finish linking in your browser: https://site.test/link/me/linked");
+  expect(log).toContain("linked: autofork.com starts it within a minute of upstream changing.");
+  expect(file(home, "opened")).toBe("https://site.test/link/me/linked\n");
+  expect(JSON.parse(file(home, "link-site.log").split("\n")[0])).toMatchObject({
+    method: "POST",
+    path: "/api/link",
+    body: { owner: "me", name: "linked" },
+  });
+  const again = linking(0);
+  expect(again.log).toBe("linked: autofork.com starts it within a minute of upstream changing.\n");
+});
+
+test("after the up-front count, each rebuild still needs room of its own", () => {
+  const mine = spendFork("reserved", { month: 60 });
+  const bin = join(home, "reserved-bin");
+  stub(
+    bin,
+    "claude",
+    `id=$(grep -o 'Patch "[a-z]*"' | cut -d'"' -f2)
+echo "// $id" >> app.js
+echo '{"type":"result","result":"built","total_cost_usd":25,"modelUsage":{}}'`,
+  );
+  const ledger = join(home, "reserved-ledger.json");
+  const month = new Date().toISOString().slice(0, 7);
+  const old = { patch: "old", agent: "claude", cap: 20, cost: 20, status: "done", at: "" };
+  writeFileSync(ledger, JSON.stringify({ month, rebuilds: [old] }));
+  wish(mine, "eight");
+  wish(mine, "nine");
+  const { log, output } = autoforkWith(
+    {
+      PATH: `${bin}:${process.env.PATH}`,
+      CLAUDE_CODE_OAUTH_TOKEN: "token",
+      AUTOFORK_LEDGER: ledger,
+    },
+    mine,
+    "sync",
+  );
+  expect(output.result).toBe("waiting");
+  expect(log).toContain("eight cost $25\n");
+  expect(log).toContain("nine waits: a rebuild may cost $20 and $15 of this month's $60 is left");
+  expect(JSON.parse(file(home, "reserved-ledger.json")).rebuilds).toHaveLength(2);
 });

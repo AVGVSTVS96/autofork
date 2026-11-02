@@ -3,7 +3,7 @@ set -euo pipefail
 
 failed="$RUNNER_TEMP/autofork-failed"
 skip="$(cat "$failed" 2>/dev/null || true)"
-[ "${GITHUB_EVENT_NAME:-}" = schedule ] || skip=""
+[ "${GITHUB_EVENT_NAME:-}" = schedule ] || [ "${GITHUB_TRIGGERING_ACTOR:-}" = "autofork-app[bot]" ] || skip=""
 head="$(git rev-parse HEAD)"
 
 git config user.name "github-actions[bot]"
@@ -50,7 +50,7 @@ if [ -n "${WORKFLOW_TOKEN_URL:-}" ] &&
   fi
 fi
 
-if ! env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL node "$GITHUB_ACTION_PATH/dist/autofork.js" sync ${skip:+--skip "$skip"} $heal $leave_workflows; then
+if ! node "$GITHUB_ACTION_PATH/dist/autofork.js" sync ${skip:+--skip "$skip"} $heal $leave_workflows; then
   echo "result=failed" >> "$GITHUB_OUTPUT"
   exit 1
 fi
@@ -102,7 +102,7 @@ if [ "$(git rev-parse HEAD)" != "$head" ]; then
 
 $workflows
 
-autofork leaves the fork's \`.github/workflows/\` to it, and this sync didn't bring these changes over. Its agent does when the workflow can get a token that can push workflow files, from autofork's GitHub app (https://github.com/apps/autofork-app); a workflow's own token can't. Bring over what this fork needs from upstream's changes, keeping what it does differently, or delete the copies it doesn't run, then close this issue.
+autofork leaves the fork's \`.github/workflows/\` to it, and this sync didn't bring these changes over, and later syncs won't. Its agent does it during the sync when the workflow can get a token that can push workflow files, from autofork's GitHub app (https://github.com/apps/autofork-app), since a workflow's own token can't, and when this month's \`limits\` in .autofork/config.json have room for a rebuild. Bring over what this fork needs from upstream's changes, keeping what it does differently, or delete the copies it doesn't run, then close this issue.
 
 Synced in ${signed:0:12}." > /dev/null
     fi || echo "::warning::upstream changed workflows this fork copied, but autofork couldn't open an issue about it: turn on the fork's issues and give the workflow issues: write"
