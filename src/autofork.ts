@@ -463,6 +463,41 @@ function tally(file: string): { month: string; rebuilds: Row[] } {
 
 const usd = (amount: number) => `$${Number.isInteger(amount) ? amount : amount.toFixed(2)}`;
 
+async function room(config: Config, dir: string) {
+  const limits = { ...LIMITS };
+  for (const key of Object.keys(LIMITS) as (keyof typeof LIMITS)[]) {
+    limits[key] = Number(config.limits?.[key] ?? LIMITS[key]);
+    if (!(limits[key] >= 0))
+      throw new Failure(
+        `"limits" in ${DIR}/config.json takes numbers, like ${JSON.stringify(LIMITS)}`,
+      );
+  }
+  const file = process.env.AUTOFORK_LEDGER ?? `${dir}-ledger.json`;
+  const local = tally(file);
+  const answer = await site("ledger");
+  const remote = answer?.status === 200 ? await answer.json().catch(() => undefined) : undefined;
+  const rebuilds = Math.max(local.rebuilds.length, Number(remote?.rebuilds) || 0);
+  const spent = Math.max(
+    local.rebuilds.reduce((sum, row) => sum + (Number(row.cost) || limits.rebuild), 0),
+    Number(remote?.spent) || 0,
+  );
+  if (rebuilds < limits.rebuilds && spent + limits.rebuild <= limits.month)
+    return { limits, file, local };
+  const next = new Date();
+  next.setUTCMonth(next.getUTCMonth() + 1, 1);
+  const month = next.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
+  const why =
+    rebuilds >= limits.rebuilds
+      ? `this month's ${limits.rebuilds} rebuild${limits.rebuilds === 1 ? " is" : "s are"} used`
+      : `${usd(Math.max(0, limits.month - spent))} left of this month's ${usd(limits.month)} and a rebuild may cost ${usd(limits.rebuild)}`;
+  return {
+    limits,
+    file,
+    local,
+    full: `${why}. It runs ${month} 1, or raise "limits" in ${DIR}/config.json.`,
+  };
+}
+
 async function agent(
   config: Config,
   dir: string,
@@ -470,28 +505,8 @@ async function agent(
   prompt: string,
   env?: NodeJS.ProcessEnv,
 ) {
-  const limits = { ...LIMITS, ...config.limits };
-  const file = process.env.AUTOFORK_LEDGER ?? `${dir}-ledger.json`;
-  const local = tally(file);
-  const answer = await site("ledger");
-  const remote = answer?.status === 200 ? await answer.json().catch(() => undefined) : undefined;
-  const rebuilds = Math.max(local.rebuilds.length, Number(remote?.rebuilds) || 0);
-  const spent = Math.max(
-    local.rebuilds.reduce((sum, row) => sum + row.cost, 0),
-    Number(remote?.spent) || 0,
-  );
-  if (rebuilds >= limits.rebuilds || spent + limits.rebuild > limits.month) {
-    const next = new Date();
-    next.setUTCMonth(next.getUTCMonth() + 1, 1);
-    const month = next.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
-    throw new Waiting(
-      `${what} waits: ${
-        rebuilds >= limits.rebuilds
-          ? `this month's ${limits.rebuilds} rebuild${limits.rebuilds === 1 ? " is" : "s are"} used`
-          : `${usd(Math.max(0, limits.month - spent))} left of this month's ${usd(limits.month)} and a rebuild may cost ${usd(limits.rebuild)}`
-      }. It runs ${month} 1, or raise "limits" in ${DIR}/config.json.`,
-    );
-  }
+  const { limits, file, local, full } = await room(config, dir);
+  if (full) throw new Waiting(`${what} waits: ${full}`);
   const { agent, command } = agentCommand(config, limits.rebuild);
   const row: Row = {
     patch: what,
@@ -561,8 +576,9 @@ async function codexSpend(out: Buffer): Promise<Spend> {
       continue;
     }
     if (event.type === "thread.started") thread = event.thread_id;
-    if (event.type === "item.completed" && event.item?.type === "agent_message")
-      say(event.item.text);
+    const said = event.type === "item.completed" ? event.item?.text : event.message;
+    if (typeof said === "string") say(said);
+    if (event.type === "turn.failed" && event.error?.message) say(event.error.message);
     if (event.type === "turn.completed") {
       used ??= {};
       for (const [key, count] of Object.entries(event.usage ?? {}))
@@ -1252,7 +1268,8 @@ async function sync(root: string, args: string[]) {
   say(
     `upstream ${moved}, ${config.patches.length} patch${config.patches.length === 1 ? "" : "es"}`,
   );
-  const healFrom = args.includes("--no-heal") ? undefined : base;
+  const full = args.includes("--no-heal") ? undefined : (await room(config, scratch(root))).full;
+  const healFrom = args.includes("--no-heal") || full ? undefined : base;
   const behind = workflowsBehind(root, base, source);
   const range = `${short(base)}..${short(source)}`;
   let result: Build | undefined;
@@ -1269,7 +1286,7 @@ async function sync(root: string, args: string[]) {
     } catch (error) {
       if (!(error instanceof Drifted)) throw error;
       say(
-        `autofork: ${error.message}${error instanceof Waiting ? "" : ". The next run that heals rebuilds it."}`,
+        `autofork: ${error.message}${error instanceof Waiting ? "" : full ? `, and a rebuild waits: ${full}` : ". The next run that heals rebuilds it."}`,
       );
       return output({ result: "waiting" });
     }
@@ -1399,7 +1416,7 @@ function options(args: string[]) {
   if (generated && !setup)
     throw new Failure("--generated files are rebuilt by --setup, so set it too");
   const every = flag(args, "--every") ?? "15m";
-  if (!EVERY[every])
+  if (!Object.hasOwn(EVERY, every))
     throw new Failure(`--every takes ${Object.keys(EVERY).join(", ")}, not ${every}`);
   return {
     follow: flag(args, "--follow"),
@@ -1475,8 +1492,15 @@ To drop the line, delete it from the README and delete this folder, in the same 
 }
 
 function origin(root: string) {
-  const url = run("git", ["config", "--get", "remote.origin.url"], root).out.toString().trim();
-  return url.match(/github\.com[/:]([\w.-]+\/[\w.-]+?)(?:\.git)?$/)?.[1] ?? "";
+  for (const args of [
+    ["remote", "get-url", "origin"],
+    ["config", "--get", "remote.origin.url"],
+  ]) {
+    const url = run("git", args, root).out.toString().trim();
+    const repo = url.match(/github\.com[/:]([\w.-]+\/[\w.-]+?)(?:\.git)?$/)?.[1];
+    if (repo) return repo;
+  }
+  return "";
 }
 
 function claim(root: string, upstream: string) {
@@ -1556,7 +1580,10 @@ async function linked(owner: string, name: string) {
       signal: AbortSignal.timeout(10_000),
     });
     if (response.ok) return !!(await response.json()).linked;
-  } catch {}
+    throw new Failure(`${SITE} answered ${response.status}: ${await response.text()}`);
+  } catch (error) {
+    if (error instanceof Failure) throw error;
+  }
   throw new Failure(`can't reach ${SITE}, try again in a minute`);
 }
 
@@ -1565,10 +1592,9 @@ async function link(root: string) {
   if (!name) throw new Failure("run autofork link inside a clone of your fork on GitHub");
   const done = () => say("linked: autofork.com starts it within a minute of upstream changing.");
   if (await linked(owner, name)) return done();
-  if (
-    !run("git", ["fetch", "--quiet", "origin", "HEAD"], root).ok ||
-    !run("git", ["cat-file", "-e", `FETCH_HEAD:${DIR}/config.json`], root).ok
-  )
+  const fetched = run("git", ["fetch", "--quiet", "origin", "HEAD"], root);
+  if (!fetched.ok) throw new Failure(`can't fetch ${owner}/${name}: ${fetched.err}`);
+  if (!run("git", ["cat-file", "-e", `FETCH_HEAD:${DIR}/config.json`], root).ok)
     throw new Failure(`push ${DIR}/config.json to ${owner}/${name}'s default branch first`);
   const page = `${SITE}/link/${owner}/${name}`;
   say(`finish linking in your browser: ${page}`);

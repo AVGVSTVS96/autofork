@@ -87,11 +87,11 @@ Each agent run is a rebuild, and `limits` in `.autofork/config.json` caps them:
 "limits": { "rebuilds": 10, "month": 200, "rebuild": 20 }
 ```
 
-Those are the defaults: at most 10 rebuilds a month, $200 a month and $20 a rebuild, at API prices. They're caps, not estimates, and a key you leave out takes its default. Before each agent run the sync looks at this month's rebuilds (the UTC calendar month) and starts one only if fewer than `rebuilds` have run and a whole rebuild's `rebuild` still fits under `month`, so no run is cut off halfway by the monthly cap. Otherwise that patch waits: the sync ends `waiting`, says why in one line, and the patch is rebuilt on the 1st, or right away once you raise `limits` and push.
+Those are the defaults: at most 10 rebuilds a month, $200 a month and $20 a rebuild, at API prices. They're caps, not estimates, and a key you leave out takes its default. Before each agent run the sync looks at this month's rebuilds (the UTC calendar month) and starts one only if fewer than `rebuilds` have run and a whole rebuild's `rebuild` still fits under `month`, so no run is cut off halfway by the monthly cap. Otherwise the sync does only what git can, like a run with `heal: false`: a patch that needs the agent waits, the sync ends `waiting` and says why in one line, and the patch is rebuilt on the 1st, or right away once you raise `limits` and push. A sync that needs more rebuilds than are left runs the ones that fit, then waits, and does them again once it can finish.
 
-Claude Code runs with `--max-budget-usd` set to `rebuild`, and the sync records the cost it reports. Codex has no budget flag, so it runs to the end, and its cost is its token counts at [LiteLLM's prices](https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json) for the model it used. A custom `agent` command, or a run that ends without reporting, counts at its full `rebuild` cap.
+Claude Code runs with `--max-budget-usd` set to `rebuild`, which it checks between steps, so a run can end a little past it, and the sync records the cost it reports. Codex has no budget flag, so a Codex run isn't stopped at `rebuild` and can cost more; its cost is its token counts at [LiteLLM's prices](https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json) for the model it used. A custom `agent` command, or a run that ends without reporting, counts at its full `rebuild` cap.
 
-The month's count lives in the action's Actions cache, which only the fork's workflows can read, so limits work with no account. GitHub drops a cache nothing has used for 7 days, so a fork that sat idle that long starts the count over. When the workflow has `id-token: write`, which `init` and `fork` add, each rebuild's cost also goes to autofork.com, proven by the run's GitHub sign-in. autofork.com then keeps the count when the cache is gone, and shows the spend to people who can push to the fork. The sync takes that sign-in out of its environment before it runs `setup`, `verify` or the agent.
+The month's count lives in the action's Actions cache, which only the fork's workflows can read, so limits work with no account. GitHub drops a cache nothing has used for 7 days, so a fork that sat idle that long starts the count over. When the workflow has `id-token: write`, which `init` and `fork` add, each rebuild's cost also goes to autofork.com, proven by the run's GitHub sign-in. autofork.com then keeps the count when the cache is gone, and shows the spend to people who can push to the fork. The sync keeps that sign-in out of the environment of `setup`, `verify` and the agent, but code they run can still get at it, like the job's other tokens ([#10](https://github.com/AVGVSTVS96/autofork/issues/10)).
 
 ## On time
 
@@ -101,7 +101,7 @@ GitHub runs the workflow on its `cron` line, every 15 minutes unless you pick an
 npx github:AVGVSTVS96/autofork link
 ```
 
-It opens autofork.com, where you sign in with GitHub and add autofork's GitHub app to the fork. autofork.com then checks upstream every minute and starts the fork's workflow when it changes. GitHub's schedule stays on as the backup. To unlink, remove the app from the fork.
+It opens autofork.com, where you sign in with GitHub and add autofork's GitHub app to the fork. autofork.com then checks upstream every minute and starts the fork's workflow when it changes. GitHub's schedule stays on as the backup. To unlink, remove the app from the fork. With the app on the fork and the workflow's `id-token: write`, code the sync runs can also get a token that pushes workflow files, as above ([#10](https://github.com/AVGVSTVS96/autofork/issues/10)).
 
 ## Agents
 

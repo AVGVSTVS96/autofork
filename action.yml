@@ -35,7 +35,7 @@ runs:
     - uses: actions/cache/restore@v6
       with:
         path: ${{ runner.temp }}/autofork-ledger.json
-        key: autofork-ledger-${{ github.run_id }}
+        key: autofork-ledger-${{ github.run_id }}-${{ github.run_attempt }}
         restore-keys: autofork-ledger-
     - id: sync
       shell: bash
