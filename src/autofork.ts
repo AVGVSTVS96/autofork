@@ -79,7 +79,6 @@ type Build = {
   steps: string[];
   source: string;
   healed: Map<string, string>;
-  reserved?: Set<string>;
   upstreamHas: Map<string, string>;
   ready?: string;
   rebuilt?: string;
@@ -560,12 +559,10 @@ async function agent(
   what: string,
   prompt: string,
   env?: NodeJS.ProcessEnv,
-  heal = false,
 ) {
   const dir = build.dir;
-  const reserved = heal && !!build.reserved?.delete(what);
-  const { limits, spent, full, why } = await room(config, 1 + (build.reserved?.size ?? 0));
-  if (full && !(reserved && spent < limits.month)) throw new Waiting(`${what} waits: ${full}`, why);
+  const { limits, full, why } = await room(config);
+  if (full) throw new Waiting(`${what} waits: ${full}`, why);
   const { agent, command } = agentCommand(config, limits.rebuild);
   const row: Row = {
     patch: what,
@@ -806,7 +803,7 @@ async function heal(
   const wish = readFileSync(doc, "utf8").trimEnd();
   say(`${doing} ${id}`);
   try {
-    if (!(await agent(config, build, id, prompt, BOT, true)))
+    if (!(await agent(config, build, id, prompt, BOT)))
       throw new Failure(`the agent failed while ${doing} ${id}`);
     git(build.dir, "reset", "--soft", "--quiet", step);
     const reason = existsSync(upstreamDoc(build.dir, id))
@@ -990,7 +987,7 @@ async function build(
     healed: new Map(),
     upstreamHas: new Map(),
   };
-  if (options.healFrom) await setAside(config, build);
+  if (options.healFrom) await fitsUpFront(config, build);
   if (options.wait) settle(config, build);
   for (const id of config.patches) {
     const file = patchFile(dir, id);
@@ -1007,7 +1004,6 @@ async function build(
         isEmpty(file) ? undefined : { file, from: options.healFrom },
       );
     } else {
-      build.reserved?.delete(id);
       if (!isEmpty(file) && !changed(dir))
         build.upstreamHas.set(id, "the same change, line for line");
     }
@@ -1016,21 +1012,15 @@ async function build(
     }
     build.steps.push(commit(dir, id));
   }
-  build.reserved = undefined;
   return build;
 }
 
-async function setAside(config: Fork, build: Build) {
+/* git counts the patches that will need an agent, so a sync whose month can't fit them all waits before it pays for any */
+async function fitsUpFront(config: Fork, build: Build) {
   const broken = config.patches.filter((id) => {
     const file = patchFile(build.dir, id);
     const fits = !isEmpty(file) && apply(build.dir, file, config);
-    if (!fits && !isEmpty(file))
-      run(
-        "git",
-        ["apply", "--reject", "--whitespace=nowarn", ...skipGenerated(config), file],
-        build.dir,
-      );
-    commit(build.dir, id);
+    if (fits) commit(build.dir, id);
     return !fits;
   });
   reset(build.dir, build.steps[0]);
@@ -1038,7 +1028,6 @@ async function setAside(config: Fork, build: Build) {
   const { full } = broken.length ? await room(config, broken.length) : {};
   if (full)
     throw new Waiting(`${broken.join(", ")} wait${broken.length === 1 ? "s" : ""}: ${full}`);
-  build.reserved = new Set(broken);
 }
 
 function passesAt(config: Fork, build: Build, commit: string) {

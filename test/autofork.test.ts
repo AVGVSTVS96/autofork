@@ -2460,7 +2460,7 @@ test("link opens the site's page once the config is pushed, and waits until the 
   expect(again.log).toBe("linked: autofork.com starts it within a minute of upstream changing.\n");
 });
 
-test("rebuilds a sync made room for go ahead when one costs more than its cap", () => {
+test("after the up-front count, each rebuild still needs room of its own", () => {
   const mine = spendFork("reserved", { month: 60 });
   const bin = join(home, "reserved-bin");
   stub(
@@ -2485,8 +2485,8 @@ echo '{"type":"result","result":"built","total_cost_usd":25,"modelUsage":{}}'`,
     mine,
     "sync",
   );
-  expect(output.result).toBe("synced");
+  expect(output.result).toBe("waiting");
   expect(log).toContain("eight cost $25\n");
-  expect(log).toContain("nine cost $25\n");
-  expect(JSON.parse(file(home, "reserved-ledger.json")).rebuilds).toHaveLength(3);
+  expect(log).toContain("nine waits: a rebuild may cost $20 and $15 of this month's $60 is left");
+  expect(JSON.parse(file(home, "reserved-ledger.json")).rebuilds).toHaveLength(2);
 });
