@@ -329,7 +329,11 @@ function tally(file) {
     try {
       saved = JSON.parse(readFileSync(file, "utf8"));
     } catch {}
-    tallies.set(file, saved?.month === month && Array.isArray(saved.rebuilds) ? saved : { month, rebuilds: [] });
+    const rows = saved?.month === month && Array.isArray(saved.rebuilds) ? saved.rebuilds : [];
+    tallies.set(file, {
+      month,
+      rebuilds: rows.filter((row) => typeof row?.cost === "number")
+    });
   }
   return tallies.get(file);
 }
@@ -359,9 +363,18 @@ async function room(config, dir, count = 1) {
   const month = next.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
   const some = count === 1 ? "a rebuild" : `${count} rebuilds`;
   const left = Math.max(0, limits.rebuilds - rebuilds);
-  const why = rebuilds + count > limits.rebuilds ? `${count === 1 ? "" : `it needs ${some} and `}${left} of this month's ${limits.rebuilds} rebuild${limits.rebuilds === 1 ? "" : "s"} ${left === 1 ? "is" : "are"} left` : `${usd(Math.max(0, limits.month - spent))} left of this month's ${usd(limits.month)} and ${some} may cost ${usd(cost)}`;
+  const gaps = [
+    rebuilds + count > limits.rebuilds && `${count === 1 ? "" : `it needs ${some} and `}${left} of this month's ${limits.rebuilds} rebuild${limits.rebuilds === 1 ? "" : "s"} ${left === 1 ? "is" : "are"} left`,
+    spent + cost > limits.month && `${usd(Math.max(0, limits.month - spent))} of this month's ${usd(limits.month)} is left and ${some} may cost ${usd(cost)}`
+  ].filter(Boolean);
+  const keys = [
+    rebuilds + count > limits.rebuilds && '"rebuilds"',
+    spent + cost > limits.month && '"month"'
+  ].filter(Boolean);
+  const raise = `raise ${keys.join(" and ")} in "limits" in ${DIR}/config.json`;
   const never = count > limits.rebuilds || cost > limits.month;
-  const when = never ? `It needs higher "limits" in ${DIR}/config.json.` : `It runs ${month} 1, or raise "limits" in ${DIR}/config.json.`;
+  const why = gaps.join(", and ");
+  const when = never ? `It needs you to ${raise}.` : `It runs ${month} 1, or ${raise}.`;
   return { limits, file, local, never, full: `${why}. ${when}` };
 }
 async function agent(config, build, what, prompt, env, heal = false) {
@@ -740,17 +753,18 @@ async function build(root, config, base, options) {
   if (options.healFrom) {
     const broken = config.patches.filter((id) => {
       const file = patchFile(dir, id);
-      if (isEmpty(file) || !apply(dir, file, config))
-        return true;
+      const fits = !isEmpty(file) && apply(dir, file, config);
+      if (!fits && !isEmpty(file))
+        run("git", ["apply", "--reject", "--whitespace=nowarn", ...skipGenerated(config), file], dir);
       commit(dir, id);
-      return false;
+      return !fits;
     });
     reset(dir, build.steps[0]);
-    const { full, never } = broken.length ? await room(config, dir, broken.length) : {};
-    if (full && !never)
+    git(dir, "clean", "-fdxq");
+    const { full } = broken.length ? await room(config, dir, broken.length) : {};
+    if (full)
       throw new Waiting(`${broken.join(", ")} wait${broken.length === 1 ? "s" : ""}: ${full}`);
-    if (!full)
-      build.reserved = new Set(broken);
+    build.reserved = new Set(broken);
   }
   if (options.wait)
     settle(config, build);
@@ -1156,8 +1170,8 @@ async function setup(root, upstream, { every, ...chosen }) {
   mkdirSync(join(root, ".github/workflows"), { recursive: true });
   if (!existsSync(path))
     writeFileSync(path, workflow(git(root, "branch", "--show-current") || defaultBranch(root, upstream), EVERY[every ?? "15m"]));
-  else if (every || !readFileSync(path, "utf8").includes("id-token: write"))
-    say(`Kept your ${path.slice(root.length + 1)}: its cron line is the schedule, and it needs \`id-token: write\` in permissions to report spend.`);
+  else if (every || !/^\s*(id-token:\s*write|permissions:\s*write-all)/m.test(readFileSync(path, "utf8")))
+    say(`Kept your ${path.slice(root.length + 1)}: its cron line is the schedule${every ? ` (--every ${every} is "${EVERY[every]}")` : ""}, and it needs \`id-token: write\` in permissions to report spend.`);
   await fetchUpstream(root, config);
   const { base, drift } = await check(root, { ...config, patches: [] }, workingTree(root));
   const readme = addNote(root, upstream, base, drift);

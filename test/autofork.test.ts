@@ -2244,14 +2244,14 @@ test("a sync waits before paying for any rebuild when the month has no room for 
   expect(waiting.ok).toBe(true);
   expect(waiting.output.result).toBe("waiting");
   expect(waiting.log).toMatch(
-    /autofork: one, two wait: it needs 2 rebuilds and 1 of this month's 2 rebuilds is left\. It runs \w{3} 1, or raise "limits" in \.autofork\/config\.json\.\n$/,
+    /autofork: one, two wait: it needs 2 rebuilds and 1 of this month's 2 rebuilds is left\. It runs \w{3} 1, or raise "rebuilds" in "limits" in \.autofork\/config\.json\.\n$/,
   );
   expect(existsSync(runs)).toBe(false);
   expect(sh(mine, "git rev-parse HEAD")).toBe(head);
 
-  const each = sync({ rebuilds: 1 });
-  expect(each.log).toContain(
-    "building one\nautofork: one waits: 0 of this month's 1 rebuild are left.",
+  const never = sync({ rebuilds: 1 });
+  expect(never.log).toContain(
+    'one, two wait: it needs 2 rebuilds and 0 of this month\'s 1 rebuild are left. It needs you to raise "rebuilds" in "limits" in .autofork/config.json.',
   );
   expect(existsSync(runs)).toBe(false);
 
@@ -2280,7 +2280,7 @@ test("a rebuild waits when a whole rebuild's cap no longer fits under the month'
   const { log, output } = autoforkWith({ AUTOFORK_LEDGER: ledger }, mine, "sync");
   expect(output.result).toBe("waiting");
   expect(log).toContain(
-    "autofork: four waits: $15 left of this month's $30 and a rebuild may cost $20.",
+    "autofork: four waits: $15 of this month's $30 is left and a rebuild may cost $20. It runs",
   );
   write(
     mine,
@@ -2360,7 +2360,7 @@ echo '{"type":"result","subtype":"success","is_error":false,"result":"built it",
   wish(mine, "six");
   const capped = autoforkWith({ ...site, SITE_TOTALS: '{"rebuilds":3,"spent":190}' }, mine, "sync");
   expect(capped.output.result).toBe("waiting");
-  expect(capped.log).toContain("six waits: $10 left of this month's $200");
+  expect(capped.log).toContain("six waits: $10 of this month's $200 is left");
 });
 
 test("Codex's tokens are priced from LiteLLM's table for the model its session used", () => {
