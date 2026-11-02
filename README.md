@@ -69,7 +69,7 @@ When upstream publishes a release, the workflow rebuilds your fork on it. Patche
 
 When upstream ships its own version of one of your patches, autofork stops applying it and opens an issue on your fork. The fork takes upstream's version, and the agent isn't called for that patch again. You decide what happens next: delete the patch's folder to keep upstream's, or say in its `PATCH.md` how yours differs and delete its `UPSTREAM.md` to bring yours back.
 
-The agent only runs when a patch is new or a release breaks one, a release makes `setup` or `verify` fail, or upstream changes a workflow your fork keeps. A check that fails at random costs a run too, so it should give the same answer every time. Between releases, the workflow's hourly check is git only and ends in seconds. A rebuild that fails or runs out of time isn't retried until upstream or your fork changes; running the workflow by hand always retries.
+The agent only runs when a patch is new or a release breaks one, a release makes `setup` or `verify` fail, or upstream changes a workflow your fork keeps. A check that fails at random costs a run too, so it should give the same answer every time. Between releases, the workflow's scheduled check is git only and ends in seconds. A rebuild that fails or runs out of time isn't retried until upstream or your fork changes; running the workflow by hand always retries.
 
 Commit straight to your fork and the workflow leaves it alone until upstream moves. A rebuild would drop changes no patch holds, so then it stops once and lists them: save them as a patch and push, and the next run syncs.
 
@@ -78,6 +78,30 @@ Commit straight to your fork and the workflow leaves it alone until upstream mov
 To follow a channel like nightlies, put its tag pattern in `follow`, like `"v*-nightly.*"`. The fork then moves to the newest release whose tag matches. To follow a branch instead, set `"follow": "main"`. Every upstream commit then gets the same treatment.
 
 An app that updates itself, like a desktop app, updates from upstream's releases until the fork publishes its own. The skill's [release steps](skills/autofork/releases.md) set that up once: a release workflow that runs after each sync, the updater pointed at the fork, and builds signed so they can update without upstream's keys or certificates. [My T3 Code fork](https://github.com/AVGVSTVS96/t3code/releases) works this way.
+
+## Spend
+
+Each agent run is a rebuild, and `limits` in `.autofork/config.json` caps them:
+
+```json
+"limits": { "rebuilds": 10, "month": 200, "rebuild": 20 }
+```
+
+Those are the defaults: at most 10 rebuilds a month, $200 a month and $20 a rebuild, at API prices. They're caps, not estimates, and a key you leave out takes its default. Before each agent run the sync looks at this month's rebuilds (the UTC calendar month) and starts one only if fewer than `rebuilds` have run and a whole rebuild's `rebuild` still fits under `month`, so no run is cut off halfway by the monthly cap. Otherwise that patch waits: the sync ends `waiting`, says why in one line, and the patch is rebuilt on the 1st, or right away once you raise `limits` and push.
+
+Claude Code runs with `--max-budget-usd` set to `rebuild`, and the sync records the cost it reports. Codex has no budget flag, so it runs to the end, and its cost is its token counts at [LiteLLM's prices](https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json) for the model it used. A custom `agent` command, or a run that ends without reporting, counts at its full `rebuild` cap.
+
+The month's count lives in the action's Actions cache, which only the fork's workflows can read, so limits work with no account. GitHub drops a cache nothing has used for 7 days, so a fork that sat idle that long starts the count over. When the workflow has `id-token: write`, which `init` and `fork` add, each rebuild's cost also goes to autofork.com, proven by the run's GitHub sign-in. autofork.com then keeps the count when the cache is gone, and shows the spend to people who can push to the fork. The sync takes that sign-in out of its environment before it runs `setup`, `verify` or the agent.
+
+## On time
+
+GitHub runs the workflow on its `cron` line, every 15 minutes unless you pick another with `--every 5m|15m|1h|1d` on `fork` or `init`, but its scheduled runs can start hours late. To have your fork synced within a minute of upstream changing:
+
+```sh
+npx github:AVGVSTVS96/autofork link
+```
+
+It opens autofork.com, where you sign in with GitHub and add autofork's GitHub app to the fork. autofork.com then checks upstream every minute and starts the fork's workflow when it changes. GitHub's schedule stays on as the backup. To unlink, remove the app from the fork.
 
 ## Agents
 
@@ -110,8 +134,9 @@ Your agent then knows how to fork a repo and keep its changes as patches.
 | `verify` | the command that checks a build. Without one, the next agent run picks it from upstream's CI, with `setup` too if there's none, and writes them here, copied into `provisional` until a later sync, on a fresh machine, passes them on upstream alone. A sync that finds one failing there, still as the agent wrote it, skips them, and the next drops them if it finds the same; both ship instead of stopping. A pick that fails with the patches is dropped, and no patch is rebuilt for it. A picked `setup` becomes yours once you change `verify` or add `generated` |
 | `agent` | the command that rebuilds a patch, prompt on stdin. Default: Claude Code when `CLAUDE_CODE_OAUTH_TOKEN` is set, otherwise Codex when it's signed in (a `CODEX_AUTH` secret holding `~/.codex/auth.json`) |
 | `green` | when following a branch, `false` takes upstream's newest commit even when its checks failed |
+| `limits` | `rebuilds` a month, and dollars a `month` and a `rebuild`, at API prices. Default: 10, 200 and 20. See [Spend](#spend) |
 
-`.github/workflows/autofork.yml` is yours too: change how often it checks, and set up the tools `setup` and `verify` need (Node, Bun, Rust) before the autofork step, with your package manager's cache on so `setup` is quick. The action takes `heal: false` to apply what still fits without calling the agent, if you want rebuilds on one schedule and heals on another. With Codex, give it `codex-auth-url` and `id-token: write` so a refreshed sign-in is saved back to the secret.
+`.github/workflows/autofork.yml` is yours too: change how often it checks on its `cron` line, and set up the tools `setup` and `verify` need (Node, Bun, Rust) before the autofork step, with your package manager's cache on so `setup` is quick. The action takes `heal: false` to apply what still fits without calling the agent, if you want rebuilds on one schedule and heals on another. With Codex, give it `codex-auth-url` so a refreshed sign-in is saved back to the secret; like reporting spend, that needs the workflow's `id-token: write`.
 
 ## Commands
 
@@ -126,6 +151,7 @@ Usage:
   autofork save <id>            save your changes as the patch in .autofork/<id>
   autofork status               your patches, and changes no patch holds yet
   autofork sync                 rebuild on upstream; an agent heals what breaks
+  autofork link                 have autofork.com start its syncs on time
 
 Options for fork and init:
   --follow <what>               releases (upstream's Latest), a channel of them
@@ -136,6 +162,8 @@ Options for fork and init:
   --generated <files>           files setup writes, like lockfiles, comma
                                 separated: rebuilt by setup, never patched
   --verify <command>            the command that checks a build
+  --every <5m|15m|1h|1d>        how often GitHub's timer checks upstream.
+                                Default: 15m
 ```
 
 ## Roadmap
@@ -150,13 +178,10 @@ autofork keeps forks current today. The agent behind it is meant to grow into au
 - Rebuilds checked by upstream's own checks on the code they touch, and `verify` picked from upstream's CI so it covers what the patches change.
 - Release steps for apps that update themselves that sign for whatever the updater checks, with Electron as one example.
 - Patches that still apply but fail `verify`, fixed by one agent run, each in its own commit, instead of failing the sync until someone steps in.
+- [Limits](#spend) on what the agent spends, set by you, with each rebuild's cost at API prices, and [`autofork link`](#on-time), which has autofork.com start a fork's sync within a minute of upstream changing and shows its spend on a dashboard.
 
 **What we're building next**
 
-- Limits on what the agent spends, set by you: rebuilds a month, spend a month and spend per rebuild, with defaults like 10 rebuilds, $200 a month and $20 a rebuild at API prices. A run near the limit finishes instead of being thrown away.
-- What each fork's rebuilds cost, from their token counts at API prices.
-- A dashboard on [autofork.com](https://autofork.com) to see your forks and what each costs, and set its budget.
-- How often a fork checks upstream, set by you and run on time. GitHub's scheduled runs can start hours late.
 - An option to re-check every change against what you asked for on each new release, not only when a release breaks it.
 - A first install of a fork's app on a Mac that needs no developer certificate from you.
 

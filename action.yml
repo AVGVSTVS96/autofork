@@ -19,7 +19,7 @@ inputs:
     default: ""
 outputs:
   result:
-    description: synced, current, waiting, skipped, moved, or failed
+    description: synced, current, waiting (a patch needs a run that heals, or this month's limits are reached), skipped, moved, or failed
     value: ${{ steps.sync.outputs.result }}
   tag:
     description: The upstream release tag a sync moved to, when the fork follows releases
@@ -32,6 +32,11 @@ runs:
         path: ${{ runner.temp }}/autofork-failed
         key: autofork-failed-${{ github.run_id }}
         restore-keys: autofork-failed-
+    - uses: actions/cache/restore@v6
+      with:
+        path: ${{ runner.temp }}/autofork-ledger.json
+        key: autofork-ledger-${{ github.run_id }}
+        restore-keys: autofork-ledger-
     - id: sync
       shell: bash
       env:
@@ -39,6 +44,7 @@ runs:
         HEAL: ${{ inputs.heal }}
         CODEX_AUTH_URL: ${{ inputs.codex-auth-url }}
         WORKFLOW_TOKEN_URL: ${{ inputs.workflow-token-url }}
+        AUTOFORK_LEDGER: ${{ runner.temp }}/autofork-ledger.json
       run: '"$GITHUB_ACTION_PATH/action.sh"'
     - if: (failure() || cancelled()) && steps.sync.outputs.key != ''
       shell: bash
@@ -48,3 +54,8 @@ runs:
       with:
         path: ${{ runner.temp }}/autofork-failed
         key: autofork-failed-${{ steps.sync.outputs.key }}
+    - if: always() && steps.sync.outputs.ledger != ''
+      uses: actions/cache/save@v6
+      with:
+        path: ${{ runner.temp }}/autofork-ledger.json
+        key: autofork-ledger-${{ github.run_id }}-${{ github.run_attempt }}

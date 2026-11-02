@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import {
   cpSync,
   existsSync,
@@ -13,6 +13,20 @@ import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 
+const oidc = {
+  url: process.env.ACTIONS_ID_TOKEN_REQUEST_URL,
+  token: process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN,
+};
+delete process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
+delete process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
+const SITE = process.env.AUTOFORK_URL ?? "https://autofork.com";
+const LIMITS = { rebuilds: 10, month: 200, rebuild: 20 };
+const EVERY: Record<string, string> = {
+  "5m": "*/5 * * * *",
+  "15m": "*/15 * * * *",
+  "1h": "17 * * * *",
+  "1d": "17 6 * * *",
+};
 const DIR = ".autofork";
 const WORKFLOWS = ".github/workflows";
 const CONTROL = [DIR, WORKFLOWS];
@@ -49,6 +63,7 @@ type Config = {
   verify?: string;
   agent?: string;
   green?: boolean;
+  limits?: Partial<typeof LIMITS>;
   provisional?: Pick<Config, "setup" | "verify"> & { failed?: string };
 };
 
@@ -72,6 +87,7 @@ type Left = { conflicted: string[]; rejected: string[]; missed: string[] };
 
 class Failure extends Error {}
 class Drifted extends Failure {}
+class Waiting extends Drifted {}
 
 function run(command: string, args: string[], cwd: string, env?: NodeJS.ProcessEnv) {
   const result = spawnSync(command, args, { cwd, env, maxBuffer: 1 << 30 });
@@ -96,14 +112,6 @@ function gitBytes(cwd: string, ...args: string[]) {
   const result = run("git", args, cwd);
   if (!result.ok) throw new Failure(`git ${args.join(" ")}\n${result.err}`);
   return result.out;
-}
-
-function shell(command: string, cwd: string, input?: string, env?: NodeJS.ProcessEnv) {
-  const stdin = input === undefined ? "inherit" : "pipe";
-  return (
-    spawnSync("sh", ["-c", command], { cwd, env, input, stdio: [stdin, "inherit", "inherit"] })
-      .status === 0
-  );
 }
 
 const say = (line: string) => console.error(line);
@@ -155,12 +163,12 @@ function discover(root: string) {
 
 function writeConfig(
   dir: string,
-  { upstream, follow, setup, generated, verify, agent, green }: Config,
+  { upstream, follow, setup, generated, verify, agent, green, limits }: Config,
 ) {
   mkdirSync(join(dir, DIR), { recursive: true });
   writeFileSync(
     configFile(dir),
-    `${JSON.stringify({ upstream, follow, setup, generated, verify, agent, green }, null, 2)}\n`,
+    `${JSON.stringify({ upstream, follow, setup, generated, verify, agent, green, limits }, null, 2)}\n`,
   );
   keepPatches(dir);
 }
@@ -398,17 +406,208 @@ If upstream already does what PATCH.md asks, or something close enough that buil
 
 const installed = (bin: string) => run("sh", ["-c", `command -v ${bin}`], ".").ok;
 
-function agentCommand(config: Config) {
-  if (config.agent) return config.agent;
-  if (
-    !process.env.CLAUDE_CODE_OAUTH_TOKEN &&
-    existsSync(join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "auth.json"))
-  ) {
+const codexHome = () => process.env.CODEX_HOME ?? join(homedir(), ".codex");
+
+function agentCommand(config: Config, cap: number) {
+  if (config.agent) return { agent: "custom", command: config.agent } as const;
+  if (!process.env.CLAUDE_CODE_OAUTH_TOKEN && existsSync(join(codexHome(), "auth.json"))) {
     const codex = installed("codex") ? "codex" : "npx -y @openai/codex";
-    return `${codex} exec --dangerously-bypass-approvals-and-sandbox -`;
+    return {
+      agent: "codex",
+      command: `${codex} exec --json --dangerously-bypass-approvals-and-sandbox -`,
+    } as const;
   }
   const claude = installed("claude") ? "claude" : "npx -y @anthropic-ai/claude-code";
-  return `${claude} -p --dangerously-skip-permissions`;
+  return {
+    agent: "claude",
+    command: `${claude} -p --dangerously-skip-permissions --output-format json --max-budget-usd ${cap}`,
+  } as const;
+}
+
+type Row = {
+  patch: string;
+  agent: "claude" | "codex" | "custom";
+  cap: number;
+  cost: number;
+  status: "running" | "done" | "stopped";
+  at: string;
+};
+type Spend = { cost?: number; model?: string; inputTokens?: number; outputTokens?: number };
+
+async function site(path: string, body?: object) {
+  if (!oidc.url || !oidc.token) return;
+  try {
+    const signal = AbortSignal.timeout(10_000);
+    const minted = await fetch(`${oidc.url}&audience=autofork`, {
+      headers: { authorization: `Bearer ${oidc.token}` },
+      signal,
+    });
+    const { value } = await minted.json();
+    return await fetch(`${SITE}/api/${path}`, {
+      method: body ? "POST" : "GET",
+      headers: { authorization: `Bearer ${value}`, "content-type": "application/json" },
+      body: body && JSON.stringify(body),
+      signal,
+    });
+  } catch {}
+}
+
+function tally(file: string): { month: string; rebuilds: Row[] } {
+  const month = new Date().toISOString().slice(0, 7);
+  try {
+    const saved = JSON.parse(readFileSync(file, "utf8"));
+    if (saved.month === month && Array.isArray(saved.rebuilds)) return saved;
+  } catch {}
+  return { month, rebuilds: [] };
+}
+
+const usd = (amount: number) => `$${Number.isInteger(amount) ? amount : amount.toFixed(2)}`;
+
+async function agent(
+  config: Config,
+  dir: string,
+  what: string,
+  prompt: string,
+  env?: NodeJS.ProcessEnv,
+) {
+  const limits = { ...LIMITS, ...config.limits };
+  const file = process.env.AUTOFORK_LEDGER ?? `${dir}-ledger.json`;
+  const local = tally(file);
+  const answer = await site("ledger");
+  const remote = answer?.status === 200 ? await answer.json().catch(() => undefined) : undefined;
+  const rebuilds = Math.max(local.rebuilds.length, Number(remote?.rebuilds) || 0);
+  const spent = Math.max(
+    local.rebuilds.reduce((sum, row) => sum + row.cost, 0),
+    Number(remote?.spent) || 0,
+  );
+  if (rebuilds >= limits.rebuilds || spent + limits.rebuild > limits.month) {
+    const next = new Date();
+    next.setUTCMonth(next.getUTCMonth() + 1, 1);
+    const month = next.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
+    throw new Waiting(
+      `${what} waits: ${
+        rebuilds >= limits.rebuilds
+          ? `this month's ${limits.rebuilds} rebuild${limits.rebuilds === 1 ? " is" : "s are"} used`
+          : `${usd(Math.max(0, limits.month - spent))} left of this month's ${usd(limits.month)} and a rebuild may cost ${usd(limits.rebuild)}`
+      }. It runs ${month} 1, or raise "limits" in ${DIR}/config.json.`,
+    );
+  }
+  const { agent, command } = agentCommand(config, limits.rebuild);
+  const row: Row = {
+    patch: what,
+    agent,
+    cap: limits.rebuild,
+    cost: limits.rebuild,
+    status: "running",
+    at: new Date().toISOString(),
+  };
+  local.rebuilds.push(row);
+  const keep = () => writeFileSync(file, `${JSON.stringify(local, null, 2)}\n`);
+  keep();
+  output({ ledger: "changed" });
+  const opened = await site("ledger", { patch: what, agent, cap: row.cap });
+  const id = opened?.status === 201 ? (await opened.json().catch(() => undefined))?.id : undefined;
+  const result = spawnSync("sh", ["-c", command], {
+    cwd: dir,
+    env,
+    input: prompt,
+    stdio: ["pipe", agent === "custom" ? "inherit" : "pipe", "inherit"],
+    maxBuffer: 1 << 30,
+  });
+  const spend =
+    agent === "claude"
+      ? claudeSpend(result.stdout)
+      : agent === "codex"
+        ? await codexSpend(result.stdout)
+        : {};
+  row.status = result.status === 0 ? "done" : "stopped";
+  if (spend.cost !== undefined) row.cost = spend.cost;
+  keep();
+  if (id !== undefined && !(await site("ledger/close", { id, status: row.status, ...spend }))?.ok)
+    say("couldn't report this rebuild's cost to autofork.com");
+  say(`${what} cost ${spend.cost === undefined ? `up to ${usd(row.cap)}` : usd(spend.cost)}`);
+  return row.status === "done";
+}
+
+function claudeSpend(out: Buffer): Spend {
+  let report;
+  try {
+    report = JSON.parse(out.toString().trim().split("\n").at(-1)!);
+  } catch {
+    return {};
+  }
+  for (const line of [report.result, ...(report.errors ?? [])])
+    if (typeof line === "string") say(line);
+  type Usage = Record<string, number>;
+  const models = Object.entries((report.modelUsage ?? {}) as Record<string, Usage>);
+  const sum = (count: (usage: Usage) => number) =>
+    models.reduce((total, [, usage]) => total + (count(usage) || 0), 0);
+  return {
+    cost: typeof report.total_cost_usd === "number" ? report.total_cost_usd : undefined,
+    model: models.sort(([, a], [, b]) => b.costUSD - a.costUSD)[0]?.[0],
+    inputTokens: sum((u) => u.inputTokens + u.cacheReadInputTokens + u.cacheCreationInputTokens),
+    outputTokens: sum((u) => u.outputTokens),
+  };
+}
+
+async function codexSpend(out: Buffer): Promise<Spend> {
+  let thread: string | undefined;
+  let used: Record<string, number> | undefined;
+  for (const line of out.toString().split("\n")) {
+    let event;
+    try {
+      event = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (event.type === "thread.started") thread = event.thread_id;
+    if (event.type === "item.completed" && event.item?.type === "agent_message")
+      say(event.item.text);
+    if (event.type === "turn.completed") {
+      used ??= {};
+      for (const [key, count] of Object.entries(event.usage ?? {}))
+        used[key] = (used[key] ?? 0) + (Number(count) || 0);
+    }
+  }
+  if (!used) return {};
+  const model = thread && codexModel(thread);
+  const tokens = (key: string) => used[key] ?? 0;
+  const spend = {
+    model,
+    inputTokens: tokens("input_tokens"),
+    outputTokens: tokens("output_tokens"),
+  };
+  const price = model ? await prices(model) : undefined;
+  if (!price) return spend;
+  const rate = (key: string) => Number(price[key] ?? price.input_cost_per_token);
+  const cost =
+    (tokens("input_tokens") - tokens("cached_input_tokens") - tokens("cache_write_input_tokens")) *
+      rate("input_cost_per_token") +
+    tokens("cached_input_tokens") * rate("cache_read_input_token_cost") +
+    tokens("cache_write_input_tokens") * rate("cache_creation_input_token_cost") +
+    tokens("output_tokens") * Number(price.output_cost_per_token);
+  return Number.isFinite(cost) ? { ...spend, cost } : spend;
+}
+
+function codexModel(thread: string) {
+  const sessions = join(codexHome(), "sessions");
+  if (!existsSync(sessions)) return;
+  const rollout = readdirSync(sessions, { recursive: true, encoding: "utf8" }).find((name) =>
+    name.endsWith(`${thread}.jsonl`),
+  );
+  return rollout && readFileSync(join(sessions, rollout), "utf8").match(/"model":"([^"]+)"/)?.[1];
+}
+
+async function prices(model: string): Promise<Record<string, number> | undefined> {
+  try {
+    const table = await (
+      await fetch(
+        "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json",
+        { signal: AbortSignal.timeout(30_000) },
+      )
+    ).json();
+    return table[model] ?? table[`openai/${model}`];
+  } catch {}
 }
 
 type Checks = Partial<Record<"setup" | "verify", unknown>>;
@@ -463,14 +662,15 @@ function workflowsBehind(root: string, base: string, source: string) {
   );
 }
 
-function updateWorkflows(config: Fork, build: Build, files: string[], range: string) {
+async function updateWorkflows(config: Fork, build: Build, files: string[], range: string) {
   const head = git(build.dir, "rev-parse", "HEAD");
   const own = `${WORKFLOWS}/autofork.yml`;
   const rest = [".", `:(exclude)${WORKFLOWS}`];
   say(`bringing upstream's changes into ${files.join(", ")}`);
-  const ran = shell(
-    agentCommand(config),
+  const ran = await agent(
+    config,
     build.dir,
+    "workflow update",
     `You are keeping a patched fork of ${config.upstream} in sync. The workflows in ${WORKFLOWS}/ are the fork's own copies, and upstream changed ${files.join(", ")}: git diff ${range} -- ${WORKFLOWS}
 
 Bring into this fork's copies what it needs from those changes, and keep what the fork does differently. Add a workflow only where upstream split or renamed one the fork keeps. Only what you change in ${WORKFLOWS}/ is kept, except autofork.yml, and the sync commits it.`,
@@ -499,7 +699,7 @@ Bring into this fork's copies what it needs from those changes, and keep what th
   return updated.split("\n").filter(Boolean);
 }
 
-function heal(
+async function heal(
   config: Fork,
   build: Build,
   id: string,
@@ -523,7 +723,7 @@ function heal(
   const wish = readFileSync(doc, "utf8").trimEnd();
   say(`${doing} ${id}`);
   try {
-    if (!shell(agentCommand(config), build.dir, prompt, BOT))
+    if (!(await agent(config, build.dir, id, prompt, BOT)))
       throw new Failure(`the agent failed while ${doing} ${id}`);
     git(build.dir, "reset", "--soft", "--quiet", step);
     const reason = existsSync(upstreamDoc(build.dir, id))
@@ -693,12 +893,12 @@ function worktree(root: string, base: string) {
   return dir;
 }
 
-function build(
+async function build(
   root: string,
   config: Fork,
   base: string,
   options: { healFrom?: string; wait?: boolean; fold?: { id: string; patch: string } },
-): Build {
+): Promise<Build> {
   const dir = worktree(root, base);
   const build: Build = {
     dir,
@@ -714,8 +914,8 @@ function build(
       throw new Drifted(`${id} isn't built yet`);
     if (isEmpty(file) ? options.healFrom : !apply(dir, file, config)) {
       if (!options.healFrom) throw new Drifted(`${id} doesn't apply to ${short(base)}`);
-      verify(config, build, options.healFrom);
-      heal(
+      await verify(config, build, options.healFrom);
+      await heal(
         config,
         build,
         id,
@@ -746,7 +946,7 @@ function passesAt(config: Fork, build: Build, commit: string) {
   return true;
 }
 
-function verify(config: Fork, build: Build, from?: string) {
+async function verify(config: Fork, build: Build, from?: string) {
   if (!config.setup && !config.verify) return;
   try {
     if (passesAt(config, build, build.steps.at(-1)!)) return;
@@ -758,7 +958,7 @@ function verify(config: Fork, build: Build, from?: string) {
       guard(config, build, from);
       if (build.steps.length <= config.patches.length) return;
     }
-    fix(config, build, failed, from);
+    await fix(config, build, failed, from);
   } finally {
     reset(build.dir, build.steps.at(-1)!);
   }
@@ -817,7 +1017,7 @@ const patchId = (config: Config, dir: string, from: string, to: string) =>
     .stdout.toString()
     .split(" ")[0];
 
-function fix(config: Fork, build: Build, failed: Failed, from: string) {
+async function fix(config: Fork, build: Build, failed: Failed, from: string) {
   const [base, ...before] = build.steps;
   const ids = config.patches.slice(0, before.length);
   const command = config[failed.check];
@@ -838,7 +1038,8 @@ function fix(config: Fork, build: Build, failed: Failed, from: string) {
   reset(build.dir, before.at(-1)!);
   if (failed.check === "verify") prepared(config, build);
   say(`fixing ${failed.check} in the patches`);
-  if (!shell(agentCommand(config), build.dir, fixPrompt(config, build, ids, failed, from), BOT))
+  const prompt = fixPrompt(config, build, ids, failed, from);
+  if (!(await agent(config, build.dir, `${failed.check} fix`, prompt, BOT)))
     throw new Failure(`the agent failed while fixing ${failed.check}`);
   const pausing = new Set<string>();
   for (const id of ids) {
@@ -1003,8 +1204,8 @@ function workingTree(root: string, skip: string[] = []) {
   return tree;
 }
 
-function check(root: string, config: Fork, against: string, base = baseline(root)) {
-  const rebuilt = build(root, config, base, {});
+async function check(root: string, config: Fork, against: string, base = baseline(root)) {
+  const rebuilt = await build(root, config, base, {});
   try {
     const drift = git(
       root,
@@ -1041,7 +1242,7 @@ async function sync(root: string, args: string[]) {
     say(`autofork: already up to date with ${config.upstream} at ${short(source)}`);
     return output({ result: "current" });
   }
-  const { drift } = check(root, config, "HEAD", base);
+  const { drift } = await check(root, config, "HEAD", base);
   if (drift.length) {
     throw new Failure(
       `these files differ from what your patches build, so a sync would drop them:\n  ${drift.join("\n  ")}\nWhere one is just an old copy of upstream's, take upstream's first: git checkout ${short(base)} -- <file>, or git rm <file> if upstream had it and deleted it. Then save the fork's own changes, on top of upstream's copies, as a patch: write ${DIR}/<id>/PATCH.md, then run autofork save <id>`,
@@ -1058,16 +1259,18 @@ async function sync(root: string, args: string[]) {
   let updated: string[] | undefined;
   try {
     try {
-      result = build(root, config, source, { healFrom, wait: true });
-      verify(config, result, healFrom);
+      result = await build(root, config, source, { healFrom, wait: true });
+      await verify(config, result, healFrom);
       regenerate(config, result);
       if (behind.length && !args.includes("--no-workflows")) {
         if (!healFrom) throw new Drifted("upstream changed workflows this fork keeps");
-        updated = updateWorkflows(config, result, behind, range);
+        updated = await updateWorkflows(config, result, behind, range);
       }
     } catch (error) {
       if (!(error instanceof Drifted)) throw error;
-      say(`autofork: ${error.message}. The next run that heals rebuilds it.`);
+      say(
+        `autofork: ${error.message}${error instanceof Waiting ? "" : ". The next run that heals rebuilds it."}`,
+      );
       return output({ result: "waiting" });
     }
     if (result.proven) {
@@ -1122,7 +1325,7 @@ async function save(root: string, args: string[]) {
   const config = await readConfig(root);
   await fetchUpstream(root, config);
   const files = workingTree(root);
-  const { base, rebuilt, drift } = check(root, config, files);
+  const { base, rebuilt, drift } = await check(root, config, files);
   if (!drift.length)
     return say(
       `nothing to save: your code matches what the patches build. Push ${DIR}/${id}/PATCH.md as it is and the next sync has an agent build it.`,
@@ -1145,7 +1348,7 @@ async function save(root: string, args: string[]) {
       ...sourcePaths(config),
     ),
   );
-  const result = build(root, config, base, { fold: { id, patch: fold } });
+  const result = await build(root, config, base, { fold: { id, patch: fold } });
   try {
     refresh(root, config, result);
     say(
@@ -1157,11 +1360,11 @@ async function save(root: string, args: string[]) {
   }
 }
 
-const workflow = (branch: string) => `name: autofork
+const workflow = (branch: string, cron: string) => `name: autofork
 
 on:
   schedule:
-    - cron: "17 * * * *"
+    - cron: "${cron}"
   workflow_dispatch:
   push:
     branches: [${branch}]
@@ -1170,6 +1373,7 @@ on:
 permissions:
   contents: write
   issues: write
+  id-token: write
 
 concurrency: autofork
 
@@ -1194,23 +1398,36 @@ function options(args: string[]) {
   const generated = flag(args, "--generated")?.split(",");
   if (generated && !setup)
     throw new Failure("--generated files are rebuilt by --setup, so set it too");
-  return { follow: flag(args, "--follow"), setup, generated, verify: flag(args, "--verify") };
+  const every = flag(args, "--every") ?? "15m";
+  if (!EVERY[every])
+    throw new Failure(`--every takes ${Object.keys(EVERY).join(", ")}, not ${every}`);
+  return {
+    follow: flag(args, "--follow"),
+    setup,
+    generated,
+    verify: flag(args, "--verify"),
+    cron: EVERY[every],
+  };
 }
 
-async function setup(root: string, upstream: string, chosen: ReturnType<typeof options>) {
+async function setup(
+  root: string,
+  upstream: string,
+  { cron, ...chosen }: ReturnType<typeof options>,
+) {
   if (existsSync(configFile(root))) throw new Failure(`${DIR}/config.json already exists`);
   const follow = chosen.follow ?? (await defaultFollow(root, upstream));
-  const config: Config = { ...chosen, upstream, follow };
+  const config: Config = { ...chosen, upstream, follow, limits: LIMITS };
   writeConfig(root, config);
   const path = join(root, ".github/workflows/autofork.yml");
   mkdirSync(join(root, ".github/workflows"), { recursive: true });
   if (!existsSync(path))
     writeFileSync(
       path,
-      workflow(git(root, "branch", "--show-current") || defaultBranch(root, upstream)),
+      workflow(git(root, "branch", "--show-current") || defaultBranch(root, upstream), cron),
     );
   await fetchUpstream(root, config);
-  const { base, drift } = check(root, { ...config, patches: [] }, workingTree(root));
+  const { base, drift } = await check(root, { ...config, patches: [] }, workingTree(root));
   const readme = addNote(root, upstream, base, drift);
   const inherited = git(root, "ls-files", ".github/workflows")
     .split("\n")
@@ -1258,7 +1475,7 @@ To drop the line, delete it from the README and delete this folder, in the same 
 }
 
 function origin(root: string) {
-  const url = run("git", ["remote", "get-url", "origin"], root).out.toString().trim();
+  const url = run("git", ["config", "--get", "remote.origin.url"], root).out.toString().trim();
   return url.match(/github\.com[/:]([\w.-]+\/[\w.-]+?)(?:\.git)?$/)?.[1] ?? "";
 }
 
@@ -1289,20 +1506,21 @@ function claim(root: string, upstream: string) {
 async function init(root: string, args: string[]) {
   if (!args[0])
     throw new Failure(
-      "usage: autofork init <owner/repo | git url> [--follow <releases | channel | branch>] [--setup <command>] [--generated <files>] [--verify <command>]",
+      "usage: autofork init <owner/repo | git url> [--follow <releases | channel | branch>] [--setup <command>] [--generated <files>] [--verify <command>] [--every <5m | 15m | 1h | 1d>]",
     );
   await setup(root, args[0], options(args));
   claim(root, args[0]);
   say(
     "Add a CLAUDE_CODE_OAUTH_TOKEN secret (claude setup-token), commit, and push. If you pushed before the secret was set, start the first sync by hand: gh workflow run autofork.yml",
   );
+  say(LINK);
 }
 
 async function fork(cwd: string, args: string[]) {
   const upstream = args[0];
   if (!/^[\w.-]+\/[\w.-]+$/.test(upstream ?? ""))
     throw new Failure(
-      "usage: autofork fork <owner/repo> [--follow <releases | channel | branch>] [--setup <command>] [--generated <files>] [--verify <command>]",
+      "usage: autofork fork <owner/repo> [--follow <releases | channel | branch>] [--setup <command>] [--generated <files>] [--verify <command>] [--every <5m | 15m | 1h | 1d>]",
     );
   const chosen = options(args);
   if (!run("gh", ["repo", "fork", upstream, "--clone", "--default-branch-only"], cwd).ok)
@@ -1324,12 +1542,51 @@ async function fork(cwd: string, args: string[]) {
     say(
       `Last step: run claude setup-token, then gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo ${repo}, then start its first sync: gh workflow run autofork.yml --repo ${repo}`,
     );
+  say(LINK);
+}
+
+const LINK = "GitHub's timer can run hours late. Run it on time and track spend: autofork link";
+
+async function linked(owner: string, name: string) {
+  try {
+    const response = await fetch(`${SITE}/api/link`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ owner, name }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (response.ok) return !!(await response.json()).linked;
+  } catch {}
+  throw new Failure(`can't reach ${SITE}, try again in a minute`);
+}
+
+async function link(root: string) {
+  const [owner, name] = origin(root).split("/");
+  if (!name) throw new Failure("run autofork link inside a clone of your fork on GitHub");
+  const done = () => say("linked: autofork.com starts it within a minute of upstream changing.");
+  if (await linked(owner, name)) return done();
+  if (
+    !run("git", ["fetch", "--quiet", "origin", "HEAD"], root).ok ||
+    !run("git", ["cat-file", "-e", `FETCH_HEAD:${DIR}/config.json`], root).ok
+  )
+    throw new Failure(`push ${DIR}/config.json to ${owner}/${name}'s default branch first`);
+  const page = `${SITE}/link/${owner}/${name}`;
+  say(`finish linking in your browser: ${page}`);
+  const opener = { darwin: "open", win32: "explorer" }[process.platform as string] ?? "xdg-open";
+  spawn(opener, [page], { detached: true, stdio: "ignore" })
+    .on("error", () => {})
+    .unref();
+  for (const deadline = Date.now() + 600_000; Date.now() < deadline;) {
+    await new Promise((wake) => setTimeout(wake, 3_000));
+    if (await linked(owner, name).catch(() => false)) return done();
+  }
+  throw new Failure(`not linked yet: finish at ${page}, then run autofork link again`);
 }
 
 async function status(root: string) {
   const config = await readConfig(root);
   await fetchUpstream(root, config);
-  const { base, drift } = check(root, config, workingTree(root));
+  const { base, drift } = await check(root, config, workingTree(root));
   const behind = git(
     root,
     "rev-list",
@@ -1360,6 +1617,7 @@ Usage:
   autofork save <id>            save your changes as the patch in .autofork/<id>
   autofork status               your patches, and changes no patch holds yet
   autofork sync                 rebuild on upstream; an agent heals what breaks
+  autofork link                 have autofork.com start its syncs on time
 
 Options for fork and init:
   --follow <what>               releases (upstream's Latest), a channel of them
@@ -1370,6 +1628,8 @@ Options for fork and init:
   --generated <files>           files setup writes, like lockfiles, comma
                                 separated: rebuilt by setup, never patched
   --verify <command>            the command that checks a build
+  --every <5m|15m|1h|1d>        how often GitHub's timer checks upstream.
+                                Default: 15m
 
 A patch is .autofork/<id>/PATCH.md, saying what the change does and why, next
 to <id>.patch, the diff. https://github.com/AVGVSTVS96/autofork
@@ -1377,6 +1637,7 @@ to <id>.patch, the diff. https://github.com/AVGVSTVS96/autofork
 
 const commands: Record<string, (root: string, args: string[]) => Promise<unknown>> = {
   init,
+  link,
   save,
   status,
   sync,

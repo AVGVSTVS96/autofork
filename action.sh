@@ -50,7 +50,7 @@ if [ -n "${WORKFLOW_TOKEN_URL:-}" ] &&
   fi
 fi
 
-if ! env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL node "$GITHUB_ACTION_PATH/dist/autofork.js" sync ${skip:+--skip "$skip"} $heal $leave_workflows; then
+if ! node "$GITHUB_ACTION_PATH/dist/autofork.js" sync ${skip:+--skip "$skip"} $heal $leave_workflows; then
   echo "result=failed" >> "$GITHUB_OUTPUT"
   exit 1
 fi
