@@ -113,6 +113,7 @@ async function readConfig(root) {
   const config = JSON.parse(readFileSync(configFile(root), "utf8"));
   if (config.generated?.length && !config.setup)
     throw new Failure(`"generated" files are rebuilt by "setup", so set it too in ${DIR}/config.json`);
+  limitsOf(config);
   const follow = config.follow ?? await defaultFollow(root, config.upstream);
   return {
     ...config,
@@ -349,16 +350,22 @@ function saveLedger() {
   }
 }
 var usd = (amount) => `$${Number.isInteger(amount) ? amount : amount.toFixed(2)}`;
-async function room(config, count = 1) {
+function limitsOf(config) {
   const limits = { ...LIMITS, ...config.limits };
-  if (config.limits !== undefined && typeof config.limits !== "object" || Object.values(limits).some((value) => typeof value !== "number" || value < 0) || !limits.rebuild)
+  if (config.limits !== undefined && typeof config.limits !== "object" || Object.keys(limits).length > 3 || Object.values(limits).some((value) => typeof value !== "number" || value < 0) || !limits.rebuild)
     throw new Failure(`"limits" in ${DIR}/config.json takes numbers, like ${JSON.stringify(LIMITS)}`);
+  return limits;
+}
+async function room(config, count = 1) {
+  const limits = limitsOf(config);
   if (ledger.month !== new Date().toISOString().slice(0, 7))
     openLedger(ledger.file);
   const answer = await site("ledger");
   const remote = answer?.status === 200 ? await answer.json().catch(() => {
     return;
   }) : undefined;
+  if (oidc.url && !remote)
+    say("couldn't read this month's spend from autofork.com, so only this fork's own count is used");
   const rebuilds = Math.max(ledger.rebuilds.length, Number(remote?.rebuilds) || 0);
   const spent = Math.max(ledger.rebuilds.reduce((sum, row) => sum + (typeof row.cost === "number" ? row.cost : limits.rebuild), 0), Number(remote?.spent) || 0);
   const cost = count * limits.rebuild;
@@ -370,9 +377,9 @@ async function room(config, count = 1) {
   const some = count === 1 ? "a rebuild" : `${count} rebuilds`;
   const counted = rebuilds + count > limits.rebuilds;
   const why = counted ? `${some} won't fit in this month's ${limits.rebuilds} (${rebuilds} used)` : `${some} may cost ${usd(cost)} and ${usd(Math.max(0, limits.month - spent))} of this month's ${usd(limits.month)} is left`;
-  const raise = `raise "${counted ? "rebuilds" : "month"}" in "limits" in ${DIR}/config.json`;
-  const never = counted ? count > limits.rebuilds : cost > limits.month;
-  const when = never ? `It needs you to ${raise}.` : `It runs ${month} 1, or ${raise}.`;
+  const raise = (key) => `raise "${key}" in "limits" in ${DIR}/config.json`;
+  const never = count > limits.rebuilds ? "rebuilds" : cost > limits.month ? "month" : "";
+  const when = never ? `It needs you to ${raise(never)}.` : `It runs ${month} 1, or ${raise(counted ? "rebuilds" : "month")}.`;
   return { limits, spent, full: `${why}. ${when}` };
 }
 async function agent(config, build, what, prompt, env, heal = false) {
@@ -488,7 +495,10 @@ function codexModel(thread) {
 }
 var table;
 async function prices(model) {
-  table ??= fetch("https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json", { signal: AbortSignal.timeout(30000) }).then((response) => response.json()).catch(() => ({}));
+  table ??= fetch("https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json", { signal: AbortSignal.timeout(30000) }).then((response) => response.json()).catch(() => {
+    table = undefined;
+    return {};
+  });
   const rates = await table;
   return rates[model] ?? rates[`openai/${model}`];
 }
