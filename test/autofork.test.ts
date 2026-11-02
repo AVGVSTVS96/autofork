@@ -2451,3 +2451,34 @@ test("link opens the site's page once the config is pushed, and waits until the 
   const again = linking(0);
   expect(again.log).toBe("linked: autofork.com starts it within a minute of upstream changing.\n");
 });
+
+test("rebuilds a sync made room for go ahead when one costs more than its cap", () => {
+  const mine = spendFork("reserved", { month: 60 });
+  const bin = join(home, "reserved-bin");
+  stub(
+    bin,
+    "claude",
+    `id=$(grep -o 'Patch "[a-z]*"' | cut -d'"' -f2)
+echo "// $id" >> app.js
+echo '{"type":"result","result":"built","total_cost_usd":25,"modelUsage":{}}'`,
+  );
+  const ledger = join(home, "reserved-ledger.json");
+  const month = new Date().toISOString().slice(0, 7);
+  const old = { patch: "old", agent: "claude", cap: 20, cost: 20, status: "done", at: "" };
+  writeFileSync(ledger, JSON.stringify({ month, rebuilds: [old] }));
+  wish(mine, "eight");
+  wish(mine, "nine");
+  const { log, output } = autoforkWith(
+    {
+      PATH: `${bin}:${process.env.PATH}`,
+      CLAUDE_CODE_OAUTH_TOKEN: "token",
+      AUTOFORK_LEDGER: ledger,
+    },
+    mine,
+    "sync",
+  );
+  expect(output.result).toBe("synced");
+  expect(log).toContain("eight cost $25\n");
+  expect(log).toContain("nine cost $25\n");
+  expect(JSON.parse(file(home, "reserved-ledger.json")).rebuilds).toHaveLength(3);
+});

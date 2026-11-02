@@ -48,7 +48,7 @@ If `.autofork/<id>/UPSTREAM.md` exists, upstream shipped its own version of that
 
 ## Spend limits
 
-Every agent run counts against `limits` in `.autofork/config.json`: by default 10 rebuilds a month, $200 a month and $20 a rebuild, at API prices. A rebuild starts only if a whole rebuild's cap still fits under the month's; otherwise the sync ends `waiting` with a line saying what's left and when it runs. To let it run now, raise the limit the user agrees to and push.
+Every agent run counts against `limits` in `.autofork/config.json`: by default 10 rebuilds a month, $200 a month and $20 a rebuild, at API prices. A rebuild starts only if fewer than `rebuilds` have run this month and a whole rebuild's cap still fits under the month's, and a sync waits up front unless there's room for every patch that no longer applies; otherwise the sync ends `waiting` with a line saying what's left and when it runs. To let it run now, raise the limit the user agrees to and push.
 
 ## Apps that update themselves
 

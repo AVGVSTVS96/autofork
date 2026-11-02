@@ -22,6 +22,8 @@ var oidc = {
 };
 delete process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
 delete process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
+var LEDGER = process.env.AUTOFORK_LEDGER;
+delete process.env.AUTOFORK_LEDGER;
 var SITE = process.env.AUTOFORK_URL ?? "https://autofork.com";
 var LIMITS = { rebuilds: 10, month: 200, rebuild: 20 };
 var EVERY = {
@@ -310,6 +312,8 @@ async function site(path, body) {
       signal
     });
     const { value } = await minted.json();
+    if (!minted.ok || typeof value !== "string")
+      return;
     return await fetch(`${SITE}/api/${path}`, {
       method: body ? "POST" : "GET",
       headers: { authorization: `Bearer ${value}`, "content-type": "application/json" },
@@ -318,24 +322,28 @@ async function site(path, body) {
     });
   } catch {}
 }
+var tallies = new Map;
 function tally(file) {
   const month = new Date().toISOString().slice(0, 7);
-  try {
-    const saved = JSON.parse(readFileSync(file, "utf8"));
-    if (saved.month === month && Array.isArray(saved.rebuilds))
-      return saved;
-  } catch {}
-  return { month, rebuilds: [] };
+  if (!tallies.has(file)) {
+    let saved;
+    try {
+      saved = JSON.parse(readFileSync(file, "utf8"));
+    } catch {}
+    tallies.set(file, saved?.month === month && Array.isArray(saved.rebuilds) ? saved : { month, rebuilds: [] });
+  }
+  return tallies.get(file);
 }
 var usd = (amount) => `$${Number.isInteger(amount) ? amount : amount.toFixed(2)}`;
 async function room(config, dir, count = 1) {
   const limits = { ...LIMITS };
   for (const key of Object.keys(LIMITS)) {
     limits[key] = config.limits?.[key] ?? LIMITS[key];
-    if (typeof limits[key] !== "number" || !(limits[key] >= 0))
+    const value = limits[key];
+    if (typeof value !== "number" || value < 0 || key === "rebuild" && !value)
       throw new Failure(`"limits" in ${DIR}/config.json takes numbers, like ${JSON.stringify(LIMITS)}`);
   }
-  const file = process.env.AUTOFORK_LEDGER ?? `${dir}-ledger.json`;
+  const file = LEDGER ?? `${dir}-ledger.json`;
   const local = tally(file);
   const answer = await site("ledger");
   const remote = answer?.status === 200 ? await answer.json().catch(() => {
@@ -354,9 +362,9 @@ async function room(config, dir, count = 1) {
   const when = count > limits.rebuilds || cost > limits.month ? `It needs higher "limits" in ${DIR}/config.json.` : `It runs ${month} 1, or raise "limits" in ${DIR}/config.json.`;
   return { limits, file, local, full: `${why}. ${when}` };
 }
-async function agent(config, dir, what, prompt, env) {
+async function agent(config, dir, what, prompt, env, reserved = false) {
   const { limits, file, local, full } = await room(config, dir);
-  if (full)
+  if (full && !reserved)
     throw new Waiting(`${what} waits: ${full}`);
   const { agent, command } = agentCommand(config, limits.rebuild);
   const row = {
@@ -455,8 +463,10 @@ async function codexSpend(out) {
     outputTokens: tokens("output_tokens")
   };
   const price = model ? await prices(model) : undefined;
-  if (!price)
+  if (!price) {
+    say(`couldn't price ${model ?? "Codex's model"}, so this rebuild counts at its cap`);
     return spend;
+  }
   const rate = (key) => Number(price[key] ?? price.input_cost_per_token);
   const cost = (tokens("input_tokens") - tokens("cached_input_tokens") - tokens("cache_write_input_tokens")) * rate("input_cost_per_token") + tokens("cached_input_tokens") * rate("cache_read_input_token_cost") + tokens("cache_write_input_tokens") * rate("cache_creation_input_token_cost") + tokens("output_tokens") * Number(price.output_cost_per_token);
   return Number.isFinite(cost) ? { ...spend, cost } : spend;
@@ -528,10 +538,15 @@ async function updateWorkflows(config, build, files, range) {
   say(`bringing upstream's changes into ${files.join(", ")}`);
   const ran = await agent(config, build.dir, "workflow update", `You are keeping a patched fork of ${config.upstream} in sync. The workflows in ${WORKFLOWS}/ are the fork's own copies, and upstream changed ${files.join(", ")}: git diff ${range} -- ${WORKFLOWS}
 
-Bring into this fork's copies what it needs from those changes, and keep what the fork does differently. Add a workflow only where upstream split or renamed one the fork keeps. Only what you change in ${WORKFLOWS}/ is kept, except autofork.yml, and the sync commits it.`);
+Bring into this fork's copies what it needs from those changes, and keep what the fork does differently. Add a workflow only where upstream split or renamed one the fork keeps. Only what you change in ${WORKFLOWS}/ is kept, except autofork.yml, and the sync commits it.`).catch((error) => {
+    if (!(error instanceof Waiting))
+      throw error;
+    say("this month's limits have no room to update workflows, so they stay as they were");
+  });
   git(build.dir, "reset", "--quiet", head);
   if (!ran) {
-    say("the agent failed while updating workflows, so they stay as they were");
+    if (ran === false)
+      say("the agent failed while updating workflows, so they stay as they were");
     reset(build.dir);
     return;
   }
@@ -557,7 +572,10 @@ async function heal(config, build, id, broken, patch) {
   const wish = readFileSync(doc, "utf8").trimEnd();
   say(`${doing} ${id}`);
   try {
-    if (!await agent(config, build.dir, id, prompt, BOT))
+    const reserved = !!build.reserved;
+    if (reserved)
+      build.reserved--;
+    if (!await agent(config, build.dir, id, prompt, BOT, reserved))
       throw new Failure(`the agent failed while ${doing} ${id}`);
     git(build.dir, "reset", "--soft", "--quiet", step);
     const reason = existsSync(upstreamDoc(build.dir, id)) ? readFileSync(upstreamDoc(build.dir, id), "utf8").trim() : "";
@@ -721,6 +739,7 @@ async function build(root, config, base, options) {
     const { full } = broken.length ? await room(config, dir, broken.length) : {};
     if (full)
       throw new Waiting(`${broken.join(", ")} wait${broken.length === 1 ? "s" : ""}: ${full}`);
+    build.reserved = broken.length;
   }
   if (options.wait)
     settle(config, build);
@@ -1094,18 +1113,18 @@ function options(args) {
   const generated = flag(args, "--generated")?.split(",");
   if (generated && !setup)
     throw new Failure("--generated files are rebuilt by --setup, so set it too");
-  const every = flag(args, "--every") ?? "15m";
-  if (!Object.hasOwn(EVERY, every))
+  const every = flag(args, "--every");
+  if (every && !Object.hasOwn(EVERY, every))
     throw new Failure(`--every takes ${Object.keys(EVERY).join(", ")}, not ${every}`);
   return {
     follow: flag(args, "--follow"),
     setup,
     generated,
     verify: flag(args, "--verify"),
-    cron: EVERY[every]
+    every
   };
 }
-async function setup(root, upstream, { cron, ...chosen }) {
+async function setup(root, upstream, { every, ...chosen }) {
   if (existsSync(configFile(root)))
     throw new Failure(`${DIR}/config.json already exists`);
   const follow = chosen.follow ?? await defaultFollow(root, upstream);
@@ -1114,7 +1133,9 @@ async function setup(root, upstream, { cron, ...chosen }) {
   const path = join(root, ".github/workflows/autofork.yml");
   mkdirSync(join(root, ".github/workflows"), { recursive: true });
   if (!existsSync(path))
-    writeFileSync(path, workflow(git(root, "branch", "--show-current") || defaultBranch(root, upstream), cron));
+    writeFileSync(path, workflow(git(root, "branch", "--show-current") || defaultBranch(root, upstream), EVERY[every ?? "15m"]));
+  else if (every || !readFileSync(path, "utf8").includes("id-token: write"))
+    say(`Kept your ${path.slice(root.length + 1)}: its cron line is the schedule, and it needs \`id-token: write\` in permissions to report spend.`);
   await fetchUpstream(root, config);
   const { base, drift } = await check(root, { ...config, patches: [] }, workingTree(root));
   const readme = addNote(root, upstream, base, drift);
@@ -1155,7 +1176,7 @@ function origin(root) {
     ["config", "--get", "remote.origin.url"]
   ]) {
     const url = run("git", args, root).out.toString().trim();
-    const repo = url.match(/(?:^|[@/])github\.com[/:]([\w.-]+\/[\w.-]+?)(?:\.git)?\/?$/)?.[1];
+    const repo = url.match(/(?:^|[@/.])github\.com(?::\d+)?[/:]([\w.-]+\/[\w.-]+?)(?:\.git)?\/?$/)?.[1];
     if (repo)
       return repo;
   }
@@ -1217,9 +1238,11 @@ async function linked(owner, name) {
   }).catch(() => {
     return;
   });
-  if (!response)
+  const text = await response?.text().catch(() => {
     return;
-  const text = await response.text();
+  });
+  if (!response || text === undefined || response.status >= 500)
+    return;
   try {
     if (response.ok)
       return !!JSON.parse(text).linked;

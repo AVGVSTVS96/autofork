@@ -21,6 +21,8 @@ const oidc = {
 };
 delete process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
 delete process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
+const LEDGER = process.env.AUTOFORK_LEDGER;
+delete process.env.AUTOFORK_LEDGER;
 const SITE = process.env.AUTOFORK_URL ?? "https://autofork.com";
 const LIMITS = { rebuilds: 10, month: 200, rebuild: 20 };
 const EVERY: Record<string, string> = {
@@ -76,6 +78,7 @@ type Build = {
   steps: string[];
   source: string;
   healed: Map<string, string>;
+  reserved?: number;
   upstreamHas: Map<string, string>;
   ready?: string;
   rebuilt?: string;
@@ -445,6 +448,7 @@ async function site(path: string, body?: object) {
       signal,
     });
     const { value } = await minted.json();
+    if (!minted.ok || typeof value !== "string") return;
     return await fetch(`${SITE}/api/${path}`, {
       method: body ? "POST" : "GET",
       headers: { authorization: `Bearer ${value}`, "content-type": "application/json" },
@@ -454,13 +458,21 @@ async function site(path: string, body?: object) {
   } catch {}
 }
 
-function tally(file: string): { month: string; rebuilds: Row[] } {
+const tallies = new Map<string, { month: string; rebuilds: Row[] }>();
+
+function tally(file: string) {
   const month = new Date().toISOString().slice(0, 7);
-  try {
-    const saved = JSON.parse(readFileSync(file, "utf8"));
-    if (saved.month === month && Array.isArray(saved.rebuilds)) return saved;
-  } catch {}
-  return { month, rebuilds: [] };
+  if (!tallies.has(file)) {
+    let saved;
+    try {
+      saved = JSON.parse(readFileSync(file, "utf8"));
+    } catch {}
+    tallies.set(
+      file,
+      saved?.month === month && Array.isArray(saved.rebuilds) ? saved : { month, rebuilds: [] },
+    );
+  }
+  return tallies.get(file)!;
 }
 
 const usd = (amount: number) => `$${Number.isInteger(amount) ? amount : amount.toFixed(2)}`;
@@ -469,12 +481,13 @@ async function room(config: Config, dir: string, count = 1) {
   const limits = { ...LIMITS };
   for (const key of Object.keys(LIMITS) as (keyof typeof LIMITS)[]) {
     limits[key] = config.limits?.[key] ?? LIMITS[key];
-    if (typeof limits[key] !== "number" || !(limits[key] >= 0))
+    const value = limits[key];
+    if (typeof value !== "number" || value < 0 || (key === "rebuild" && !value))
       throw new Failure(
         `"limits" in ${DIR}/config.json takes numbers, like ${JSON.stringify(LIMITS)}`,
       );
   }
-  const file = process.env.AUTOFORK_LEDGER ?? `${dir}-ledger.json`;
+  const file = LEDGER ?? `${dir}-ledger.json`;
   const local = tally(file);
   const answer = await site("ledger");
   const remote = answer?.status === 200 ? await answer.json().catch(() => undefined) : undefined;
@@ -510,9 +523,10 @@ async function agent(
   what: string,
   prompt: string,
   env?: NodeJS.ProcessEnv,
+  reserved = false,
 ) {
   const { limits, file, local, full } = await room(config, dir);
-  if (full) throw new Waiting(`${what} waits: ${full}`);
+  if (full && !reserved) throw new Waiting(`${what} waits: ${full}`);
   const { agent, command } = agentCommand(config, limits.rebuild);
   const row: Row = {
     patch: what,
@@ -607,7 +621,10 @@ async function codexSpend(out: Buffer): Promise<Spend> {
     outputTokens: tokens("output_tokens"),
   };
   const price = model ? await prices(model) : undefined;
-  if (!price) return spend;
+  if (!price) {
+    say(`couldn't price ${model ?? "Codex's model"}, so this rebuild counts at its cap`);
+    return spend;
+  }
   const rate = (key: string) => Number(price[key] ?? price.input_cost_per_token);
   const cost =
     (tokens("input_tokens") - tokens("cached_input_tokens") - tokens("cache_write_input_tokens")) *
@@ -703,10 +720,13 @@ async function updateWorkflows(config: Fork, build: Build, files: string[], rang
     `You are keeping a patched fork of ${config.upstream} in sync. The workflows in ${WORKFLOWS}/ are the fork's own copies, and upstream changed ${files.join(", ")}: git diff ${range} -- ${WORKFLOWS}
 
 Bring into this fork's copies what it needs from those changes, and keep what the fork does differently. Add a workflow only where upstream split or renamed one the fork keeps. Only what you change in ${WORKFLOWS}/ is kept, except autofork.yml, and the sync commits it.`,
-  );
+  ).catch((error) => {
+    if (!(error instanceof Waiting)) throw error;
+    say("this month's limits have no room to update workflows, so they stay as they were");
+  });
   git(build.dir, "reset", "--quiet", head);
   if (!ran) {
-    say("the agent failed while updating workflows, so they stay as they were");
+    if (ran === false) say("the agent failed while updating workflows, so they stay as they were");
     reset(build.dir);
     return;
   }
@@ -752,7 +772,9 @@ async function heal(
   const wish = readFileSync(doc, "utf8").trimEnd();
   say(`${doing} ${id}`);
   try {
-    if (!(await agent(config, build.dir, id, prompt, BOT)))
+    const reserved = !!build.reserved;
+    if (reserved) build.reserved!--;
+    if (!(await agent(config, build.dir, id, prompt, BOT, reserved)))
       throw new Failure(`the agent failed while ${doing} ${id}`);
     git(build.dir, "reset", "--soft", "--quiet", step);
     const reason = existsSync(upstreamDoc(build.dir, id))
@@ -947,6 +969,7 @@ async function build(
     const { full } = broken.length ? await room(config, dir, broken.length) : {};
     if (full)
       throw new Waiting(`${broken.join(", ")} wait${broken.length === 1 ? "s" : ""}: ${full}`);
+    build.reserved = broken.length;
   }
   if (options.wait) settle(config, build);
   for (const id of config.patches) {
@@ -1439,22 +1462,22 @@ function options(args: string[]) {
   const generated = flag(args, "--generated")?.split(",");
   if (generated && !setup)
     throw new Failure("--generated files are rebuilt by --setup, so set it too");
-  const every = flag(args, "--every") ?? "15m";
-  if (!Object.hasOwn(EVERY, every))
+  const every = flag(args, "--every");
+  if (every && !Object.hasOwn(EVERY, every))
     throw new Failure(`--every takes ${Object.keys(EVERY).join(", ")}, not ${every}`);
   return {
     follow: flag(args, "--follow"),
     setup,
     generated,
     verify: flag(args, "--verify"),
-    cron: EVERY[every],
+    every,
   };
 }
 
 async function setup(
   root: string,
   upstream: string,
-  { cron, ...chosen }: ReturnType<typeof options>,
+  { every, ...chosen }: ReturnType<typeof options>,
 ) {
   if (existsSync(configFile(root))) throw new Failure(`${DIR}/config.json already exists`);
   const follow = chosen.follow ?? (await defaultFollow(root, upstream));
@@ -1465,7 +1488,14 @@ async function setup(
   if (!existsSync(path))
     writeFileSync(
       path,
-      workflow(git(root, "branch", "--show-current") || defaultBranch(root, upstream), cron),
+      workflow(
+        git(root, "branch", "--show-current") || defaultBranch(root, upstream),
+        EVERY[every ?? "15m"],
+      ),
+    );
+  else if (every || !readFileSync(path, "utf8").includes("id-token: write"))
+    say(
+      `Kept your ${path.slice(root.length + 1)}: its cron line is the schedule, and it needs \`id-token: write\` in permissions to report spend.`,
     );
   await fetchUpstream(root, config);
   const { base, drift } = await check(root, { ...config, patches: [] }, workingTree(root));
@@ -1521,7 +1551,9 @@ function origin(root: string) {
     ["config", "--get", "remote.origin.url"],
   ]) {
     const url = run("git", args, root).out.toString().trim();
-    const repo = url.match(/(?:^|[@/])github\.com[/:]([\w.-]+\/[\w.-]+?)(?:\.git)?\/?$/)?.[1];
+    const repo = url.match(
+      /(?:^|[@/.])github\.com(?::\d+)?[/:]([\w.-]+\/[\w.-]+?)(?:\.git)?\/?$/,
+    )?.[1];
     if (repo) return repo;
   }
   return "";
@@ -1602,8 +1634,8 @@ async function linked(owner: string, name: string) {
     body: JSON.stringify({ owner, name }),
     signal: AbortSignal.timeout(10_000),
   }).catch(() => undefined);
-  if (!response) return;
-  const text = await response.text();
+  const text = await response?.text().catch(() => undefined);
+  if (!response || text === undefined || response.status >= 500) return;
   try {
     if (response.ok) return !!JSON.parse(text).linked;
   } catch {}

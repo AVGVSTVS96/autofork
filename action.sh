@@ -3,7 +3,7 @@ set -euo pipefail
 
 failed="$RUNNER_TEMP/autofork-failed"
 skip="$(cat "$failed" 2>/dev/null || true)"
-[ "${GITHUB_EVENT_NAME:-}" = schedule ] || skip=""
+[ "${GITHUB_EVENT_NAME:-}" = schedule ] || [[ "${GITHUB_TRIGGERING_ACTOR:-}" == *"[bot]" ]] || skip=""
 head="$(git rev-parse HEAD)"
 
 git config user.name "github-actions[bot]"
