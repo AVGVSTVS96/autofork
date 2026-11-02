@@ -8,6 +8,7 @@ import {
   openSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -457,27 +458,36 @@ async function site(path: string, body?: object) {
   } catch {}
 }
 
-const tallies = new Map<string, { month: string; rebuilds: Row[] }>();
+let ledger = { file: "", month: "", rebuilds: [] as Row[] };
 
-function tally(file: string) {
+function openLedger(file: string) {
   const month = new Date().toISOString().slice(0, 7);
-  if (tallies.get(file)?.month !== month) {
-    let saved;
-    try {
-      saved = JSON.parse(readFileSync(file, "utf8"));
-    } catch {}
-    const rows = saved?.month === month && Array.isArray(saved.rebuilds) ? saved.rebuilds : [];
-    tallies.set(file, {
-      month,
-      rebuilds: rows.filter((row: Row | null) => typeof row?.cost === "number"),
-    });
+  let saved;
+  try {
+    saved = JSON.parse(readFileSync(file, "utf8"));
+  } catch {}
+  const rows = saved?.month === month && Array.isArray(saved.rebuilds) ? saved.rebuilds : [];
+  ledger = {
+    file,
+    month,
+    rebuilds: rows.filter((row: Row | null) => typeof row?.cost === "number"),
+  };
+}
+
+function saveLedger() {
+  const { file, ...kept } = ledger;
+  if (!file) return;
+  try {
+    writeFileSync(`${file}.tmp`, `${JSON.stringify(kept, null, 2)}\n`);
+    renameSync(`${file}.tmp`, file);
+  } catch (error) {
+    say(`couldn't write the spend tally to ${file}: ${(error as Error).message}`);
   }
-  return tallies.get(file)!;
 }
 
 const usd = (amount: number) => `$${Number.isInteger(amount) ? amount : amount.toFixed(2)}`;
 
-async function room(config: Config, dir: string, count = 1) {
+async function room(config: Config, count = 1) {
   const limits = { ...LIMITS };
   const set = config.limits ?? {};
   for (const key of Object.keys(LIMITS) as (keyof typeof LIMITS)[]) {
@@ -493,21 +503,19 @@ async function room(config: Config, dir: string, count = 1) {
         `"limits" in ${DIR}/config.json takes numbers, like ${JSON.stringify(LIMITS)}`,
       );
   }
-  const file = LEDGER ?? `${dir}-ledger.json`;
-  const local = tally(file);
+  if (ledger.month !== new Date().toISOString().slice(0, 7)) openLedger(ledger.file);
   const answer = await site("ledger");
   const remote = answer?.status === 200 ? await answer.json().catch(() => undefined) : undefined;
-  const rebuilds = Math.max(local.rebuilds.length, Number(remote?.rebuilds) || 0);
+  const rebuilds = Math.max(ledger.rebuilds.length, Number(remote?.rebuilds) || 0);
   const spent = Math.max(
-    local.rebuilds.reduce(
+    ledger.rebuilds.reduce(
       (sum, row) => sum + (typeof row.cost === "number" ? row.cost : limits.rebuild),
       0,
     ),
     Number(remote?.spent) || 0,
   );
   const cost = count * limits.rebuild;
-  if (rebuilds + count <= limits.rebuilds && spent + cost <= limits.month)
-    return { limits, file, local };
+  if (rebuilds + count <= limits.rebuilds && spent + cost <= limits.month) return { limits, spent };
   const next = new Date();
   next.setUTCMonth(next.getUTCMonth() + 1, 1);
   const month = next.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
@@ -523,11 +531,16 @@ async function room(config: Config, dir: string, count = 1) {
     rebuilds + count > limits.rebuilds && '"rebuilds"',
     spent + cost > limits.month && '"month"',
   ].filter(Boolean);
-  const raise = `raise ${keys.join(" and ")} in "limits" in ${DIR}/config.json`;
-  const never = count > limits.rebuilds || cost > limits.month;
+  const raise = (names: (string | false)[]) =>
+    `raise ${names.filter(Boolean).join(" and ")} in "limits" in ${DIR}/config.json`;
+  const never = [count > limits.rebuilds && '"rebuilds"', cost > limits.month && '"month"'].filter(
+    Boolean,
+  );
   const why = gaps.join(", and ");
-  const when = never ? `It needs you to ${raise}.` : `It runs ${month} 1, or ${raise}.`;
-  return { limits, file, local, never, full: `${why}. ${when}` };
+  const when = never.length
+    ? `It needs you to ${raise(never)}${cost > limits.month ? ` or lower "rebuild"` : ""}.`
+    : `It runs ${month} 1, or ${raise(keys)}.`;
+  return { limits, spent, full: `${why}. ${when}` };
 }
 
 async function agent(
@@ -540,8 +553,8 @@ async function agent(
 ) {
   const dir = build.dir;
   const reserved = heal && !!build.reserved?.delete(what);
-  const { limits, file, local, full } = await room(config, dir, 1 + (build.reserved?.size ?? 0));
-  if (full && !reserved) throw new Waiting(`${what} waits: ${full}`);
+  const { limits, spent, full } = await room(config, 1 + (build.reserved?.size ?? 0));
+  if (full && !(reserved && spent < limits.month)) throw new Waiting(`${what} waits: ${full}`);
   const { agent, command } = agentCommand(config, limits.rebuild);
   const row: Row = {
     patch: what,
@@ -551,15 +564,8 @@ async function agent(
     status: "running",
     at: new Date().toISOString(),
   };
-  local.rebuilds.push(row);
-  const keep = () => {
-    try {
-      writeFileSync(file, `${JSON.stringify(local, null, 2)}\n`);
-    } catch (error) {
-      throw new Failure(`can't write the spend tally to ${file}: ${(error as Error).message}`);
-    }
-  };
-  keep();
+  ledger.rebuilds.push(row);
+  saveLedger();
   output({ ledger: "changed" });
   const opened = await site("ledger", { patch: what, agent, cap: row.cap });
   const id = opened?.status === 201 ? (await opened.json().catch(() => undefined))?.id : undefined;
@@ -578,7 +584,7 @@ async function agent(
     agent === "claude" ? claudeSpend(stdout) : agent === "codex" ? await codexSpend(stdout) : {};
   row.status = result.status === 0 ? "done" : "stopped";
   if (spend.cost !== undefined) row.cost = spend.cost;
-  keep();
+  saveLedger();
   const closed =
     id !== undefined && (await site("ledger/close", { id, status: row.status, ...spend }))?.ok;
   if (oidc.url && !closed) say("couldn't report this rebuild's cost to autofork.com");
@@ -657,6 +663,7 @@ async function codexSpend(out: Buffer): Promise<Spend> {
   return Number.isFinite(cost) ? { ...spend, cost } : spend;
 }
 
+// Codex's --json events don't name the model, so it's read from the session file Codex writes; if that layout changes, the run counts at its cap.
 function codexModel(thread: string) {
   const sessions = join(codexHome(), "sessions");
   try {
@@ -995,7 +1002,7 @@ async function build(
     });
     reset(dir, build.steps[0]);
     git(dir, "clean", "-fdxq");
-    const { full } = broken.length ? await room(config, dir, broken.length) : {};
+    const { full } = broken.length ? await room(config, broken.length) : {};
     if (full)
       throw new Waiting(`${broken.join(", ")} wait${broken.length === 1 ? "s" : ""}: ${full}`);
     build.reserved = new Set(broken);
@@ -1349,7 +1356,7 @@ async function sync(root: string, args: string[]) {
     `upstream ${moved}, ${config.patches.length} patch${config.patches.length === 1 ? "" : "es"}`,
   );
   const healFrom = args.includes("--no-heal") ? undefined : base;
-  tally(LEDGER ?? `${scratch(root)}-ledger.json`);
+  openLedger(LEDGER ?? `${scratch(root)}-ledger.json`);
   const behind = workflowsBehind(root, base, source);
   const range = `${short(base)}..${short(source)}`;
   let result: Build | undefined;
@@ -1408,12 +1415,7 @@ async function sync(root: string, args: string[]) {
     output({ result: "synced", ...(tag && source === tip ? { tag } : {}) });
   } finally {
     cleanup(root, scratch(root));
-    for (const [file, kept] of tallies)
-      try {
-        writeFileSync(file, `${JSON.stringify(kept, null, 2)}\n`);
-      } catch (error) {
-        say(`couldn't write the spend tally to ${file}: ${(error as Error).message}`);
-      }
+    saveLedger();
   }
 }
 
@@ -1532,13 +1534,15 @@ async function setup(
         EVERY[every ?? "15m"],
       ),
     );
-  else if (
-    every ||
-    !/^\s*(id-token:\s*write|permissions:\s*write-all)/m.test(readFileSync(path, "utf8"))
-  )
-    say(
-      `Kept your ${path.slice(root.length + 1)}: its cron line is the schedule${every ? ` (--every ${every} is "${EVERY[every]}")` : ""}, and it needs \`id-token: write\` in permissions to report spend.`,
-    );
+  else {
+    const kept = readFileSync(path, "utf8");
+    const reports = /^\s*(id-token:\s*['"]?write|permissions:\s*['"]?write-all)/m.test(kept);
+    const notes = [
+      every && `its cron line is the schedule, so set it to "${EVERY[every]}" for --every ${every}`,
+      !reports && "it needs `id-token: write` in permissions to report spend",
+    ].filter(Boolean);
+    if (notes.length) say(`Kept your ${path.slice(root.length + 1)}: ${notes.join(", and ")}.`);
+  }
   await fetchUpstream(root, config);
   const { base, drift } = await check(root, { ...config, patches: [] }, workingTree(root));
   const readme = addNote(root, upstream, base, drift);
