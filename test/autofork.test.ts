@@ -1,14 +1,6 @@
 import { afterAll, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import {
-  appendFileSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -518,7 +510,7 @@ test("a fork can follow one channel of upstream's releases, named by its tags", 
   expect(file(mine, "notes.txt")).toBe("two\n");
 });
 
-test("init turns on Actions and issues for the fork origin points to, not the upstream gh picks", () => {
+test("init turns on Actions and issues for the fork origin points to, not the upstream gh picks, and checks a private fork hourly", () => {
   const bin = join(home, "bin");
   mkdirSync(bin, { recursive: true });
   writeFileSync(
@@ -527,6 +519,7 @@ test("init turns on Actions and issues for the fork origin points to, not the up
 echo "$*" >> ${home}/gh.log
 case "$*" in
   "repo view"*) echo acme/app ;;
+  "api repos/me/app --jq .private") echo true ;;
   "api repos/me/app") echo '{"fork":true,"owner":{"login":"me"},"parent":{"full_name":"acme/app","description":"An app"}}' ;;
   "api users/me") echo '{"type":"User","name":"Ada Lovelace"}' ;;
   *) echo '{}' ;;
@@ -538,13 +531,15 @@ esac
     home,
     `git clone -q ${join(github, "acme/app.git")} mine && git -C mine remote set-url origin git@github.com:me/app.git`,
   );
-  const { ok } = autoforkWith(
+  const { ok, log } = autoforkWith(
     { PATH: `${bin}:${process.env.PATH}` },
     join(home, "mine"),
     "init",
     "acme/app",
   );
   expect(ok).toBe(true);
+  expect(log).toContain("This repo is private");
+  expect(file(join(home, "mine"), ".github/workflows/autofork.yml")).toContain("17 * * * *");
   const calls = file(home, "gh.log");
   expect(calls).toContain("api -X PUT repos/me/app/actions/permissions -F enabled=true");
   expect(calls).toContain("repo edit me/app --enable-issues");
@@ -2244,7 +2239,7 @@ test("a sync waits before paying for any rebuild when the month has no room for 
   expect(waiting.ok).toBe(true);
   expect(waiting.output.result).toBe("waiting");
   expect(waiting.log).toMatch(
-    /autofork: one, two wait: 2 rebuilds won't fit in this month's 2 \(1 used\)\. It runs \w{3} 1, or raise "rebuilds" in "limits" in \.autofork\/config\.json\.\n$/,
+    /autofork: one, two wait: 2 rebuilds won't fit in this month's 2 \(1 used\)\. It runs \w{3} 1 \(UTC\), or raise "rebuilds" in "limits" in \.autofork\/config\.json\.\n$/,
   );
   expect(existsSync(runs)).toBe(false);
   expect(sh(mine, "git rev-parse HEAD")).toBe(head);

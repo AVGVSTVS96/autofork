@@ -489,11 +489,12 @@ function saveLedger() {
 const usd = (amount: number) => `$${Number.isInteger(amount) ? amount : amount.toFixed(2)}`;
 
 function limitsOf(config: Partial<Config>) {
-  const limits = { ...LIMITS, ...config.limits };
+  const given = config.limits;
+  const limits = { ...LIMITS, ...given };
   if (
-    (config.limits !== undefined && typeof config.limits !== "object") ||
+    (given !== undefined && (typeof given !== "object" || !given || Array.isArray(given))) ||
     Object.keys(limits).length > 3 ||
-    Object.values(limits).some((value) => typeof value !== "number" || value < 0) ||
+    Object.values(limits).some((value) => !Number.isFinite(value) || value < 0) ||
     !limits.rebuild
   )
     throw new Failure(
@@ -525,15 +526,14 @@ async function room(config: Config, count = 1) {
   next.setUTCMonth(next.getUTCMonth() + 1, 1);
   const month = next.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
   const some = count === 1 ? "a rebuild" : `${count} rebuilds`;
-  const counted = rebuilds + count > limits.rebuilds;
-  const why = counted
-    ? `${some} won't fit in this month's ${limits.rebuilds} (${rebuilds} used)`
-    : `${some} may cost ${usd(cost)} and ${usd(Math.max(0, limits.month - spent))} of this month's ${usd(limits.month)} is left`;
-  const raise = (key: string) => `raise "${key}" in "limits" in ${DIR}/config.json`;
-  const never = count > limits.rebuilds ? "rebuilds" : cost > limits.month ? "month" : "";
-  const when = never
-    ? `It needs you to ${raise(never)}.`
-    : `It runs ${month} 1, or ${raise(counted ? "rebuilds" : "month")}.`;
+  const never = count > limits.rebuilds || (cost > limits.month && "month");
+  const key = never === "month" || rebuilds + count <= limits.rebuilds ? "month" : "rebuilds";
+  const why =
+    key === "rebuilds"
+      ? `${some} won't fit in this month's ${limits.rebuilds} (${rebuilds} used)`
+      : `${some} may cost ${usd(cost)} and ${usd(Math.max(0, limits.month - spent))} of this month's ${usd(limits.month)} is left`;
+  const raise = `raise "${key}" in "limits" in ${DIR}/config.json`;
+  const when = never ? `It needs you to ${raise}.` : `It runs ${month} 1 (UTC), or ${raise}.`;
   return { limits, spent, full: `${why}. ${when}` };
 }
 
@@ -736,7 +736,7 @@ async function updateWorkflows(config: Fork, build: Build, files: string[], rang
 Bring into this fork's copies what it needs from those changes, and keep what the fork does differently. Add a workflow only where upstream split or renamed one the fork keeps. Only what you change in ${WORKFLOWS}/ is kept, except autofork.yml, and the sync commits it.`,
   ).catch((error) => {
     if (!(error instanceof Waiting)) throw error;
-    say("this month's limits have no room to update workflows, so they stay as they were");
+    say(`${error.message} The workflows stay as they were.`);
   });
   git(build.dir, "reset", "--quiet", head);
   if (!ran) {
@@ -970,26 +970,7 @@ async function build(
     healed: new Map(),
     upstreamHas: new Map(),
   };
-  if (options.healFrom) {
-    const broken = config.patches.filter((id) => {
-      const file = patchFile(dir, id);
-      const fits = !isEmpty(file) && apply(dir, file, config);
-      if (!fits && !isEmpty(file))
-        run(
-          "git",
-          ["apply", "--reject", "--whitespace=nowarn", ...skipGenerated(config), file],
-          dir,
-        );
-      commit(dir, id);
-      return !fits;
-    });
-    reset(dir, build.steps[0]);
-    git(dir, "clean", "-fdxq");
-    const { full } = broken.length ? await room(config, broken.length) : {};
-    if (full)
-      throw new Waiting(`${broken.join(", ")} wait${broken.length === 1 ? "s" : ""}: ${full}`);
-    build.reserved = new Set(broken);
-  }
+  if (options.healFrom) await setAside(config, build);
   if (options.wait) settle(config, build);
   for (const id of config.patches) {
     const file = patchFile(dir, id);
@@ -1017,6 +998,27 @@ async function build(
   }
   build.reserved = undefined;
   return build;
+}
+
+async function setAside(config: Fork, build: Build) {
+  const broken = config.patches.filter((id) => {
+    const file = patchFile(build.dir, id);
+    const fits = !isEmpty(file) && apply(build.dir, file, config);
+    if (!fits && !isEmpty(file))
+      run(
+        "git",
+        ["apply", "--reject", "--whitespace=nowarn", ...skipGenerated(config), file],
+        build.dir,
+      );
+    commit(build.dir, id);
+    return !fits;
+  });
+  reset(build.dir, build.steps[0]);
+  git(build.dir, "clean", "-fdxq");
+  const { full } = broken.length ? await room(config, broken.length) : {};
+  if (full)
+    throw new Waiting(`${broken.join(", ")} wait${broken.length === 1 ? "s" : ""}: ${full}`);
+  build.reserved = new Set(broken);
 }
 
 function passesAt(config: Fork, build: Build, commit: string) {
@@ -1509,15 +1511,26 @@ async function setup(
   writeConfig(root, config);
   const path = join(root, ".github/workflows/autofork.yml");
   mkdirSync(join(root, ".github/workflows"), { recursive: true });
-  if (!existsSync(path))
+  if (!existsSync(path)) {
+    const repo = origin(root);
+    const hidden =
+      !every &&
+      !!repo &&
+      run("gh", ["api", `repos/${repo}`, "--jq", ".private"], root)
+        .out.toString()
+        .trim() === "true";
+    if (hidden)
+      say(
+        "This repo is private, where each scheduled run bills Actions minutes, so it checks hourly (--every 1h).",
+      );
     writeFileSync(
       path,
       workflow(
         git(root, "branch", "--show-current") || defaultBranch(root, upstream),
-        EVERY[every ?? "15m"],
+        EVERY[every ?? (hidden ? "1h" : "15m")],
       ),
     );
-  else if (
+  } else if (
     every ||
     !/^\s*(id-token:\s*['"]?write|permissions:\s*['"]?write-all)/m.test(readFileSync(path, "utf8"))
   )
