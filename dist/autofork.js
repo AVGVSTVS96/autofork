@@ -366,10 +366,8 @@ async function room(config, dir, count = 1) {
 }
 async function agent(config, build, what, prompt, env, heal = false) {
   const dir = build.dir;
-  const reserved = heal && !!build.reserved;
-  if (reserved)
-    build.reserved--;
-  const { limits, file, local, full } = await room(config, dir, 1 + (build.reserved ?? 0));
+  const reserved = heal && !!build.reserved?.delete(what);
+  const { limits, file, local, full } = await room(config, dir, 1 + (build.reserved?.size ?? 0));
   if (full && !reserved)
     throw new Waiting(`${what} waits: ${full}`);
   const { agent, command } = agentCommand(config, limits.rebuild);
@@ -421,6 +419,8 @@ function claudeSpend(out) {
     process.stderr.write(out);
     return {};
   }
+  if (Array.isArray(report))
+    report = report.findLast((message) => message?.type === "result");
   if (!report || typeof report !== "object")
     return {};
   for (const line of [report.result, ...Array.isArray(report.errors) ? report.errors : []])
@@ -734,16 +734,17 @@ async function build(root, config, base, options) {
   if (options.healFrom) {
     const broken = config.patches.filter((id) => {
       const file = patchFile(dir, id);
-      if (isEmpty(file) || !apply(dir, file, config))
-        return true;
+      const fits = !isEmpty(file) && apply(dir, file, config);
+      if (!fits && !isEmpty(file))
+        merge(dir, file, config);
       commit(dir, id);
-      return false;
+      return !fits;
     });
     reset(dir, build.steps[0]);
     const { full } = broken.length ? await room(config, dir, broken.length) : {};
     if (full)
       throw new Waiting(`${broken.join(", ")} wait${broken.length === 1 ? "s" : ""}: ${full}`);
-    build.reserved = broken.length;
+    build.reserved = new Set(broken);
   }
   if (options.wait)
     settle(config, build);
@@ -764,7 +765,7 @@ async function build(root, config, base, options) {
     }
     build.steps.push(commit(dir, id));
   }
-  build.reserved = 0;
+  build.reserved = undefined;
   return build;
 }
 function passesAt(config, build, commit) {
@@ -1005,6 +1006,7 @@ Where one is just an old copy of upstream's, take upstream's first: git checkout
   const moved = base === source ? short(source) : `${short(base)} → ${short(source)}`;
   say(`upstream ${moved}, ${config.patches.length} patch${config.patches.length === 1 ? "" : "es"}`);
   const healFrom = args.includes("--no-heal") ? undefined : base;
+  tally(LEDGER ?? `${scratch(root)}-ledger.json`);
   const behind = workflowsBehind(root, base, source);
   const range = `${short(base)}..${short(source)}`;
   let result;
@@ -1055,8 +1057,12 @@ Where one is just an old copy of upstream's, take upstream's first: git checkout
   } finally {
     cleanup(root, scratch(root));
     for (const [file, kept] of tallies)
-      writeFileSync(file, `${JSON.stringify(kept, null, 2)}
+      try {
+        writeFileSync(file, `${JSON.stringify(kept, null, 2)}
 `);
+      } catch (error) {
+        say(`couldn't write the spend tally to ${file}: ${error.message}`);
+      }
   }
 }
 async function save(root, args) {

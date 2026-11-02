@@ -78,7 +78,7 @@ type Build = {
   steps: string[];
   source: string;
   healed: Map<string, string>;
-  reserved?: number;
+  reserved?: Set<string>;
   upstreamHas: Map<string, string>;
   ready?: string;
   rebuilt?: string;
@@ -533,9 +533,8 @@ async function agent(
   heal = false,
 ) {
   const dir = build.dir;
-  const reserved = heal && !!build.reserved;
-  if (reserved) build.reserved!--;
-  const { limits, file, local, full } = await room(config, dir, 1 + (build.reserved ?? 0));
+  const reserved = heal && !!build.reserved?.delete(what);
+  const { limits, file, local, full } = await room(config, dir, 1 + (build.reserved?.size ?? 0));
   if (full && !reserved) throw new Waiting(`${what} waits: ${full}`);
   const { agent, command } = agentCommand(config, limits.rebuild);
   const row: Row = {
@@ -583,6 +582,7 @@ function claudeSpend(out: Buffer): Spend {
     process.stderr.write(out);
     return {};
   }
+  if (Array.isArray(report)) report = report.findLast((message) => message?.type === "result");
   if (!report || typeof report !== "object") return {};
   for (const line of [report.result, ...(Array.isArray(report.errors) ? report.errors : [])])
     if (typeof line === "string") say(line);
@@ -969,15 +969,16 @@ async function build(
   if (options.healFrom) {
     const broken = config.patches.filter((id) => {
       const file = patchFile(dir, id);
-      if (isEmpty(file) || !apply(dir, file, config)) return true;
+      const fits = !isEmpty(file) && apply(dir, file, config);
+      if (!fits && !isEmpty(file)) merge(dir, file, config);
       commit(dir, id);
-      return false;
+      return !fits;
     });
     reset(dir, build.steps[0]);
     const { full } = broken.length ? await room(config, dir, broken.length) : {};
     if (full)
       throw new Waiting(`${broken.join(", ")} wait${broken.length === 1 ? "s" : ""}: ${full}`);
-    build.reserved = broken.length;
+    build.reserved = new Set(broken);
   }
   if (options.wait) settle(config, build);
   for (const id of config.patches) {
@@ -1002,7 +1003,7 @@ async function build(
     }
     build.steps.push(commit(dir, id));
   }
-  build.reserved = 0;
+  build.reserved = undefined;
   return build;
 }
 
@@ -1326,6 +1327,7 @@ async function sync(root: string, args: string[]) {
     `upstream ${moved}, ${config.patches.length} patch${config.patches.length === 1 ? "" : "es"}`,
   );
   const healFrom = args.includes("--no-heal") ? undefined : base;
+  tally(LEDGER ?? `${scratch(root)}-ledger.json`);
   const behind = workflowsBehind(root, base, source);
   const range = `${short(base)}..${short(source)}`;
   let result: Build | undefined;
@@ -1384,7 +1386,12 @@ async function sync(root: string, args: string[]) {
     output({ result: "synced", ...(tag && source === tip ? { tag } : {}) });
   } finally {
     cleanup(root, scratch(root));
-    for (const [file, kept] of tallies) writeFileSync(file, `${JSON.stringify(kept, null, 2)}\n`);
+    for (const [file, kept] of tallies)
+      try {
+        writeFileSync(file, `${JSON.stringify(kept, null, 2)}\n`);
+      } catch (error) {
+        say(`couldn't write the spend tally to ${file}: ${(error as Error).message}`);
+      }
   }
 }
 
