@@ -66,6 +66,11 @@ class Drifted extends Failure {
 }
 
 class Waiting extends Drifted {
+  why;
+  constructor(message, why = message) {
+    super(message);
+    this.why = why;
+  }
 }
 function run(command, args, cwd, env) {
   const result = spawnSync(command, args, { cwd, env, maxBuffer: 1 << 30 });
@@ -376,19 +381,23 @@ async function room(config, count = 1) {
   next.setUTCMonth(next.getUTCMonth() + 1, 1);
   const month = next.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
   const some = count === 1 ? "a rebuild" : `${count} rebuilds`;
-  const never = count > limits.rebuilds || cost > limits.month && "month";
-  const key = never === "month" || rebuilds + count <= limits.rebuilds ? "month" : "rebuilds";
-  const why = key === "rebuilds" ? `${some} won't fit in this month's ${limits.rebuilds} (${rebuilds} used)` : `${some} may cost ${usd(cost)} and ${usd(Math.max(0, limits.month - spent))} of this month's ${usd(limits.month)} is left`;
-  const raise = `raise "${key}" in "limits" in ${DIR}/config.json`;
-  const when = never ? `It needs you to ${raise}.` : `It runs ${month} 1 (UTC), or ${raise}.`;
-  return { limits, spent, full: `${why}. ${when}` };
+  const over = (rebuilds, spent) => [
+    rebuilds + count > limits.rebuilds && "rebuilds",
+    spent + cost > limits.month && "month"
+  ].filter((key) => key !== false);
+  const never = over(0, 0);
+  const keys = never.length ? never : over(rebuilds, spent);
+  const why = keys.map((key) => key === "rebuilds" ? `${some} won't fit in this month's ${limits.rebuilds} (${rebuilds} used)` : `${some} may cost ${usd(cost)} and ${usd(Math.max(0, limits.month - spent))} of this month's ${usd(limits.month)} is left`).join(", and ");
+  const raise = `raise ${keys.map((key) => `"${key}"`).join(" and ")} in "limits" in ${DIR}/config.json`;
+  const when = never.length ? `It needs you to ${raise}.` : `It runs ${month} 1 (UTC), or ${raise}.`;
+  return { limits, spent, why, full: `${why}. ${when}` };
 }
 async function agent(config, build, what, prompt, env, heal = false) {
   const dir = build.dir;
   const reserved = heal && !!build.reserved?.delete(what);
-  const { limits, spent, full } = await room(config, 1 + (build.reserved?.size ?? 0));
+  const { limits, spent, full, why } = await room(config, 1 + (build.reserved?.size ?? 0));
   if (full && !(reserved && spent < limits.month))
-    throw new Waiting(`${what} waits: ${full}`);
+    throw new Waiting(`${what} waits: ${full}`, why);
   const { agent, command } = agentCommand(config, limits.rebuild);
   const row = {
     patch: what,
@@ -496,11 +505,13 @@ function codexModel(thread) {
 }
 var table;
 async function prices(model) {
-  table ??= fetch("https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json", { signal: AbortSignal.timeout(30000) }).then((response) => response.json()).catch(() => {
+  table ??= fetch("https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json", { signal: AbortSignal.timeout(30000) }).then((response) => response.ok ? response.json() : {}).catch(() => {
     table = undefined;
     return {};
   });
   const rates = await table;
+  if (!rates || typeof rates !== "object")
+    return;
   return rates[model] ?? rates[`openai/${model}`];
 }
 function checksIn(dir) {
@@ -560,7 +571,7 @@ async function updateWorkflows(config, build, files, range) {
 Bring into this fork's copies what it needs from those changes, and keep what the fork does differently. Add a workflow only where upstream split or renamed one the fork keeps. Only what you change in ${WORKFLOWS}/ is kept, except autofork.yml, and the sync commits it.`).catch((error) => {
     if (!(error instanceof Waiting))
       throw error;
-    say(`${error.message} The workflows stay as they were.`);
+    say(`workflow update has no room: ${error.why}. The workflows stay as they were, and later syncs won't bring them over.`);
   });
   git(build.dir, "reset", "--quiet", head);
   if (!ran) {
@@ -1158,11 +1169,13 @@ async function setup(root, upstream, { every, ...chosen }) {
   const path = join(root, ".github/workflows/autofork.yml");
   mkdirSync(join(root, ".github/workflows"), { recursive: true });
   if (!existsSync(path)) {
-    const repo = origin(root);
-    const hidden = !every && !!repo && run("gh", ["api", `repos/${repo}`, "--jq", ".private"], root).out.toString().trim() === "true";
-    if (hidden)
-      say("This repo is private, where each scheduled run bills Actions minutes, so it checks hourly (--every 1h).");
-    writeFileSync(path, workflow(git(root, "branch", "--show-current") || defaultBranch(root, upstream), EVERY[every ?? (hidden ? "1h" : "15m")]));
+    const repo = !every && origin(root);
+    const asked = repo ? run("gh", ["api", `repos/${repo}`, "--jq", ".private"], root) : undefined;
+    const answer = asked?.ok ? asked.out.toString().trim() : undefined;
+    const hourly = !!asked && answer !== "false";
+    if (hourly)
+      say(`${answer === "true" ? "This repo is private" : "Couldn't tell whether this repo is private"}, and a private repo's scheduled runs bill Actions minutes, so it checks hourly (--every 1h).`);
+    writeFileSync(path, workflow(git(root, "branch", "--show-current") || defaultBranch(root, upstream), EVERY[every ?? (hourly ? "1h" : "15m")]));
   } else if (every || !/^\s*(id-token:\s*['"]?write|permissions:\s*['"]?write-all)/m.test(readFileSync(path, "utf8")))
     say(`Kept your ${path.slice(root.length + 1)} as it is: its cron line is the schedule, and spend reporting needs \`id-token: write\` in its permissions.`);
   await fetchUpstream(root, config);
@@ -1267,7 +1280,7 @@ async function linked(owner, name) {
       signal: AbortSignal.timeout(1e4)
     });
     if (response.ok)
-      return !!(await response.json()).linked;
+      return !!(await response.json())?.linked;
     if (response.status < 500 && response.status !== 429)
       throw new Failure(`${SITE}/api/link answered ${response.status}: ${await response.text()}`);
   } catch (error) {
@@ -1337,7 +1350,7 @@ Options for fork and init:
                                 separated: rebuilt by setup, never patched
   --verify <command>            the command that checks a build
   --every <5m|15m|1h|1d>        how often GitHub's timer checks upstream.
-                                Default: 15m
+                                Default: 15m, or 1h when the repo is private
 
 A patch is .autofork/<id>/PATCH.md, saying what the change does and why, next
 to <id>.patch, the diff. https://github.com/AVGVSTVS96/autofork

@@ -2261,7 +2261,7 @@ test("a sync waits before paying for any rebuild when the month has no room for 
   ]);
 });
 
-test("a rebuild waits when a whole rebuild's cap no longer fits under the month's", () => {
+test("a rebuild waits when a whole rebuild's cap no longer fits under the month's, and names every limit that's short", () => {
   const mine = spendFork("broke", { month: 30 });
   const ledger = join(home, "broke-ledger.json");
   const month = new Date().toISOString().slice(0, 7);
@@ -2276,6 +2276,18 @@ test("a rebuild waits when a whole rebuild's cap no longer fits under the month'
   expect(output.result).toBe("waiting");
   expect(log).toContain(
     "autofork: four waits: a rebuild may cost $20 and $15 of this month's $30 is left. It runs",
+  );
+  write(
+    mine,
+    ".autofork/config.json",
+    JSON.stringify({
+      ...JSON.parse(file(mine, ".autofork/config.json")),
+      limits: { month: 30, rebuilds: 1 },
+    }),
+  );
+  sh(mine, "git commit -qam 'one rebuild a month'");
+  expect(autoforkWith({ AUTOFORK_LEDGER: ledger }, mine, "sync").log).toMatch(
+    /four waits: a rebuild won't fit in this month's 1 \(1 used\), and a rebuild may cost \$20 and \$15 of this month's \$30 is left\. It runs \w{3} 1 \(UTC\), or raise "rebuilds" and "month" in "limits"/,
   );
   write(
     mine,
