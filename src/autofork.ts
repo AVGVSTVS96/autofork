@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 import { spawn, spawnSync } from "node:child_process";
 import {
+  closeSync,
   cpSync,
   existsSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
   rmSync,
@@ -463,11 +465,11 @@ function tally(file: string): { month: string; rebuilds: Row[] } {
 
 const usd = (amount: number) => `$${Number.isInteger(amount) ? amount : amount.toFixed(2)}`;
 
-async function room(config: Config, dir: string) {
+async function room(config: Config, dir: string, count = 1) {
   const limits = { ...LIMITS };
   for (const key of Object.keys(LIMITS) as (keyof typeof LIMITS)[]) {
-    limits[key] = Number(config.limits?.[key] ?? LIMITS[key]);
-    if (!(limits[key] >= 0))
+    limits[key] = config.limits?.[key] ?? LIMITS[key];
+    if (typeof limits[key] !== "number" || !(limits[key] >= 0))
       throw new Failure(
         `"limits" in ${DIR}/config.json takes numbers, like ${JSON.stringify(LIMITS)}`,
       );
@@ -478,24 +480,28 @@ async function room(config: Config, dir: string) {
   const remote = answer?.status === 200 ? await answer.json().catch(() => undefined) : undefined;
   const rebuilds = Math.max(local.rebuilds.length, Number(remote?.rebuilds) || 0);
   const spent = Math.max(
-    local.rebuilds.reduce((sum, row) => sum + (Number(row.cost) || limits.rebuild), 0),
+    local.rebuilds.reduce(
+      (sum, row) => sum + (typeof row.cost === "number" ? row.cost : limits.rebuild),
+      0,
+    ),
     Number(remote?.spent) || 0,
   );
-  if (rebuilds < limits.rebuilds && spent + limits.rebuild <= limits.month)
+  const cost = count * limits.rebuild;
+  if (rebuilds + count <= limits.rebuilds && spent + cost <= limits.month)
     return { limits, file, local };
   const next = new Date();
   next.setUTCMonth(next.getUTCMonth() + 1, 1);
   const month = next.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
+  const some = count === 1 ? "a rebuild" : `${count} rebuilds`;
   const why =
-    rebuilds >= limits.rebuilds
-      ? `this month's ${limits.rebuilds} rebuild${limits.rebuilds === 1 ? " is" : "s are"} used`
-      : `${usd(Math.max(0, limits.month - spent))} left of this month's ${usd(limits.month)} and a rebuild may cost ${usd(limits.rebuild)}`;
-  return {
-    limits,
-    file,
-    local,
-    full: `${why}. It runs ${month} 1, or raise "limits" in ${DIR}/config.json.`,
-  };
+    rebuilds + count > limits.rebuilds
+      ? `${count === 1 ? "" : `it needs ${some} and `}${Math.max(0, limits.rebuilds - rebuilds)} of this month's ${limits.rebuilds} rebuild${limits.rebuilds === 1 ? " is" : "s are"} left`
+      : `${usd(Math.max(0, limits.month - spent))} left of this month's ${usd(limits.month)} and ${some} may cost ${usd(cost)}`;
+  const when =
+    count > limits.rebuilds || cost > limits.month
+      ? `It needs higher "limits" in ${DIR}/config.json.`
+      : `It runs ${month} 1, or raise "limits" in ${DIR}/config.json.`;
+  return { limits, file, local, full: `${why}. ${when}` };
 }
 
 async function agent(
@@ -522,24 +528,25 @@ async function agent(
   output({ ledger: "changed" });
   const opened = await site("ledger", { patch: what, agent, cap: row.cap });
   const id = opened?.status === 201 ? (await opened.json().catch(() => undefined))?.id : undefined;
+  const printed = `${dir}-agent.out`;
+  const out = openSync(printed, "w");
   const result = spawnSync("sh", ["-c", command], {
     cwd: dir,
     env,
     input: prompt,
-    stdio: ["pipe", agent === "custom" ? "inherit" : "pipe", "inherit"],
-    maxBuffer: 1 << 30,
+    stdio: ["pipe", agent === "custom" ? "inherit" : out, "inherit"],
   });
+  closeSync(out);
+  const stdout = readFileSync(printed);
+  rmSync(printed);
   const spend =
-    agent === "claude"
-      ? claudeSpend(result.stdout)
-      : agent === "codex"
-        ? await codexSpend(result.stdout)
-        : {};
+    agent === "claude" ? claudeSpend(stdout) : agent === "codex" ? await codexSpend(stdout) : {};
   row.status = result.status === 0 ? "done" : "stopped";
   if (spend.cost !== undefined) row.cost = spend.cost;
   keep();
-  if (id !== undefined && !(await site("ledger/close", { id, status: row.status, ...spend }))?.ok)
-    say("couldn't report this rebuild's cost to autofork.com");
+  const closed =
+    id !== undefined && (await site("ledger/close", { id, status: row.status, ...spend }))?.ok;
+  if (oidc.url && !closed) say("couldn't report this rebuild's cost to autofork.com");
   say(`${what} cost ${spend.cost === undefined ? `up to ${usd(row.cap)}` : usd(spend.cost)}`);
   return row.status === "done";
 }
@@ -549,19 +556,24 @@ function claudeSpend(out: Buffer): Spend {
   try {
     report = JSON.parse(out.toString().trim().split("\n").at(-1)!);
   } catch {
+    process.stderr.write(out);
     return {};
   }
   for (const line of [report.result, ...(report.errors ?? [])])
     if (typeof line === "string") say(line);
-  type Usage = Record<string, number>;
-  const models = Object.entries((report.modelUsage ?? {}) as Record<string, Usage>);
-  const sum = (count: (usage: Usage) => number) =>
-    models.reduce((total, [, usage]) => total + (count(usage) || 0), 0);
+  const models = Object.entries(
+    (report.modelUsage ?? {}) as Record<string, Record<string, number>>,
+  );
+  const sum = (...keys: string[]) =>
+    models.reduce(
+      (total, [, usage]) => keys.reduce((sum, key) => sum + (Number(usage[key]) || 0), total),
+      0,
+    );
   return {
     cost: typeof report.total_cost_usd === "number" ? report.total_cost_usd : undefined,
     model: models.sort(([, a], [, b]) => b.costUSD - a.costUSD)[0]?.[0],
-    inputTokens: sum((u) => u.inputTokens + u.cacheReadInputTokens + u.cacheCreationInputTokens),
-    outputTokens: sum((u) => u.outputTokens),
+    inputTokens: sum("inputTokens", "cacheReadInputTokens", "cacheCreationInputTokens"),
+    outputTokens: sum("outputTokens"),
   };
 }
 
@@ -573,6 +585,7 @@ async function codexSpend(out: Buffer): Promise<Spend> {
     try {
       event = JSON.parse(line);
     } catch {
+      if (line.trim()) say(line);
       continue;
     }
     if (event.type === "thread.started") thread = event.thread_id;
@@ -923,6 +936,18 @@ async function build(
     healed: new Map(),
     upstreamHas: new Map(),
   };
+  if (options.healFrom) {
+    const broken = config.patches.filter((id) => {
+      const file = patchFile(dir, id);
+      if (isEmpty(file) || !apply(dir, file, config)) return true;
+      commit(dir, id);
+      return false;
+    });
+    reset(dir, build.steps[0]);
+    const { full } = broken.length ? await room(config, dir, broken.length) : {};
+    if (full)
+      throw new Waiting(`${broken.join(", ")} wait${broken.length === 1 ? "s" : ""}: ${full}`);
+  }
   if (options.wait) settle(config, build);
   for (const id of config.patches) {
     const file = patchFile(dir, id);
@@ -1268,8 +1293,7 @@ async function sync(root: string, args: string[]) {
   say(
     `upstream ${moved}, ${config.patches.length} patch${config.patches.length === 1 ? "" : "es"}`,
   );
-  const full = args.includes("--no-heal") ? undefined : (await room(config, scratch(root))).full;
-  const healFrom = args.includes("--no-heal") || full ? undefined : base;
+  const healFrom = args.includes("--no-heal") ? undefined : base;
   const behind = workflowsBehind(root, base, source);
   const range = `${short(base)}..${short(source)}`;
   let result: Build | undefined;
@@ -1286,7 +1310,7 @@ async function sync(root: string, args: string[]) {
     } catch (error) {
       if (!(error instanceof Drifted)) throw error;
       say(
-        `autofork: ${error.message}${error instanceof Waiting ? "" : full ? `, and a rebuild waits: ${full}` : ". The next run that heals rebuilds it."}`,
+        `autofork: ${error.message}${error instanceof Waiting ? "" : ". The next run that heals rebuilds it."}`,
       );
       return output({ result: "waiting" });
     }
@@ -1497,7 +1521,7 @@ function origin(root: string) {
     ["config", "--get", "remote.origin.url"],
   ]) {
     const url = run("git", args, root).out.toString().trim();
-    const repo = url.match(/github\.com[/:]([\w.-]+\/[\w.-]+?)(?:\.git)?$/)?.[1];
+    const repo = url.match(/(?:^|[@/])github\.com[/:]([\w.-]+\/[\w.-]+?)(?:\.git)?\/?$/)?.[1];
     if (repo) return repo;
   }
   return "";
@@ -1566,32 +1590,33 @@ async function fork(cwd: string, args: string[]) {
     say(
       `Last step: run claude setup-token, then gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo ${repo}, then start its first sync: gh workflow run autofork.yml --repo ${repo}`,
     );
-  say(LINK);
+  say(LINK.replace("autofork link", `cd ${basename(root)} && autofork link`));
 }
 
 const LINK = "GitHub's timer can run hours late. Run it on time and track spend: autofork link";
 
 async function linked(owner: string, name: string) {
+  const response = await fetch(`${SITE}/api/link`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ owner, name }),
+    signal: AbortSignal.timeout(10_000),
+  }).catch(() => undefined);
+  if (!response) return;
+  const text = await response.text();
   try {
-    const response = await fetch(`${SITE}/api/link`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ owner, name }),
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (response.ok) return !!(await response.json()).linked;
-    throw new Failure(`${SITE} answered ${response.status}: ${await response.text()}`);
-  } catch (error) {
-    if (error instanceof Failure) throw error;
-  }
-  throw new Failure(`can't reach ${SITE}, try again in a minute`);
+    if (response.ok) return !!JSON.parse(text).linked;
+  } catch {}
+  throw new Failure(`${SITE}/api/link answered ${response.status}: ${text.slice(0, 200)}`);
 }
 
 async function link(root: string) {
   const [owner, name] = origin(root).split("/");
   if (!name) throw new Failure("run autofork link inside a clone of your fork on GitHub");
   const done = () => say("linked: autofork.com starts it within a minute of upstream changing.");
-  if (await linked(owner, name)) return done();
+  const now = await linked(owner, name);
+  if (now === undefined) throw new Failure(`can't reach ${SITE}, try again in a minute`);
+  if (now) return done();
   const fetched = run("git", ["fetch", "--quiet", "origin", "HEAD"], root);
   if (!fetched.ok) throw new Failure(`can't fetch ${owner}/${name}: ${fetched.err}`);
   if (!run("git", ["cat-file", "-e", `FETCH_HEAD:${DIR}/config.json`], root).ok)
@@ -1604,7 +1629,7 @@ async function link(root: string) {
     .unref();
   for (const deadline = Date.now() + 600_000; Date.now() < deadline;) {
     await new Promise((wake) => setTimeout(wake, 3_000));
-    if (await linked(owner, name).catch(() => false)) return done();
+    if (await linked(owner, name)) return done();
   }
   throw new Failure(`not linked yet: finish at ${page}, then run autofork link again`);
 }

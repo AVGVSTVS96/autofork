@@ -2223,7 +2223,7 @@ test("init and fork write the limits, the schedule --every picks, id-token: writ
   expect(file(mine, ".github/workflows/autofork.yml")).toContain('- cron: "*/15 * * * *"');
 });
 
-test("a rebuild past this month's limits waits without the agent, counted from the local tally", () => {
+test("a sync waits before paying for any rebuild when the month has no room for all it needs", () => {
   const mine = spendFork("capped", { rebuilds: 2 });
   const ledger = join(home, "capped-ledger.json");
   const runs = join(home, "capped-runs");
@@ -2234,30 +2234,35 @@ test("a rebuild past this month's limits waits without the agent, counted from t
   wish(mine, "one", build);
   wish(mine, "two", build);
   const head = sh(mine, "git rev-parse HEAD");
-  const first = autoforkWith({ AUTOFORK_LEDGER: ledger }, mine, "sync");
-  expect(first.ok).toBe(true);
-  expect(first.output).toMatchObject({ result: "waiting", ledger: "changed" });
-  expect(first.log).toContain("one cost up to $20");
-  expect(first.log).toMatch(
-    /autofork: two waits: this month's 2 rebuilds are used\. It runs \w{3} 1, or raise "limits" in \.autofork\/config\.json\.\n$/,
+  const sync = (limits: object) => {
+    const config = JSON.parse(file(mine, ".autofork/config.json"));
+    write(mine, ".autofork/config.json", JSON.stringify({ ...config, limits }));
+    sh(mine, "git diff --quiet || git commit -qam limits");
+    return autoforkWith({ AUTOFORK_LEDGER: ledger }, mine, "sync");
+  };
+  const waiting = autoforkWith({ AUTOFORK_LEDGER: ledger }, mine, "sync");
+  expect(waiting.ok).toBe(true);
+  expect(waiting.output.result).toBe("waiting");
+  expect(waiting.log).toMatch(
+    /autofork: one, two wait: it needs 2 rebuilds and 1 of this month's 2 rebuilds are left\. It runs \w{3} 1, or raise "limits" in \.autofork\/config\.json\.\n$/,
   );
-  const tally = JSON.parse(file(home, "capped-ledger.json"));
-  expect(tally.rebuilds).toMatchObject([
-    old,
-    { patch: "one", agent: "custom", cap: 20, cost: 20, status: "done" },
-  ]);
+  expect(existsSync(runs)).toBe(false);
   expect(sh(mine, "git rev-parse HEAD")).toBe(head);
 
-  const again = autoforkWith({ AUTOFORK_LEDGER: ledger }, mine, "sync");
-  expect(again.output.result).toBe("waiting");
-  expect(again.log).toContain(
-    "autofork: one isn't built yet, and a rebuild waits: this month's 2 rebuilds are used.",
+  const never = sync({ rebuilds: 1 });
+  expect(never.log).toContain(
+    'one, two wait: it needs 2 rebuilds and 0 of this month\'s 1 rebuild is left. It needs higher "limits" in .autofork/config.json.',
   );
-  expect(file(home, "capped-runs")).toBe("one\n");
 
-  writeFileSync(ledger, JSON.stringify({ ...tally, month: "2000-01" }));
-  expect(autoforkWith({ AUTOFORK_LEDGER: ledger }, mine, "sync").output.result).toBe("synced");
-  expect(file(home, "capped-runs")).toBe("one\none\ntwo\n");
+  writeFileSync(ledger, JSON.stringify({ month: "2000-01", rebuilds: [old] }));
+  const built = sync({ rebuilds: 2 });
+  expect(built.output).toMatchObject({ result: "synced", ledger: "changed" });
+  expect(built.log).toContain("one cost up to $20");
+  expect(file(home, "capped-runs")).toBe("one\ntwo\n");
+  expect(JSON.parse(file(home, "capped-ledger.json")).rebuilds).toMatchObject([
+    { patch: "one", agent: "custom", cap: 20, cost: 20, status: "done" },
+    { patch: "two", agent: "custom", cap: 20, cost: 20, status: "done" },
+  ]);
 });
 
 test("a rebuild waits when a whole rebuild's cap no longer fits under the month's", () => {
@@ -2274,7 +2279,7 @@ test("a rebuild waits when a whole rebuild's cap no longer fits under the month'
   const { log, output } = autoforkWith({ AUTOFORK_LEDGER: ledger }, mine, "sync");
   expect(output.result).toBe("waiting");
   expect(log).toContain(
-    "autofork: four isn't built yet, and a rebuild waits: $15 left of this month's $30 and a rebuild may cost $20.",
+    "autofork: four waits: $15 left of this month's $30 and a rebuild may cost $20.",
   );
   write(
     mine,
@@ -2354,9 +2359,7 @@ echo '{"type":"result","subtype":"success","is_error":false,"result":"built it",
   wish(mine, "six");
   const capped = autoforkWith({ ...site, SITE_TOTALS: '{"rebuilds":3,"spent":190}' }, mine, "sync");
   expect(capped.output.result).toBe("waiting");
-  expect(capped.log).toContain(
-    "six isn't built yet, and a rebuild waits: $10 left of this month's $200",
-  );
+  expect(capped.log).toContain("six waits: $10 left of this month's $200");
 });
 
 test("Codex's tokens are priced from LiteLLM's table for the model its session used", () => {
