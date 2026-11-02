@@ -438,7 +438,7 @@ type Row = {
   status: "running" | "done" | "stopped";
   at: string;
 };
-type Spend = { cost?: number; model?: string; inputTokens?: number; outputTokens?: number };
+type Spend = { cost?: number; model?: string };
 
 async function site(path: string, body?: object) {
   if (!oidc.url || !oidc.token) return;
@@ -488,21 +488,15 @@ function saveLedger() {
 const usd = (amount: number) => `$${Number.isInteger(amount) ? amount : amount.toFixed(2)}`;
 
 async function room(config: Config, count = 1) {
-  const limits = { ...LIMITS };
-  const set = config.limits ?? {};
-  for (const key of Object.keys(LIMITS) as (keyof typeof LIMITS)[]) {
-    limits[key] = set[key] ?? LIMITS[key];
-    const value = limits[key];
-    if (
-      typeof set !== "object" ||
-      typeof value !== "number" ||
-      value < 0 ||
-      (key === "rebuild" && !value)
-    )
-      throw new Failure(
-        `"limits" in ${DIR}/config.json takes numbers, like ${JSON.stringify(LIMITS)}`,
-      );
-  }
+  const limits = { ...LIMITS, ...config.limits };
+  if (
+    (config.limits !== undefined && typeof config.limits !== "object") ||
+    Object.values(limits).some((value) => typeof value !== "number" || value < 0) ||
+    !limits.rebuild
+  )
+    throw new Failure(
+      `"limits" in ${DIR}/config.json takes numbers, like ${JSON.stringify(LIMITS)}`,
+    );
   if (ledger.month !== new Date().toISOString().slice(0, 7)) openLedger(ledger.file);
   const answer = await site("ledger");
   const remote = answer?.status === 200 ? await answer.json().catch(() => undefined) : undefined;
@@ -520,26 +514,13 @@ async function room(config: Config, count = 1) {
   next.setUTCMonth(next.getUTCMonth() + 1, 1);
   const month = next.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
   const some = count === 1 ? "a rebuild" : `${count} rebuilds`;
-  const left = Math.max(0, limits.rebuilds - rebuilds);
-  const gaps = [
-    rebuilds + count > limits.rebuilds &&
-      `${count === 1 ? "" : `it needs ${some} and `}${left} of this month's ${limits.rebuilds} rebuild${limits.rebuilds === 1 ? "" : "s"} ${left === 1 ? "is" : "are"} left`,
-    spent + cost > limits.month &&
-      `${usd(Math.max(0, limits.month - spent))} of this month's ${usd(limits.month)} is left and ${some} may cost ${usd(cost)}`,
-  ].filter(Boolean);
-  const keys = [
-    rebuilds + count > limits.rebuilds && '"rebuilds"',
-    spent + cost > limits.month && '"month"',
-  ].filter(Boolean);
-  const raise = (names: (string | false)[]) =>
-    `raise ${names.filter(Boolean).join(" and ")} in "limits" in ${DIR}/config.json`;
-  const never = [count > limits.rebuilds && '"rebuilds"', cost > limits.month && '"month"'].filter(
-    Boolean,
-  );
-  const why = gaps.join(", and ");
-  const when = never.length
-    ? `It needs you to ${raise(never)}${cost > limits.month ? ` or lower "rebuild"` : ""}.`
-    : `It runs ${month} 1, or ${raise(keys)}.`;
+  const counted = rebuilds + count > limits.rebuilds;
+  const why = counted
+    ? `${some} won't fit in this month's ${limits.rebuilds} (${rebuilds} used)`
+    : `${some} may cost ${usd(cost)} and ${usd(Math.max(0, limits.month - spent))} of this month's ${usd(limits.month)} is left`;
+  const raise = `raise "${counted ? "rebuilds" : "month"}" in "limits" in ${DIR}/config.json`;
+  const never = counted ? count > limits.rebuilds : cost > limits.month;
+  const when = never ? `It needs you to ${raise}.` : `It runs ${month} 1, or ${raise}.`;
   return { limits, spent, full: `${why}. ${when}` };
 }
 
@@ -604,21 +585,12 @@ function claudeSpend(out: Buffer): Spend {
   if (!report || typeof report !== "object") return {};
   for (const line of [report.result, ...(Array.isArray(report.errors) ? report.errors : [])])
     if (typeof line === "string") say(line);
-  const models = Object.entries(
-    (report.modelUsage ?? {}) as Record<string, Record<string, number>>,
-  );
-  const sum = (...keys: string[]) =>
-    models.reduce(
-      (total, [, usage]) => keys.reduce((sum, key) => sum + (Number(usage?.[key]) || 0), total),
-      0,
-    );
+  const models = Object.entries((report.modelUsage ?? {}) as Record<string, { costUSD?: number }>);
   return {
     cost: typeof report.total_cost_usd === "number" ? report.total_cost_usd : undefined,
     model: models.sort(
       ([, a], [, b]) => (Number(b?.costUSD) || 0) - (Number(a?.costUSD) || 0),
     )[0]?.[0],
-    inputTokens: sum("inputTokens", "cacheReadInputTokens", "cacheCreationInputTokens"),
-    outputTokens: sum("outputTokens"),
   };
 }
 
@@ -643,15 +615,10 @@ async function codexSpend(out: Buffer): Promise<Spend> {
   if (!used || !Object.values(used).some((count) => Number(count) > 0)) return {};
   const model = thread && codexModel(thread);
   const tokens = (key: string) => Number(used![key]) || 0;
-  const spend = {
-    model,
-    inputTokens: tokens("input_tokens"),
-    outputTokens: tokens("output_tokens"),
-  };
   const price = model ? await prices(model) : undefined;
   if (!price || !(Number(price.input_cost_per_token) > 0)) {
     say(`couldn't price ${model ?? "Codex's model"}, so this rebuild counts at its cap`);
-    return spend;
+    return { model };
   }
   const rate = (key: string) => Number(price[key] ?? price.input_cost_per_token);
   const cost =
@@ -660,7 +627,7 @@ async function codexSpend(out: Buffer): Promise<Spend> {
     tokens("cached_input_tokens") * rate("cache_read_input_token_cost") +
     tokens("cache_write_input_tokens") * rate("cache_creation_input_token_cost") +
     tokens("output_tokens") * Number(price.output_cost_per_token);
-  return Number.isFinite(cost) ? { ...spend, cost } : spend;
+  return Number.isFinite(cost) ? { model, cost } : { model };
 }
 
 // Codex's --json events don't name the model, so it's read from the session file Codex writes; if that layout changes, the run counts at its cap.
@@ -1534,15 +1501,13 @@ async function setup(
         EVERY[every ?? "15m"],
       ),
     );
-  else {
-    const kept = readFileSync(path, "utf8");
-    const reports = /^\s*(id-token:\s*['"]?write|permissions:\s*['"]?write-all)/m.test(kept);
-    const notes = [
-      every && `its cron line is the schedule, so set it to "${EVERY[every]}" for --every ${every}`,
-      !reports && "it needs `id-token: write` in permissions to report spend",
-    ].filter(Boolean);
-    if (notes.length) say(`Kept your ${path.slice(root.length + 1)}: ${notes.join(", and ")}.`);
-  }
+  else if (
+    every ||
+    !/^\s*(id-token:\s*['"]?write|permissions:\s*['"]?write-all)/m.test(readFileSync(path, "utf8"))
+  )
+    say(
+      `Kept your ${path.slice(root.length + 1)} as it is: its cron line is the schedule, and spend reporting needs \`id-token: write\` in its permissions.`,
+    );
   await fetchUpstream(root, config);
   const { base, drift } = await check(root, { ...config, patches: [] }, workingTree(root));
   const readme = addNote(root, upstream, base, drift);
@@ -1675,18 +1640,19 @@ const LINK =
   "GitHub's timer can run hours late. Run it on time and track spend: npx github:AVGVSTVS96/autofork link";
 
 async function linked(owner: string, name: string) {
-  const response = await fetch(`${SITE}/api/link`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ owner, name }),
-    signal: AbortSignal.timeout(10_000),
-  }).catch(() => undefined);
-  const text = await response?.text().catch(() => undefined);
-  if (!response || text === undefined || response.status >= 500 || response.status === 429) return;
   try {
-    if (response.ok) return !!JSON.parse(text).linked;
-  } catch {}
-  throw new Failure(`${SITE}/api/link answered ${response.status}: ${text.slice(0, 200)}`);
+    const response = await fetch(`${SITE}/api/link`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ owner, name }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (response.ok) return !!(await response.json()).linked;
+    if (response.status < 500 && response.status !== 429)
+      throw new Failure(`${SITE}/api/link answered ${response.status}: ${await response.text()}`);
+  } catch (error) {
+    if (error instanceof Failure) throw error;
+  }
 }
 
 async function link(root: string) {
