@@ -2249,10 +2249,11 @@ test("a sync waits before paying for any rebuild when the month has no room for 
   expect(existsSync(runs)).toBe(false);
   expect(sh(mine, "git rev-parse HEAD")).toBe(head);
 
-  const never = sync({ rebuilds: 1 });
-  expect(never.log).toContain(
-    'one, two wait: it needs 2 rebuilds and 0 of this month\'s 1 rebuild are left. It needs higher "limits" in .autofork/config.json.',
+  const each = sync({ rebuilds: 1 });
+  expect(each.log).toContain(
+    "building one\nautofork: one waits: 0 of this month's 1 rebuild are left.",
   );
+  expect(existsSync(runs)).toBe(false);
 
   writeFileSync(ledger, JSON.stringify({ month: "2000-01", rebuilds: [old] }));
   const built = sync({ rebuilds: 2 });

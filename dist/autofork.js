@@ -306,10 +306,9 @@ async function site(path, body) {
   if (!oidc.url || !oidc.token)
     return;
   try {
-    const signal = AbortSignal.timeout(1e4);
     const minted = await fetch(`${oidc.url}&audience=autofork`, {
       headers: { authorization: `Bearer ${oidc.token}` },
-      signal
+      signal: AbortSignal.timeout(1e4)
     });
     const { value } = await minted.json();
     if (!minted.ok || typeof value !== "string")
@@ -318,7 +317,7 @@ async function site(path, body) {
       method: body ? "POST" : "GET",
       headers: { authorization: `Bearer ${value}`, "content-type": "application/json" },
       body: body && JSON.stringify(body),
-      signal
+      signal: AbortSignal.timeout(1e4)
     });
   } catch {}
 }
@@ -361,8 +360,9 @@ async function room(config, dir, count = 1) {
   const some = count === 1 ? "a rebuild" : `${count} rebuilds`;
   const left = Math.max(0, limits.rebuilds - rebuilds);
   const why = rebuilds + count > limits.rebuilds ? `${count === 1 ? "" : `it needs ${some} and `}${left} of this month's ${limits.rebuilds} rebuild${limits.rebuilds === 1 ? "" : "s"} ${left === 1 ? "is" : "are"} left` : `${usd(Math.max(0, limits.month - spent))} left of this month's ${usd(limits.month)} and ${some} may cost ${usd(cost)}`;
-  const when = count > limits.rebuilds || cost > limits.month ? `It needs higher "limits" in ${DIR}/config.json.` : `It runs ${month} 1, or raise "limits" in ${DIR}/config.json.`;
-  return { limits, file, local, full: `${why}. ${when}` };
+  const never = count > limits.rebuilds || cost > limits.month;
+  const when = never ? `It needs higher "limits" in ${DIR}/config.json.` : `It runs ${month} 1, or raise "limits" in ${DIR}/config.json.`;
+  return { limits, file, local, never, full: `${why}. ${when}` };
 }
 async function agent(config, build, what, prompt, env, heal = false) {
   const dir = build.dir;
@@ -380,8 +380,14 @@ async function agent(config, build, what, prompt, env, heal = false) {
     at: new Date().toISOString()
   };
   local.rebuilds.push(row);
-  const keep = () => writeFileSync(file, `${JSON.stringify(local, null, 2)}
+  const keep = () => {
+    try {
+      writeFileSync(file, `${JSON.stringify(local, null, 2)}
 `);
+    } catch (error) {
+      throw new Failure(`can't write the spend tally to ${file}: ${error.message}`);
+    }
+  };
   keep();
   output({ ledger: "changed" });
   const opened = await site("ledger", { patch: what, agent, cap: row.cap });
@@ -427,10 +433,10 @@ function claudeSpend(out) {
     if (typeof line === "string")
       say(line);
   const models = Object.entries(report.modelUsage ?? {});
-  const sum = (...keys) => models.reduce((total, [, usage]) => keys.reduce((sum, key) => sum + (Number(usage[key]) || 0), total), 0);
+  const sum = (...keys) => models.reduce((total, [, usage]) => keys.reduce((sum, key) => sum + (Number(usage?.[key]) || 0), total), 0);
   return {
     cost: typeof report.total_cost_usd === "number" ? report.total_cost_usd : undefined,
-    model: models.sort(([, a], [, b]) => (Number(b.costUSD) || 0) - (Number(a.costUSD) || 0))[0]?.[0],
+    model: models.sort(([, a], [, b]) => (Number(b?.costUSD) || 0) - (Number(a?.costUSD) || 0))[0]?.[0],
     inputTokens: sum("inputTokens", "cacheReadInputTokens", "cacheCreationInputTokens"),
     outputTokens: sum("outputTokens")
   };
@@ -480,16 +486,16 @@ async function codexSpend(out) {
 }
 function codexModel(thread) {
   const sessions = join(codexHome(), "sessions");
-  if (!existsSync(sessions))
-    return;
-  const rollout = readdirSync(sessions, { recursive: true, encoding: "utf8" }).find((name) => name.endsWith(`${thread}.jsonl`));
-  return rollout && readFileSync(join(sessions, rollout), "utf8").match(/"model":"([^"]+)"/)?.[1];
-}
-async function prices(model) {
   try {
-    const table = await (await fetch("https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json", { signal: AbortSignal.timeout(30000) })).json();
-    return table[model] ?? table[`openai/${model}`];
+    const rollout = readdirSync(sessions, { recursive: true, encoding: "utf8" }).find((name) => name.endsWith(`${thread}.jsonl`));
+    return rollout && readFileSync(join(sessions, rollout), "utf8").match(/"model":"([^"]+)"/)?.[1];
   } catch {}
+}
+var table;
+async function prices(model) {
+  table ??= fetch("https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json", { signal: AbortSignal.timeout(30000) }).then((response) => response.json()).catch(() => ({}));
+  const rates = await table;
+  return rates[model] ?? rates[`openai/${model}`];
 }
 function checksIn(dir) {
   try {
@@ -734,17 +740,17 @@ async function build(root, config, base, options) {
   if (options.healFrom) {
     const broken = config.patches.filter((id) => {
       const file = patchFile(dir, id);
-      const fits = !isEmpty(file) && apply(dir, file, config);
-      if (!fits && !isEmpty(file))
-        merge(dir, file, config);
+      if (isEmpty(file) || !apply(dir, file, config))
+        return true;
       commit(dir, id);
-      return !fits;
+      return false;
     });
     reset(dir, build.steps[0]);
-    const { full } = broken.length ? await room(config, dir, broken.length) : {};
-    if (full)
+    const { full, never } = broken.length ? await room(config, dir, broken.length) : {};
+    if (full && !never)
       throw new Waiting(`${broken.join(", ")} wait${broken.length === 1 ? "s" : ""}: ${full}`);
-    build.reserved = new Set(broken);
+    if (!full)
+      build.reserved = new Set(broken);
   }
   if (options.wait)
     settle(config, build);
@@ -757,8 +763,10 @@ async function build(root, config, base, options) {
         throw new Drifted(`${id} doesn't apply to ${short(base)}`);
       await verify(config, build, options.healFrom);
       await heal(config, build, id, `Upstream changed, and patch "${id}" no longer applies cleanly.`, isEmpty(file) ? undefined : { file, from: options.healFrom });
-    } else if (!isEmpty(file) && !changed(dir)) {
-      build.upstreamHas.set(id, "the same change, line for line");
+    } else {
+      build.reserved?.delete(id);
+      if (!isEmpty(file) && !changed(dir))
+        build.upstreamHas.set(id, "the same change, line for line");
     }
     if (options.fold?.id === id && !apply(dir, options.fold.patch, config)) {
       throw new Failure(`your changes don't apply on top of ${id}`);
@@ -1128,8 +1136,8 @@ function options(args) {
   if (generated && !setup)
     throw new Failure("--generated files are rebuilt by --setup, so set it too");
   const every = flag(args, "--every");
-  if (every && !Object.hasOwn(EVERY, every))
-    throw new Failure(`--every takes ${Object.keys(EVERY).join(", ")}, not ${every}`);
+  if (args.includes("--every") && !Object.hasOwn(EVERY, every ?? ""))
+    throw new Failure(`--every takes ${Object.keys(EVERY).join(", ")}, not ${every ?? "nothing"}`);
   return {
     follow: flag(args, "--follow"),
     setup,
