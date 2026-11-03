@@ -341,10 +341,9 @@ async function newestGreen(root: string, config: Config, base: string, tip: stri
   for (const sha of git(root, "rev-list", "--first-parent", "--max-count=30", `${base}..${tip}`)
     .split("\n")
     .filter(Boolean)) {
-    const conclusions = await checkRuns(repo, sha);
-    if (!conclusions) return tip;
-    if (conclusions.includes(null) || conclusions.some((conclusion) => RED.includes(conclusion!)))
-      continue;
+    const passed = await green(repo, sha);
+    if (passed === undefined) return tip;
+    if (!passed) continue;
     if (sha !== tip) say(`upstream's tip isn't green yet, using ${short(sha)}`);
     return sha;
   }
@@ -353,9 +352,8 @@ async function newestGreen(root: string, config: Config, base: string, tip: stri
   return base;
 }
 
-async function checkRuns(repo: string, sha: string) {
-  const conclusions: (string | null)[] = [];
-  for (let page = 1; ; page++) {
+async function green(repo: string, sha: string) {
+  for (let page = 1, read = 0; ; page++) {
     const response = await github(
       `repos/${repo}/commits/${sha}/check-runs?per_page=100&page=${page}`,
     );
@@ -364,8 +362,14 @@ async function checkRuns(repo: string, sha: string) {
       return;
     }
     const { total_count, check_runs } = await response.json();
-    conclusions.push(...check_runs.map((check: { conclusion: string | null }) => check.conclusion));
-    if (!check_runs.length || conclusions.length >= total_count) return conclusions;
+    if (
+      check_runs.some(
+        ({ conclusion }: { conclusion: string | null }) => !conclusion || RED.includes(conclusion),
+      )
+    )
+      return false;
+    read += check_runs.length;
+    if (!check_runs.length || read >= total_count) return true;
   }
 }
 
@@ -1549,7 +1553,7 @@ async function setup(
   );
   const inherited = git(root, "ls-files", WORKFLOWS)
     .split("\n")
-    .filter((file) => file && upstreamHas.has(file));
+    .filter((file) => file && upstreamHas.has(file) && !file.endsWith("/autofork.yml"));
   if ("branch" in parseFollow(follow)) {
     say(
       `autofork follows ${upstream}'s ${follow} branch${chosen.follow ? "" : ", since it has no releases"}.`,
