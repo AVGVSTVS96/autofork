@@ -312,21 +312,23 @@ function agentCommand(config, cap) {
 async function site(path, body) {
   if (!oidc.url || !oidc.token)
     return;
-  try {
-    const minted = await fetch(`${oidc.url}&audience=autofork`, {
-      headers: { authorization: `Bearer ${oidc.token}` },
-      signal: AbortSignal.timeout(1e4)
-    });
-    const { value } = await minted.json();
-    if (!minted.ok || typeof value !== "string")
-      return;
-    return await fetch(`${SITE}/api/${path}`, {
-      method: body ? "POST" : "GET",
-      headers: { authorization: `Bearer ${value}`, "content-type": "application/json" },
-      body: body && JSON.stringify(body),
-      signal: AbortSignal.timeout(1e4)
-    });
-  } catch {}
+  for (let attempt = 0;attempt < 2; attempt++) {
+    try {
+      const minted = await fetch(`${oidc.url}&audience=autofork`, {
+        headers: { authorization: `Bearer ${oidc.token}` },
+        signal: AbortSignal.timeout(1e4)
+      });
+      const { value } = await minted.json();
+      if (!minted.ok || typeof value !== "string")
+        return;
+      return await fetch(`${SITE}/api/${path}`, {
+        method: body ? "POST" : "GET",
+        headers: { authorization: `Bearer ${value}`, "content-type": "application/json" },
+        body: body && JSON.stringify(body),
+        signal: AbortSignal.timeout(1e4)
+      });
+    } catch {}
+  }
 }
 var ledger = { file: "", month: "", rebuilds: [] };
 function openLedger(file) {

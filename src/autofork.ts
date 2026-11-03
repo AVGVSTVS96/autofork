@@ -447,22 +447,26 @@ type Row = {
 };
 type Spend = { cost?: number; model?: string };
 
+/* An agent run blocks the event loop for minutes, and the first request after it can go out on a
+   connection the server already closed, so a request that fails before any answer is tried once more */
 async function site(path: string, body?: object) {
   if (!oidc.url || !oidc.token) return;
-  try {
-    const minted = await fetch(`${oidc.url}&audience=autofork`, {
-      headers: { authorization: `Bearer ${oidc.token}` },
-      signal: AbortSignal.timeout(10_000),
-    });
-    const { value } = await minted.json();
-    if (!minted.ok || typeof value !== "string") return;
-    return await fetch(`${SITE}/api/${path}`, {
-      method: body ? "POST" : "GET",
-      headers: { authorization: `Bearer ${value}`, "content-type": "application/json" },
-      body: body && JSON.stringify(body),
-      signal: AbortSignal.timeout(10_000),
-    });
-  } catch {}
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const minted = await fetch(`${oidc.url}&audience=autofork`, {
+        headers: { authorization: `Bearer ${oidc.token}` },
+        signal: AbortSignal.timeout(10_000),
+      });
+      const { value } = await minted.json();
+      if (!minted.ok || typeof value !== "string") return;
+      return await fetch(`${SITE}/api/${path}`, {
+        method: body ? "POST" : "GET",
+        headers: { authorization: `Bearer ${value}`, "content-type": "application/json" },
+        body: body && JSON.stringify(body),
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch {}
+  }
 }
 
 let ledger = { file: "", month: "", rebuilds: [] as Row[] };
