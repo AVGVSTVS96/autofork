@@ -1683,8 +1683,7 @@ async function fork(cwd: string, args: string[]) {
 const CHATGPT = (repo: string) =>
   `For ChatGPT instead, give the fork a Codex sign-in of its own, since each refresh retires the last one. Turn on device code login in ChatGPT's security settings, run sh -c 'd=$(mktemp -d) && trap "rm -rf \\"\\$d\\"" EXIT && CODEX_HOME="$d" codex login --device-auth && gh secret set CODEX_AUTH${repo} < "$d/auth.json"', then start its first sync: gh workflow run autofork.yml${repo}. Link it too (below): only a linked fork saves Codex's refreshed sign-ins, and without them it stops working within about a week.`;
 
-const LINK =
-  "GitHub's timer can run hours late. Run it on time and track spend: npx github:AVGVSTVS96/autofork link";
+const LINK = "GitHub's timer can run hours late. Run it on time and track spend: npx autofork link";
 
 async function linked(owner: string, name: string) {
   try {
