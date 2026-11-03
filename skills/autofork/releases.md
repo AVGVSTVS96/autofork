@@ -46,7 +46,7 @@ An updater installs a build only if it passes the updater's checks, and upstream
 
 ## 6. Check the real release
 
-The fork's first release comes from its next sync to an upstream release. To have it now, when the commit the fork's last `autofork: sync` message names is the release's (`gh api repos/<upstream>/commits/<tag> --jq .sha` starts with it) and no run has released that tag yet, start the release workflow by hand: `gh workflow run <release workflow> --repo <fork> -f tag=<tag>`. Download the fork's release, not a local build, and check:
+A sync starts the release workflow itself when it builds a patch or moves to a new release. When the fork is already current and every patch was saved with `save`, start its first release by hand, with the newest release tag in its channel: `gh workflow run <release workflow> --repo <fork> -f tag=<tag>`. Download the fork's release, not a local build, and check:
 
 - The version is the upstream tag.
 - The feed file inside the app names the fork and the channel.

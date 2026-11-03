@@ -105,7 +105,7 @@ When the workflow has `id-token: write` (`init` and `fork` add it), each rebuild
 
 ## On time
 
-GitHub runs the workflow on its `cron` line, but its scheduled runs can start hours late. A workflow `fork` or `init` writes checks every 15 minutes, or hourly on a private repo, unless you pick another with `--every 5m|15m|1h|1d`. Runs are free on public repos, and a fork of a public repo is public; on a private repo each run bills Actions minutes. To have your fork synced within a minute of upstream changing:
+GitHub runs the workflow on its `cron` line, but its scheduled runs can start hours late. A workflow `fork` or `init` writes checks every 15 minutes, or hourly on a private repo (or when `gh` can't tell), unless you pick another with `--every 5m|15m|1h|1d`; an existing `autofork.yml` keeps its own. Runs are free on public repos, and a fork of a public repo is public; on a private repo each run bills Actions minutes. To have your fork synced within a minute of upstream changing:
 
 ```sh
 npx autofork link

@@ -23,13 +23,13 @@ It follows upstream's releases, or its default branch if it has none. `--follow 
 
 If `CLAUDE_CODE_OAUTH_TOKEN` is set, `fork` also adds that secret. Otherwise give the user the sign-in steps it prints, for Claude or ChatGPT, then run `gh workflow run autofork.yml --repo <fork>`: the run `fork`'s push started fails without the secret, and this one builds the README line if `fork` wrote one.
 
-GitHub runs the workflow on the `cron` line in `.github/workflows/autofork.yml`, often hours late. `npx autofork link`, run in the clone once the config is pushed to the fork's default branch, has autofork.com start syncs within a minute of upstream changing. The user finishes it in a browser at `https://autofork.com/link/<owner>/<name>`, signing in with GitHub and adding autofork's app to the fork, and `link` waits up to 10 minutes for that, so give the user the link and run `link` in the background. Like `workflow-token-url`, the app lets code the sync runs push workflow files, so say so when offering it.
+GitHub runs the workflow on the `cron` line in `.github/workflows/autofork.yml`, often hours late. `npx autofork link`, run in the clone once the config is pushed to the fork's default branch, has autofork.com start syncs within a minute of upstream changing. The user finishes it in a browser at `https://autofork.com/link/<owner>/<name>`, signing in with GitHub and adding autofork's app to the fork, and `link` waits up to 10 minutes for that, so give the user the link and run `link` in the background or again once they're done. Like `workflow-token-url`, the app lets code the sync runs push workflow files, so say so when offering it.
 
 `verify` is the check a sync has to pass before it pushes, and `setup` installs what it needs. Leave both out and the first agent run picks them from upstream's CI; until one runs, syncs push without a check. When the user names a check, give it with `--verify "<command>"` and its install with `--setup "<command>"`, since a fork with its own `verify` gets no picked `setup`. A check should pass on upstream as it is and give the same answer every run. Set up the tools both need in `.github/workflows/autofork.yml`, before the autofork step. List the files `setup` writes, like lockfiles, with `--generated <file>,<file>`: they stay out of patches and are rebuilt once the patches are in.
 
 ## Change a fork
 
-Start from a fork whose first sync has pushed: after `fork`, `git pull` until `git log -1 --grep='^autofork: sync'` shows a commit.
+Start from a fork whose first sync has run: once it has the sign-in, wait for the autofork run you started to finish (`gh run list --repo <fork> -w autofork.yml -L 1`), then `git pull`.
 
 1. Make the change.
 2. Write `.autofork/<id>/PATCH.md`, the prose an agent rebuilds the change from after upstream rewrites that code: what the user wants and why, and why it's built the way it is where upstream does it differently. Write it from what the user asked for; a commit message or diff only says how.
