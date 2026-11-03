@@ -1794,21 +1794,18 @@ esac
   });
 });
 
-test("picks aren't dropped when the one failing on upstream alone isn't the one a patch broke", () => {
+test("a picked verify that fails on upstream alone is dropped even when a patch broke setup, and the patch is still fixed", () => {
+  const tool = join(home, "caught-tool");
   const { mine, script, runs, moveUpstream } = picking("caught", {
-    picked: { setup: "test -f standalone.txt", verify: "! grep -qs bad mark.txt" },
+    setup: "! grep -qs bad mark.txt",
+    picked: { verify: `test -f ${tool}` },
   });
   sh(mine, "git rm -rq .autofork/shout && git commit -qm 'no shout'");
-  for (const [id, path, text] of [
-    ["a-standalone", "standalone.txt", "yes\n"],
-    ["zmark", "mark.txt", "bad\n"],
-  ]) {
-    mkdirSync(join(mine, `.autofork/${id}`));
-    write(mine, `.autofork/${id}/PATCH.md`, `${path} is the fork's.\n`);
-    write(mine, path, text);
-    expect(autofork(mine, "save", id).ok).toBe(true);
-    sh(mine, `git add -A && git commit -qm ${id}`);
-  }
+  mkdirSync(join(mine, ".autofork/zmark"));
+  write(mine, ".autofork/zmark/PATCH.md", "mark.txt marks the fork.\n");
+  write(mine, "mark.txt", "bad\n");
+  expect(autofork(mine, "save", "zmark").ok).toBe(true);
+  sh(mine, "git add -A && git commit -qm zmark");
   moveUpstream();
   writeFileSync(
     script,
@@ -1816,10 +1813,15 @@ test("picks aren't dropped when the one failing on upstream alone isn't the one 
   );
   const { ok, log } = autofork(mine, "sync");
   expect(ok).toBe(true);
-  expect(log).not.toContain("dropped");
+  expect(log).toContain(
+    `\`test -f ${tool}\` fails on upstream alone, so the checks an agent picked are dropped`,
+  );
   expect(log).toContain("healed zmark");
   expect(file(mine, "mark.txt")).toBe("good\n");
   expect(readFileSync(runs, "utf8")).toBe("fix\n");
+  const config = JSON.parse(file(mine, ".autofork/config.json"));
+  expect(config.setup).toBe("! grep -qs bad mark.txt");
+  expect(config.picked).toBeUndefined();
 });
 
 test("a check an agent picked that fails with a saved patch gets the patch fixed, like a check you wrote", () => {

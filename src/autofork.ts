@@ -745,11 +745,10 @@ function restoreControl(dir: string, base: string) {
   git(dir, "clean", "-fdxq", "--", ...CONTROL);
 }
 
-function workflowsBehind(root: string, base: string, source: string) {
-  if (run("git", ["merge-base", "--is-ancestor", source, "HEAD"], root).ok) return [];
+function workflowsBehind(root: string, since: string, source: string) {
   const files = (...args: string[]) =>
     git(root, "diff", "--name-only", "--no-renames", ...args, "--", WORKFLOWS).split("\n");
-  const upstreamChanged = new Set(files(base, source));
+  const upstreamChanged = new Set(files(since, source));
   return files("--diff-filter=MD", "HEAD", source).filter(
     (file) => file && upstreamChanged.has(file),
   );
@@ -1063,7 +1062,7 @@ async function verify(config: Fork, build: Build, from?: string): Promise<void> 
     if (!alone) {
       const { check } = build.failed!;
       const yours = !!config.verify && !config.picked?.verify;
-      if (!yours && check === failed.check && config.picked?.[check]) {
+      if (!yours && config.picked?.[check]) {
         say(
           `\`${config[check]}\` fails on upstream alone, so the checks an agent picked are dropped and the next agent run picks new ones`,
         );
@@ -1327,8 +1326,9 @@ async function sync(root: string, args: string[]) {
   );
   const healFrom = args.includes("--no-heal") ? undefined : base;
   openLedger(LEDGER ?? `${scratch(root)}-ledger.json`);
-  const behind = workflowsBehind(root, base, source);
-  const range = `${short(base)}..${short(source)}`;
+  const since = run("git", ["merge-base", "HEAD", source], root).out.toString().trim() || base;
+  const behind = workflowsBehind(root, since, source);
+  const range = `${short(since)}..${short(source)}`;
   let result: Build | undefined;
   let updated: string[] | undefined;
   try {
