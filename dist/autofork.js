@@ -327,7 +327,10 @@ async function site(path, body) {
         body: body && JSON.stringify(body),
         signal: AbortSignal.timeout(1e4)
       });
-    } catch {}
+    } catch (error) {
+      if (error.name === "TimeoutError")
+        return;
+    }
   }
 }
 var ledger = { file: "", month: "", rebuilds: [] };
