@@ -1547,6 +1547,50 @@ test("a rebuild under the patch that makes upstream build doesn't pay for a fix 
   expect(file(mine, "notes.txt")).toBe("uno\ntwo\n");
 });
 
+test("a rebuilt patch upstream needs to build fails the sync without paying for a fix, even under a patch that applies", () => {
+  const origin = join(home, "split-last");
+  const mine = join(home, "split-last-fork");
+  mkdirSync(origin);
+  write(
+    origin,
+    "app.js",
+    'import { who } from "./lib/name.js";\nexport const greet = () => "hello " + who();\n',
+  );
+  write(origin, "notes.txt", "one\n");
+  sh(origin, "git init -q && git add -A && git commit -qm init");
+  sh(home, `git clone -q ${origin} split-last-fork`);
+  expect(autofork(mine, "init", origin, "--verify", loads).ok).toBe(true);
+  sh(mine, "git add -A && git commit -qm 'track upstream'");
+  savePatch(
+    "a-extra",
+    "extra.js says hi.",
+    () => write(mine, "extra.js", "export const hi = 1;\n"),
+    mine,
+  );
+  savePatch(
+    "z-standalone",
+    "lib/name.js stands in for the monorepo's name package, so the app builds on its own.",
+    () => {
+      mkdirSync(join(mine, "lib"));
+      write(mine, "lib/name.js", 'export const who = () => "world";\n');
+      write(mine, "notes.txt", "one\nstandalone\n");
+    },
+    mine,
+  );
+  write(origin, "notes.txt", "uno\n");
+  sh(origin, "git commit -qam 'notes in spanish'");
+  checkedAgent(
+    { "z-standalone": "printf 'uno\\nstandalone\\n' > notes.txt && rm lib/name.js", fix: "true" },
+    mine,
+  );
+  const head = sh(mine, "git rev-parse HEAD");
+  const { ok, log } = autofork(mine, "sync");
+  expect(ok).toBe(false);
+  expect(log).toContain("verify fails with z-standalone, which the agent healed");
+  expect(file(home, "agent-runs.log")).toBe("z-standalone\n");
+  expect(sh(mine, "git rev-parse HEAD")).toBe(head);
+});
+
 test("a fork without patches whose upstream never passes verify fails the sync instead of pushing", () => {
   const origin = join(home, "unpatched");
   const mine = join(home, "unpatched-fork");
@@ -1748,6 +1792,34 @@ esac
   expect(JSON.parse(file(mine, ".autofork/config.json")).picked).toEqual({
     verify: "! grep -qs bad mark.txt",
   });
+});
+
+test("picks aren't dropped when the one failing on upstream alone isn't the one a patch broke", () => {
+  const { mine, script, runs, moveUpstream } = picking("caught", {
+    picked: { setup: "test -f standalone.txt", verify: "! grep -qs bad mark.txt" },
+  });
+  sh(mine, "git rm -rq .autofork/shout && git commit -qm 'no shout'");
+  for (const [id, path, text] of [
+    ["a-standalone", "standalone.txt", "yes\n"],
+    ["zmark", "mark.txt", "bad\n"],
+  ]) {
+    mkdirSync(join(mine, `.autofork/${id}`));
+    write(mine, `.autofork/${id}/PATCH.md`, `${path} is the fork's.\n`);
+    write(mine, path, text);
+    expect(autofork(mine, "save", id).ok).toBe(true);
+    sh(mine, `git add -A && git commit -qm ${id}`);
+  }
+  moveUpstream();
+  writeFileSync(
+    script,
+    `cat > /dev/null\necho fix >> ${runs}\n${fixup({ zmark: "printf 'good\\n' > mark.txt" })}\n`,
+  );
+  const { ok, log } = autofork(mine, "sync");
+  expect(ok).toBe(true);
+  expect(log).not.toContain("dropped");
+  expect(log).toContain("healed zmark");
+  expect(file(mine, "mark.txt")).toBe("good\n");
+  expect(readFileSync(runs, "utf8")).toBe("fix\n");
 });
 
 test("a check an agent picked that fails with a saved patch gets the patch fixed, like a check you wrote", () => {
