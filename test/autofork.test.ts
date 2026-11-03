@@ -2331,7 +2331,12 @@ echo '{"type":"result","subtype":"success","is_error":false,"result":"built it",
   };
   wish(mine, "five");
   const { ok, log } = autoforkWith(
-    { ...site, SITE_TOTALS: '{"rebuilds":3,"spent":40}' },
+    {
+      ...site,
+      SITE_TOTALS: '{"rebuilds":3,"spent":40}',
+      CLAUDECODE: "1",
+      CLAUDE_CODE_ENTRYPOINT: "sdk-cli",
+    },
     mine,
     "sync",
   );
@@ -2341,6 +2346,7 @@ echo '{"type":"result","subtype":"success","is_error":false,"result":"built it",
     "-p --dangerously-skip-permissions --output-format json --max-budget-usd 20",
   );
   expect(file(home, "claude-env")).not.toContain("ACTIONS_ID_TOKEN_REQUEST");
+  expect(file(home, "claude-env")).toContain("CLAUDE_CODE_ENTRYPOINT=autofork\n");
   const calls = file(home, "billed-site.log")
     .trim()
     .split("\n")
@@ -2369,11 +2375,18 @@ echo '{"type":"result","subtype":"success","is_error":false,"result":"built it",
 
   wish(mine, "retried");
   const retried = autoforkWith(
-    { ...site, SITE_TOTALS: '{"rebuilds":4,"spent":41.25}', SITE_FAIL_ONCE: "/api/ledger/close" },
+    {
+      ...site,
+      SITE_TOTALS: '{"rebuilds":4,"spent":41.25}',
+      SITE_FAIL_ONCE: "/api/ledger/close",
+      CLAUDECODE: "",
+      CLAUDE_CODE_ENTRYPOINT: "mine",
+    },
     mine,
     "sync",
   );
   expect(retried.log).not.toContain("couldn't report");
+  expect(file(home, "claude-env")).toContain("CLAUDE_CODE_ENTRYPOINT=mine\n");
   expect(file(home, "billed-site.log")).toContain(
     '"path":"/api/ledger/close","auth":"Bearer oidc-autofork","body":{"id":"row-1","status":"done"',
   );

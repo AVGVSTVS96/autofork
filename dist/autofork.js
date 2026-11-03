@@ -292,6 +292,7 @@ Don't edit anything ${fresh || !config.verify ? "else " : ""}in ${DIR}/ or ${WOR
 If upstream already does what PATCH.md asks, or something close enough that building it would duplicate upstream's own version, write one line saying what upstream does to ${DIR}/${id}/UPSTREAM.md, and the sync leaves the patch out.`;
 }
 var installed = (bin) => run("sh", ["-c", `command -v ${bin}`], ".").ok;
+var entrypoint = !process.env.CLAUDECODE && process.env.CLAUDE_CODE_ENTRYPOINT || "autofork";
 var codexHome = () => process.env.CODEX_HOME ?? join(homedir(), ".codex");
 function agentCommand(config, cap) {
   if (config.agent)
@@ -422,7 +423,7 @@ async function agent(config, build, what, prompt, env) {
   const out = openSync(printed, "w");
   const result = spawnSync("sh", ["-c", command], {
     cwd: dir,
-    env,
+    env: { ...env ?? process.env, CLAUDE_CODE_ENTRYPOINT: entrypoint },
     input: prompt,
     stdio: ["pipe", agent === "custom" ? "inherit" : out, "inherit"]
   });

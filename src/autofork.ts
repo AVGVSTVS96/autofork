@@ -419,6 +419,11 @@ If upstream already does what PATCH.md asks, or something close enough that buil
 
 const installed = (bin: string) => run("sh", ["-c", `command -v ${bin}`], ".").ok;
 
+/* Claude's 5-hour limit drains faster for claude -p's own label than for interactive Claude Code, and
+   a run labeled autofork drains at the interactive rate (pingdotgg/t3code#24649). A label inherited
+   from a Claude Code session autofork runs in is that session's, not the user's */
+const entrypoint = (!process.env.CLAUDECODE && process.env.CLAUDE_CODE_ENTRYPOINT) || "autofork";
+
 const codexHome = () => process.env.CODEX_HOME ?? join(homedir(), ".codex");
 
 function agentCommand(config: Config, cap: number) {
@@ -588,7 +593,7 @@ async function agent(
   const out = openSync(printed, "w");
   const result = spawnSync("sh", ["-c", command], {
     cwd: dir,
-    env,
+    env: { ...(env ?? process.env), CLAUDE_CODE_ENTRYPOINT: entrypoint },
     input: prompt,
     stdio: ["pipe", agent === "custom" ? "inherit" : out, "inherit"],
   });
