@@ -561,7 +561,7 @@ function restoreControl(dir, base) {
   git(dir, "clean", "-fdxq", "--", ...CONTROL);
 }
 function workflowsBehind(root, base, source) {
-  if (run("git", ["merge-base", "--is-ancestor", source, base], root).ok)
+  if (run("git", ["merge-base", "--is-ancestor", source, "HEAD"], root).ok)
     return [];
   const files = (...args) => git(root, "diff", "--name-only", "--no-renames", ...args, "--", WORKFLOWS).split(`
 `);

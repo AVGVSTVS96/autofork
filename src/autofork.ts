@@ -746,7 +746,7 @@ function restoreControl(dir: string, base: string) {
 }
 
 function workflowsBehind(root: string, base: string, source: string) {
-  if (run("git", ["merge-base", "--is-ancestor", source, base], root).ok) return [];
+  if (run("git", ["merge-base", "--is-ancestor", source, "HEAD"], root).ok) return [];
   const files = (...args: string[]) =>
     git(root, "diff", "--name-only", "--no-renames", ...args, "--", WORKFLOWS).split("\n");
   const upstreamChanged = new Set(files(base, source));
