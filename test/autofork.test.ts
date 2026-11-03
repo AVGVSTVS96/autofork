@@ -1,5 +1,6 @@
 import { afterAll, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -30,6 +31,12 @@ globalThis.fetch = async (url, init = {}) => {
   if (latest && url.endsWith("/releases/latest")) return new Response(JSON.stringify({ tag_name: latest }));
   if (process.env.RELEASES && url.includes("/releases?")) return new Response(process.env.RELEASES);
   if (process.env.PRICES && url.endsWith("/model_prices_and_context_window.json")) return new Response(process.env.PRICES);
+  if (process.env.CHECK_RUNS && url.includes("/check-runs?")) {
+    const { pathname, searchParams } = new URL(url);
+    const runs = JSON.parse(process.env.CHECK_RUNS)[pathname.split("/")[5]] ?? [];
+    const page = Number(searchParams.get("page") ?? 1);
+    return Response.json({ total_count: runs.length, check_runs: runs.slice(page * 100 - 100, page * 100).map((conclusion) => ({ conclusion })) });
+  }
   if (url.startsWith("https://token.test/")) return Response.json({ value: "oidc-" + new URL(url).searchParams.get("audience") });
   if (url.startsWith("https://site.test/")) {
     const path = url.slice("https://site.test".length);
@@ -152,6 +159,15 @@ test("save turns your changes into the patch PATCH.md describes", () => {
   );
   sh(fork, "git add -A && git commit -qm 'shout'");
   expect(sh(fork, "git ls-files .autofork/shout")).toContain("shout.patch");
+});
+
+test("a run killed while it set up its worktree doesn't block the next one", () => {
+  const root = sh(fork, "git rev-parse --show-toplevel");
+  const hash = createHash("sha256").update(root).digest("hex").slice(0, 8);
+  const dir = join(home, "autofork", `fork-${hash}`);
+  sh(fork, `git worktree add -q --detach ${dir} && git worktree lock --reason initializing ${dir}`);
+  expect(autofork(fork, "status").ok).toBe(true);
+  expect(sh(fork, "git worktree list")).not.toContain(dir);
 });
 
 test("sync with nothing new is a no-op", () => {
@@ -410,6 +426,45 @@ test("a new fork starts at the release it follows, and one with changes of its o
   expect(file(own, "notes.txt")).toBe("unreleased, and mine\n");
 });
 
+test("a commit of the fork's own titled like a sync doesn't move where the next sync starts", () => {
+  const origin = join(home, "branched");
+  const mine = join(home, "branched-fork");
+  mkdirSync(origin);
+  sh(origin, "git init -q && echo one > notes.txt && git add -A && git commit -qm one");
+  sh(home, `git clone -q ${origin} branched-fork`);
+  sh(
+    origin,
+    "git checkout -qb stable && echo two > notes.txt && git commit -qam two && git checkout -q main && echo main > main.txt && git add -A && git commit -qm main",
+  );
+  expect(autofork(mine, "init", origin, "--follow", "stable").ok).toBe(true);
+  sh(mine, "git add -A && git commit -qm 'track stable'");
+  expect(autofork(mine, "sync").output.result).toBe("synced");
+  write(mine, ".github/workflows/autofork.yml", "name: autofork\n");
+  sh(mine, "git commit -qam 'autofork: sync on pushes to main, the branch this becomes'");
+  const { ok, output } = autofork(mine, "sync");
+  expect(ok).toBe(true);
+  expect(output.result).toBe("current");
+});
+
+test("an upstream commit with a check still running past the first hundred isn't green", () => {
+  const app = join(github, "acme/green.git");
+  mkdirSync(app, { recursive: true });
+  sh(app, "git init -q && echo one > notes.txt && git add -A && git commit -qm one");
+  sh(home, `git clone -q ${app} green`);
+  const mine = join(home, "green");
+  expect(autofork(mine, "init", "acme/green").ok).toBe(true);
+  sh(mine, "git add -A && git commit -qm 'track upstream'");
+  sh(app, "echo two > notes.txt && git commit -qam two");
+  const two = sh(app, "git rev-parse HEAD");
+  sh(app, "echo three > notes.txt && git commit -qam three");
+  const passed = Array(150).fill("success");
+  const runs = { [two]: passed, [sh(app, "git rev-parse HEAD")]: [...passed, null] };
+  const { ok, log } = autoforkWith({ CHECK_RUNS: JSON.stringify(runs) }, mine, "sync");
+  expect(ok).toBe(true);
+  expect(log).toContain(`upstream's tip isn't green yet, using ${two.slice(0, 12)}`);
+  expect(file(mine, "notes.txt")).toBe("two\n");
+});
+
 test("init leaves the README's note to the first sync's agent, and later syncs apply it without the agent", () => {
   const origin = join(home, "demo");
   const mine = join(home, "demo-fork");
@@ -553,7 +608,7 @@ test("a fork can follow one channel of upstream's releases, named by its tags", 
   expect(file(mine, "notes.txt")).toBe("two\n");
 });
 
-test("init turns on Actions and issues for the fork origin points to, not the upstream gh picks, and checks a private fork hourly", () => {
+test("init turns on Actions and issues for the fork origin points to, not the upstream gh picks, checks a private fork hourly, and starts the fork's own description with its owner's autofork once", () => {
   const bin = join(home, "bin");
   mkdirSync(bin, { recursive: true });
   writeFileSync(
@@ -563,13 +618,25 @@ echo "$*" >> ${home}/gh.log
 case "$*" in
   "repo view"*) echo acme/app ;;
   "api repos/me/app --jq .private") echo true ;;
-  "api repos/me/app") echo '{"fork":true,"owner":{"login":"me"},"parent":{"full_name":"acme/app","description":"An app"}}' ;;
+  "api repos/me/app") cat ${home}/fork.json ;;
   "api users/me") echo '{"type":"User","name":"Ada Lovelace"}' ;;
   *) echo '{}' ;;
 esac
 `,
     { mode: 0o755 },
   );
+  const repo = (description: string) =>
+    write(
+      home,
+      "fork.json",
+      JSON.stringify({
+        fork: true,
+        description,
+        owner: { login: "me" },
+        parent: { full_name: "acme/app", description: "An app" },
+      }),
+    );
+  repo("My app, my way");
   sh(
     home,
     `git clone -q ${join(github, "acme/app.git")} mine && git -C mine remote set-url origin git@github.com:me/app.git`,
@@ -590,7 +657,35 @@ esac
   const calls = file(home, "gh.log");
   expect(calls).toContain("api -X PUT repos/me/app/actions/permissions -F enabled=true");
   expect(calls).toContain("repo edit me/app --enable-issues");
-  expect(calls).toContain("api -X PATCH repos/me/app -f description=Ada's autofork · An app");
+  expect(calls).toContain(
+    "api -X PATCH repos/me/app -f description=Ada's autofork · My app, my way",
+  );
+  repo("Ada's autofork · My app, my way");
+  sh(join(home, "mine"), "rm -rf .autofork .github/workflows/autofork.yml && : > ../gh.log");
+  expect(
+    autoforkWith({ PATH: `${bin}:${process.env.PATH}` }, join(home, "mine"), "init", "acme/app").ok,
+  ).toBe(true);
+  expect(file(home, "gh.log")).not.toContain("description=");
+});
+
+test("init counts only the workflows the fork has from upstream as copied from it", () => {
+  const origin = join(home, "flows");
+  const mine = join(home, "flows-fork");
+  mkdirSync(join(origin, ".github/workflows"), { recursive: true });
+  sh(origin, "git init -q && echo one > app.js");
+  write(origin, ".github/workflows/test.yml", "name: test\n");
+  sh(origin, "git add -A && git commit -qm init");
+  sh(home, `git clone -q ${origin} flows-fork`);
+  write(mine, ".github/workflows/desktop.yml", "name: desktop\n");
+  sh(mine, "git add -A && git commit -qm 'build the desktop app'");
+  expect(autofork(mine, "init", origin).log).toContain(
+    "Your fork has 1 workflow copied from upstream",
+  );
+  sh(
+    mine,
+    "git rm -q .github/workflows/test.yml && rm -rf .autofork .github/workflows/autofork.yml",
+  );
+  expect(autofork(mine, "init", origin).log).not.toContain("copied from upstream");
 });
 
 test("a sync brings upstream's .github/ in, but names upstream's changes to workflows the fork keeps when it can't update them", () => {
