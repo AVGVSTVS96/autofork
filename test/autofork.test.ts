@@ -203,7 +203,7 @@ test("a drifted patch is healed from git's conflict markers and its PATCH.md", (
   expect(file(fork, ".autofork/shout/shout.patch")).toContain(
     '+  return "hi " + name.toUpperCase();',
   );
-  expect(file(fork, ".autofork/config.json")).not.toContain("provisional");
+  expect(file(fork, ".autofork/config.json")).not.toContain("picked");
   agent("exit 1");
   expect(autofork(fork, "sync").log).toContain("already up to date");
 });
@@ -370,6 +370,45 @@ test("a fork ahead of upstream's newest release stays where it is", () => {
   expect(ok).toBe(true);
   expect(log).toContain("already up to date");
   expect(file(fork, "notes.txt")).toBe("five\n");
+});
+
+test("a new fork starts at the release it follows, and one with changes of its own stays where it is", () => {
+  const app = join(github, "acme/stable.git");
+  mkdirSync(app, { recursive: true });
+  sh(
+    app,
+    "git init -q && mkdir -p .github/workflows && echo one | tee notes.txt > .github/workflows/ci.yml && git add -A && git commit -qm one && git tag v1.0.0 && echo two | tee notes.txt > .github/workflows/ci.yml && git commit -qam two && echo unreleased | tee notes.txt > .github/workflows/ci.yml && git commit -qam unreleased",
+  );
+  sh(home, `git clone -q ${app} stable && git clone -q ${app} stable-mine`);
+  const mine = join(home, "stable");
+  expect(autofork(mine, "init", "acme/stable").log).toContain(
+    "autofork follows acme/stable's releases.",
+  );
+  const runs = join(home, "stable-runs.log");
+  const config = JSON.parse(file(mine, ".autofork/config.json"));
+  write(mine, ".autofork/config.json", JSON.stringify({ ...config, agent: `echo ran >> ${runs}` }));
+  sh(mine, "git add -A && git commit -qm 'track upstream'");
+  const { ok, log, output } = autofork(mine, "sync");
+  expect(ok).toBe(true);
+  expect(output).toMatchObject({ result: "synced", tag: "v1.0.0" });
+  expect(file(mine, "notes.txt")).toBe("one\n");
+  expect(log).not.toContain("upstream changed");
+  sh(app, "git tag v1.1.0 HEAD~1");
+  const next = autofork(mine, "sync");
+  expect(next.output).toMatchObject({ result: "synced", tag: "v1.1.0" });
+  expect(file(mine, "notes.txt")).toBe("two\n");
+  expect(next.log).not.toContain("upstream changed");
+  expect(existsSync(runs)).toBe(false);
+
+  const own = join(home, "stable-mine");
+  expect(autofork(own, "init", "acme/stable").ok).toBe(true);
+  write(own, "notes.txt", "unreleased, and mine\n");
+  mkdirSync(join(own, ".autofork/mine"));
+  write(own, ".autofork/mine/PATCH.md", "notes.txt is mine.\n");
+  expect(autofork(own, "save", "mine").ok).toBe(true);
+  sh(own, "git add -A && git commit -qm mine");
+  expect(autofork(own, "sync").output.result).toBe("current");
+  expect(file(own, "notes.txt")).toBe("unreleased, and mine\n");
 });
 
 test("init leaves the README's note to the first sync's agent, and later syncs apply it without the agent", () => {
@@ -745,6 +784,7 @@ test("a patch that still applies but fails verify waits for a run that heals", (
   expect(log).toContain(
     "verify fails, so a patch needs rebuilding. The next run that heals rebuilds it.",
   );
+  expect(log).not.toContain("alone");
   expect(sh(checkedFork, "git rev-parse HEAD")).toBe(head);
 });
 
@@ -1508,6 +1548,50 @@ test("a rebuild under the patch that makes upstream build doesn't pay for a fix 
   expect(file(mine, "notes.txt")).toBe("uno\ntwo\n");
 });
 
+test("a rebuilt patch upstream needs to build fails the sync without paying for a fix, even under a patch that applies", () => {
+  const origin = join(home, "split-last");
+  const mine = join(home, "split-last-fork");
+  mkdirSync(origin);
+  write(
+    origin,
+    "app.js",
+    'import { who } from "./lib/name.js";\nexport const greet = () => "hello " + who();\n',
+  );
+  write(origin, "notes.txt", "one\n");
+  sh(origin, "git init -q && git add -A && git commit -qm init");
+  sh(home, `git clone -q ${origin} split-last-fork`);
+  expect(autofork(mine, "init", origin, "--verify", loads).ok).toBe(true);
+  sh(mine, "git add -A && git commit -qm 'track upstream'");
+  savePatch(
+    "a-extra",
+    "extra.js says hi.",
+    () => write(mine, "extra.js", "export const hi = 1;\n"),
+    mine,
+  );
+  savePatch(
+    "z-standalone",
+    "lib/name.js stands in for the monorepo's name package, so the app builds on its own.",
+    () => {
+      mkdirSync(join(mine, "lib"));
+      write(mine, "lib/name.js", 'export const who = () => "world";\n');
+      write(mine, "notes.txt", "one\nstandalone\n");
+    },
+    mine,
+  );
+  write(origin, "notes.txt", "uno\n");
+  sh(origin, "git commit -qam 'notes in spanish'");
+  checkedAgent(
+    { "z-standalone": "printf 'uno\\nstandalone\\n' > notes.txt && rm lib/name.js", fix: "true" },
+    mine,
+  );
+  const head = sh(mine, "git rev-parse HEAD");
+  const { ok, log } = autofork(mine, "sync");
+  expect(ok).toBe(false);
+  expect(log).toContain("verify fails with z-standalone, which the agent healed");
+  expect(file(home, "agent-runs.log")).toBe("z-standalone\n");
+  expect(sh(mine, "git rev-parse HEAD")).toBe(head);
+});
+
 test("a fork without patches whose upstream never passes verify fails the sync instead of pushing", () => {
   const origin = join(home, "unpatched");
   const mine = join(home, "unpatched-fork");
@@ -1556,7 +1640,7 @@ node -e 'const fs = require("fs"); const c = JSON.parse(fs.readFileSync(".autofo
   const { ok, log } = autofork(mine, "sync");
   expect(ok).toBe(true);
   expect(file(home, "bare-prompt.txt")).toContain(
-    'write those commands to .autofork/config.json as "setup" and "verify"',
+    'write .autofork/config.json\'s "setup", which installs dependencies, and "verify", which checks a build',
   );
   expect(log).toContain("built shout");
   expect(log).toContain("setup: echo installed");
@@ -1565,9 +1649,7 @@ node -e 'const fs = require("fs"); const c = JSON.parse(fs.readFileSync(".autofo
     upstream: origin,
     agent: `sh ${script}`,
     follow: "main",
-    setup: "echo installed",
-    verify: "node --check app.js && echo verified",
-    provisional: { setup: "echo installed", verify: "node --check app.js && echo verified" },
+    picked: { setup: "echo installed", verify: "node --check app.js && echo verified" },
   });
   expect(sh(mine, "git ls-files .autofork").split("\n")).toEqual(
     expect.arrayContaining([
@@ -1582,587 +1664,245 @@ node -e 'const fs = require("fs"); const c = JSON.parse(fs.readFileSync(".autofo
   const later = autofork(mine, "sync");
   expect(later.ok).toBe(true);
   expect(later.log).toContain("verified");
-  expect(JSON.parse(file(mine, ".autofork/config.json")).provisional).toBeUndefined();
+  expect(JSON.parse(file(mine, ".autofork/config.json")).picked).toEqual({
+    setup: "echo installed",
+    verify: "node --check app.js && echo verified",
+  });
 });
 
-function handmade(name: string) {
+function picking(name: string, own: object = {}) {
   const origin = join(home, name);
   const mine = join(home, `${name}-fork`);
   const tool = join(home, `${name}-tool`);
+  const runs = join(home, `${name}-runs.log`);
+  const prompt = join(home, `${name}-prompt.txt`);
+  const script = join(home, `${name}-agent.sh`);
   mkdirSync(origin);
   write(origin, "app.js", 'export const greet = (name) => "hello " + name;\n');
   sh(origin, "git init -q && git add -A && git commit -qm init");
   sh(home, `git clone -q ${origin} ${name}-fork`);
-  const script = join(home, `${name}-agent.sh`);
-  const agent = (verify: string, edit = "sed -i 's/+ name/+ name.toUpperCase()/' app.js") =>
-    write(
-      home,
-      `${name}-agent.sh`,
-      `cat > ${join(home, `${name}-prompt.txt`)}
+  const agent = (checks: object, edit = "sed -i 's/+ name/+ name.toUpperCase()/' app.js") =>
+    writeFileSync(
+      script,
+      `cat > ${prompt}
+echo ran >> ${runs}
 touch ${tool}
 ${edit}
-node -e 'const fs = require("fs"); const c = JSON.parse(fs.readFileSync(".autofork/config.json")); fs.writeFileSync(".autofork/config.json", JSON.stringify({ ...c, verify: process.argv[1] }))' '${verify}'
+node -e 'const fs = require("fs"); const c = JSON.parse(fs.readFileSync(".autofork/config.json")); fs.writeFileSync(".autofork/config.json", JSON.stringify({ ...c, ...JSON.parse(process.argv[1]) }))' '${JSON.stringify(checks).replaceAll("'", "'\\''")}'
 `,
     );
-  agent(`test -f ${tool}`);
   mkdirSync(join(mine, ".autofork/shout"), { recursive: true });
-  write(mine, ".autofork/config.json", JSON.stringify({ upstream: origin, agent: `sh ${script}` }));
+  write(
+    mine,
+    ".autofork/config.json",
+    JSON.stringify({ upstream: origin, agent: `sh ${script}`, ...own }),
+  );
   write(mine, ".autofork/shout/PATCH.md", "greet() shouts the name.\n");
   sh(mine, "git add -A && git commit -qm 'autofork: greet() shouts the name'");
+  const moveUpstream = () => {
+    write(origin, "notes.txt", "two\n");
+    sh(origin, "git add -A && git commit -qm notes");
+  };
+  return { origin, mine, tool, runs, prompt, script, agent, moveUpstream };
+}
+
+test("checks an agent picked that fail on upstream alone are dropped, and the sync ships without them, even one that doesn't heal", () => {
+  const { mine, tool, runs, prompt, agent, moveUpstream } = picking("handmade", { setup: "true" });
+  agent({ verify: `test -f ${tool}` });
   expect(autofork(mine, "sync").ok).toBe(true);
-  expect(JSON.parse(file(mine, ".autofork/config.json")).provisional).toEqual({
+  expect(readFileSync(prompt, "utf8")).toContain(
+    'write .autofork/config.json\'s "verify", which checks a build, as one `sh -c` command. A sync runs it on a fresh machine after `true`',
+  );
+  expect(JSON.parse(file(mine, ".autofork/config.json")).picked).toEqual({
     verify: `test -f ${tool}`,
   });
   rmSync(tool);
-  return { origin, mine, tool, script, agent };
-}
-
-test("the agent's checks failing on upstream alone in two later syncs are skipped, then dropped, and the syncs ship", () => {
-  const { origin, mine, tool, script } = handmade("handmade");
-  write(origin, "notes.txt", "two\n");
-  sh(origin, "git add -A && git commit -qm notes");
-  write(home, "handmade-agent.sh", "exit 1\n");
-  const first = autofork(mine, "sync");
-  expect(first.ok).toBe(true);
-  expect(first.log).toContain(
-    `\`test -f ${tool}\` fails on upstream alone, so this sync skips the checks an agent picked`,
-  );
-  expect(file(mine, "notes.txt")).toBe("two\n");
-  expect(JSON.parse(file(mine, ".autofork/config.json")).provisional).toEqual({
-    verify: `test -f ${tool}`,
-    failed: sh(origin, "git rev-parse HEAD").slice(0, 12),
-  });
-  write(origin, "notes.txt", "three\n");
-  sh(origin, "git commit -qam notes");
-  const { ok, log } = autofork(mine, "sync");
+  moveUpstream();
+  const { ok, log } = autofork(mine, "sync", "--no-heal");
   expect(ok).toBe(true);
   expect(log).toContain(
-    `\`test -f ${tool}\` fails on upstream alone in a second sync, so the checks an agent picked are dropped`,
+    `\`test -f ${tool}\` fails on upstream alone, so the checks an agent picked are dropped`,
   );
-  expect(file(mine, "notes.txt")).toBe("three\n");
+  expect(readFileSync(runs, "utf8")).toBe("ran\n");
+  expect(file(mine, "notes.txt")).toBe("two\n");
   expect(file(mine, "app.js")).toContain("name.toUpperCase()");
-  expect(JSON.parse(file(mine, ".autofork/config.json"))).toEqual({
-    upstream: origin,
-    agent: `sh ${script}`,
-    follow: "main",
-  });
+  const config = JSON.parse(file(mine, ".autofork/config.json"));
+  expect(config.setup).toBe("true");
+  expect(config.picked).toBeUndefined();
 });
 
-test("the agent's checks failing on upstream alone are skipped before it rebuilds a patch, and it picks new ones", () => {
-  const { origin, mine, agent } = handmade("rehandmade");
+test("checks an agent picked that fail on upstream alone are dropped before it rebuilds a patch, and it picks new ones", () => {
+  const { origin, mine, tool, prompt, agent } = picking("repick");
+  agent({ setup: "true", verify: `test -f ${tool}` });
+  expect(autofork(mine, "sync").ok).toBe(true);
+  expect(readFileSync(prompt, "utf8")).toContain(
+    'write .autofork/config.json\'s "setup", which installs dependencies, and "verify", which checks a build',
+  );
+  rmSync(tool);
   write(origin, "app.js", 'export const greet = (name) => "hi " + name;\n');
   sh(origin, "git commit -qam hi");
   agent(
-    "node --check app.js",
+    { verify: "node --check app.js" },
     `printf 'export const greet = (name) => "hi " + name.toUpperCase();\\n' > app.js`,
   );
   const { ok, log } = autofork(mine, "sync");
   expect(ok).toBe(true);
-  expect(log).toContain("skips the checks an agent picked");
-  expect(file(home, "rehandmade-prompt.txt")).toContain("This fork has no check yet");
+  expect(log).toContain("the checks an agent picked are dropped");
+  expect(readFileSync(prompt, "utf8")).toContain("This fork has no check yet");
   expect(file(mine, "app.js")).toContain('"hi " + name.toUpperCase()');
-  expect(JSON.parse(file(mine, ".autofork/config.json")).provisional).toEqual({
+  expect(JSON.parse(file(mine, ".autofork/config.json")).picked).toEqual({
     verify: "node --check app.js",
   });
 });
 
-test("an agent that picks no checks in a sync that skipped them doesn't get them back as its pick", () => {
-  const { origin, mine, tool } = handmade("stale");
+test("new picks that replace dropped ones run their own setup on upstream alone, so a patch that breaks them still stops the sync", () => {
+  const ready = join(home, "replaced-ready");
+  const { origin, mine, tool, runs, agent } = picking("replaced");
+  agent({ setup: "true", verify: `test -f ${tool}` });
+  expect(autofork(mine, "sync").ok).toBe(true);
+  rmSync(tool);
   write(origin, "app.js", 'export const greet = (name) => "hi " + name;\n');
   sh(origin, "git commit -qam hi");
-  write(
-    home,
-    "stale-agent.sh",
-    `cat > /dev/null\nprintf 'export const greet = (name) => "hi " + name.toUpperCase();\\n' > app.js\n`,
+  agent(
+    { setup: `! grep -q broken app.js && touch ${ready}`, verify: `test -f ${ready}` },
+    `printf 'export const greet = (name) => "hi " + name.toUpperCase(); // broken\\n' > app.js`,
   );
-  const { ok, log } = autofork(mine, "sync");
-  expect(ok).toBe(true);
-  expect(log).toContain("skips the checks an agent picked");
-  expect(log).not.toContain("aren't kept");
-  const config = JSON.parse(file(mine, ".autofork/config.json"));
-  expect(config.verify).toBe(`test -f ${tool}`);
-  expect(config.provisional.failed).toBe(sh(origin, "git rev-parse HEAD").slice(0, 12));
-});
-
-test("an agent that picks one check in a sync that skipped them picks the set it leaves, with no strike", () => {
-  const { origin, mine, tool } = handmade("restrike");
-  write(origin, "app.js", 'export const greet = (name) => "hi " + name;\n');
-  sh(origin, "git commit -qam hi");
-  write(
-    home,
-    "restrike-agent.sh",
-    `cat > /dev/null\ntouch ${tool}\nprintf 'export const greet = (name) => "hi " + name.toUpperCase();\\n' > app.js\nnode -e 'const fs = require("fs"); const c = JSON.parse(fs.readFileSync(".autofork/config.json")); fs.writeFileSync(".autofork/config.json", JSON.stringify({ ...c, setup: "true" }))'\n`,
-  );
-  rmSync(tool, { force: true });
-  const { ok, log } = autofork(mine, "sync");
-  expect(ok).toBe(true);
-  expect(log).toContain("skips the checks an agent picked");
-  const config = JSON.parse(file(mine, ".autofork/config.json"));
-  expect(config).toMatchObject({ setup: "true", verify: `test -f ${tool}` });
-  expect(config.provisional).toEqual({ setup: "true", verify: `test -f ${tool}` });
-});
-
-test("an agent that edits only the user's setup in a sync that skipped its verify leaves that pick's strike alone", () => {
-  const { origin, mine, tool } = handmade("ownsetup");
-  const config = JSON.parse(file(mine, ".autofork/config.json"));
-  write(mine, ".autofork/config.json", JSON.stringify({ ...config, setup: "true" }));
-  sh(mine, "git commit -qam 'my setup'");
-  write(origin, "app.js", 'export const greet = (name) => "hi " + name;\n');
-  sh(origin, "git commit -qam hi");
-  write(
-    home,
-    "ownsetup-agent.sh",
-    `cat > /dev/null\ntouch ${tool}\nprintf 'export const greet = (name) => "hi " + name.toUpperCase();\\n' > app.js\nnode -e 'const fs = require("fs"); const c = JSON.parse(fs.readFileSync(".autofork/config.json")); fs.writeFileSync(".autofork/config.json", JSON.stringify({ ...c, setup: "true && true" }))'\n`,
-  );
-  const { ok, log } = autofork(mine, "sync");
-  expect(ok).toBe(true);
-  expect(log).toContain("skips the checks an agent picked");
-  const saved = JSON.parse(file(mine, ".autofork/config.json"));
-  expect(saved).toMatchObject({ setup: "true", verify: `test -f ${tool}` });
-  expect(saved.provisional.failed).toBe(sh(origin, "git rev-parse HEAD").slice(0, 12));
-});
-
-test("an agent's setup counts as the user's once they own verify, so it's never skipped", () => {
-  const { origin, mine, tool } = handmade("leftover");
-  const config = JSON.parse(file(mine, ".autofork/config.json"));
-  const setup = `test -f ${tool}`;
-  write(
-    mine,
-    ".autofork/config.json",
-    JSON.stringify({ ...config, setup, verify: "echo mine-ran", provisional: { setup } }),
-  );
-  sh(mine, "git commit -qam 'my verify'");
-  write(origin, "notes.txt", "two\n");
-  sh(origin, "git add -A && git commit -qm notes");
-  write(home, "leftover-agent.sh", "exit 1\n");
   const head = sh(mine, "git rev-parse HEAD");
   const { ok, log } = autofork(mine, "sync");
   expect(ok).toBe(false);
-  expect(log).not.toContain("skips the checks");
+  expect(log).toContain("the checks an agent picked are dropped");
+  expect(log).toContain("setup fails with shout, which the agent healed");
+  expect(readFileSync(runs, "utf8")).toBe("ran\nran\n");
   expect(sh(mine, "git rev-parse HEAD")).toBe(head);
 });
 
-test("a skipped pick is out of the way before the agent fixes the patches for the user's check", () => {
-  const { origin, mine } = handmade("blame");
-  write(origin, "check.sh", "! grep -qs mark mark.txt\n");
-  sh(origin, "git add -A && git commit -qm check");
-  mkdirSync(join(mine, ".autofork/zmark"));
-  write(mine, ".autofork/zmark/PATCH.md", "Marks the fork.\n");
-  write(mine, "mark.txt", "mark\n");
-  expect(autofork(mine, "save", "zmark").ok).toBe(true);
-  const config = JSON.parse(file(mine, ".autofork/config.json"));
-  write(mine, ".autofork/config.json", JSON.stringify({ ...config, setup: "sh check.sh" }));
-  sh(mine, "git add -A && git commit -qm 'mark, and my setup'");
-  write(home, "blame-agent.sh", "exit 1\n");
-  const { ok, log } = autofork(mine, "sync");
-  expect(ok).toBe(false);
-  expect(log.indexOf("skips the checks an agent picked")).toBeGreaterThan(-1);
-  expect(log.indexOf("skips the checks an agent picked")).toBeLessThan(
-    log.indexOf("fixing setup in the patches"),
-  );
-});
-
-test("a pick that fails on upstream alone in one sync and passes in the next is kept and proven", () => {
-  const { origin, mine } = handmade("flaky");
-  const runs = join(home, "flaky-runs");
-  const verify = `n=$(cat ${runs} 2>/dev/null || echo 0); echo $((n + 1)) > ${runs}; [ $n -ge 1 ]`;
-  const config = JSON.parse(file(mine, ".autofork/config.json"));
-  write(
-    mine,
-    ".autofork/config.json",
-    JSON.stringify({ ...config, verify, provisional: { verify } }),
-  );
-  sh(mine, "git commit -qam 'flaky verify'");
-  write(origin, "notes.txt", "two\n");
-  sh(origin, "git add -A && git commit -qm notes");
-  expect(autofork(mine, "sync").log).toContain("skips the checks an agent picked");
-  write(origin, "notes.txt", "three\n");
-  sh(origin, "git commit -qam notes");
-  const { ok, log } = autofork(mine, "sync");
-  expect(ok).toBe(true);
-  expect(log).not.toContain("are dropped");
-  const saved = JSON.parse(file(mine, ".autofork/config.json"));
-  expect(saved.verify).toBe(verify);
-  expect(saved.provisional).toBeUndefined();
-});
-
-test("the agent's checks are proven by a later sync that passes them on upstream alone, even when an agent runs in it", () => {
-  const { origin, mine, tool } = handmade("rerun");
-  write(origin, "app.js", 'export const greet = (name) => "hi " + name;\n');
-  sh(origin, "git commit -qam hi");
-  write(
-    home,
-    "rerun-agent.sh",
-    `cat > /dev/null\ntouch ${tool}\nprintf 'export const greet = (name) => "hi " + name.toUpperCase();\\n' > app.js\n`,
-  );
-  sh(home, `touch ${tool}`);
-  const { ok, log } = autofork(mine, "sync");
-  expect(ok).toBe(true);
-  expect(log).toContain("healed shout");
-  const saved = JSON.parse(file(mine, ".autofork/config.json"));
-  expect(saved.verify).toBe(`test -f ${tool}`);
-  expect(saved.provisional).toBeUndefined();
-});
-
-test("a pick the user deletes stays deleted", () => {
-  const { origin, mine } = handmade("deleted");
-  const { verify, ...rest } = JSON.parse(file(mine, ".autofork/config.json"));
-  expect(verify).toBeTruthy();
-  write(mine, ".autofork/config.json", JSON.stringify(rest));
-  sh(mine, "git commit -qam 'no verify'");
-  write(origin, "notes.txt", "two\n");
-  sh(origin, "git add -A && git commit -qm notes");
-  expect(autofork(mine, "sync").ok).toBe(true);
-  const saved = JSON.parse(file(mine, ".autofork/config.json"));
-  expect(saved.verify).toBeUndefined();
-  expect(saved.provisional).toBeUndefined();
-});
-
-test("a pick that fails once a later patch is in is dropped, and no patch is rebuilt for it", () => {
-  const origin = join(home, "later");
-  const mine = join(home, "later-fork");
-  mkdirSync(origin);
-  write(origin, "app.js", 'export const greet = (name) => "hello " + name;\n');
-  sh(origin, "git init -q && git add -A && git commit -qm init");
-  sh(home, `git clone -q ${origin} later-fork`);
-  const script = join(home, "later-agent.sh");
-  write(
-    home,
-    "later-agent.sh",
-    `echo ran >> ${join(home, "later-runs.log")}
-cat > /dev/null
+test("checks an agent leaves in an unreadable config aren't kept, and the sync says so", () => {
+  const { mine, script } = picking("unreadable");
+  writeFileSync(
+    script,
+    `cat > /dev/null
 sed -i 's/+ name/+ name.toUpperCase()/' app.js
-node -e 'const fs = require("fs"); const c = JSON.parse(fs.readFileSync(".autofork/config.json")); fs.writeFileSync(".autofork/config.json", JSON.stringify({ ...c, verify: "! grep -qs mark mark.txt" }))'
+printf '{"verify": ' > .autofork/config.json
 `,
   );
-  mkdirSync(join(mine, ".autofork/a-shout"), { recursive: true });
-  mkdirSync(join(mine, ".autofork/b-mark"), { recursive: true });
-  write(mine, ".autofork/config.json", JSON.stringify({ upstream: origin, agent: `sh ${script}` }));
-  write(mine, ".autofork/a-shout/PATCH.md", "greet() shouts the name.\n");
-  write(mine, ".autofork/b-mark/PATCH.md", "Marks the fork.\n");
-  write(mine, "mark.txt", "mark\n");
-  expect(autofork(mine, "save", "b-mark").ok).toBe(true);
-  sh(mine, "git add -A && git commit -qm 'shout and mark'");
   const { ok, log } = autofork(mine, "sync");
   expect(ok).toBe(true);
-  expect(log).toContain("`! grep -qs mark mark.txt` fails with the patches");
-  expect(file(home, "later-runs.log")).toBe("ran\n");
+  expect(log).toContain("the agent left .autofork/config.json unreadable");
   expect(file(mine, "app.js")).toContain("name.toUpperCase()");
-  expect(JSON.parse(file(mine, ".autofork/config.json")).verify).toBeUndefined();
+  expect(JSON.parse(file(mine, ".autofork/config.json")).picked).toBeUndefined();
 });
 
-test("a pick the agent removes in a sync that skipped it stays removed", () => {
-  const origin = join(home, "removed");
-  const mine = join(home, "removed-fork");
-  const tool = join(home, "removed-tool");
-  mkdirSync(origin);
-  write(origin, "app.js", 'export const greet = (name) => "hello " + name;\n');
-  sh(origin, "git init -q && git add -A && git commit -qm init");
-  sh(home, `git clone -q ${origin} removed-fork`);
-  const script = join(home, "removed-agent.sh");
-  const agent = (edit: string, checks: string) =>
-    write(
-      home,
-      "removed-agent.sh",
-      `cat > /dev/null\ntouch ${tool}\n${edit}\nnode -e 'const fs = require("fs"); const { setup, verify, ...c } = JSON.parse(fs.readFileSync(".autofork/config.json")); fs.writeFileSync(".autofork/config.json", JSON.stringify({ ...c, ...${checks} }))'\n`,
-    );
-  agent(
-    "sed -i 's/+ name/+ name.toUpperCase()/' app.js",
-    `{ setup: "test -f ${tool}", verify: "true" }`,
-  );
-  mkdirSync(join(mine, ".autofork/shout"), { recursive: true });
-  write(mine, ".autofork/config.json", JSON.stringify({ upstream: origin, agent: `sh ${script}` }));
-  write(mine, ".autofork/shout/PATCH.md", "greet() shouts the name.\n");
-  sh(mine, "git add -A && git commit -qm 'autofork: greet() shouts the name'");
-  expect(autofork(mine, "sync").ok).toBe(true);
-  rmSync(tool);
-  write(origin, "app.js", 'export const greet = (name) => "hi " + name;\n');
-  sh(origin, "git commit -qam hi");
-  agent(
-    `printf 'export const greet = (name) => "hi " + name.toUpperCase();\\n' > app.js`,
-    `{ verify: "node --check app.js" }`,
-  );
-  const { ok, log } = autofork(mine, "sync");
-  expect(ok).toBe(true);
-  expect(log).toContain("skips the checks an agent picked");
-  const saved = JSON.parse(file(mine, ".autofork/config.json"));
-  expect(saved.setup).toBeUndefined();
-  expect(saved.verify).toBe("node --check app.js");
-  expect(saved.provisional).toEqual({ verify: "node --check app.js" });
-});
-
-test("an unproven pick that still fails after the agent fixes the user's check is dropped, and the fix ships", () => {
-  const origin = join(home, "afterfix");
-  const mine = join(home, "afterfix-fork");
-  mkdirSync(origin);
-  write(origin, "app.js", 'export const greet = (name) => "hello " + name;\n');
-  write(origin, "check.sh", "true\n");
-  sh(origin, "git init -q && git add -A && git commit -qm init");
-  sh(home, `git clone -q ${origin} afterfix-fork`);
-  const verify = "! grep -qs fixed mark.txt";
-  write(
-    home,
-    "afterfix-agent.sh",
-    "cat > /dev/null\nprintf 'fixed\\n' > mark.txt\ngit -c user.name=a -c user.email=a@a commit -qa --amend --no-edit\n",
-  );
-  mkdirSync(join(mine, ".autofork/mark"), { recursive: true });
-  write(
-    mine,
-    ".autofork/config.json",
-    JSON.stringify({
-      upstream: origin,
-      agent: `sh ${join(home, "afterfix-agent.sh")}`,
-      setup: "sh check.sh",
-      verify,
-      provisional: { verify },
-    }),
-  );
-  write(mine, ".autofork/mark/PATCH.md", "Marks the fork.\n");
-  write(mine, "mark.txt", "mark\n");
-  expect(autofork(mine, "save", "mark").ok).toBe(true);
-  sh(mine, "git add -A && git commit -qm mark");
-  write(origin, "check.sh", "! grep -qs mark mark.txt\n");
-  sh(origin, "git commit -qam check");
-  const { ok, log } = autofork(mine, "sync");
-  expect(ok).toBe(true);
-  expect(log).toContain("fixing setup in the patches");
-  expect(log).toContain(`\`${verify}\` fails with the patches`);
-  expect(file(mine, "mark.txt")).toBe("fixed\n");
-  expect(JSON.parse(file(mine, ".autofork/config.json")).verify).toBeUndefined();
-});
-
-test("a setup picked in one rebuild stays provisional when a later rebuild picks verify", () => {
-  const origin = join(home, "picksplit");
-  const mine = join(home, "picksplit-fork");
-  mkdirSync(origin);
-  write(origin, "app.js", 'export const greet = (name) => "hello " + name;\n');
-  sh(origin, "git init -q && git add -A && git commit -qm init");
-  sh(home, `git clone -q ${origin} picksplit-fork`);
-  const script = join(home, "picksplit-agent.sh");
-  write(
-    home,
-    "picksplit-agent.sh",
-    `cat > /dev/null
-if grep -q toUpperCase app.js; then
-  echo marked > mark.txt
-  node -e 'const fs = require("fs"); const c = JSON.parse(fs.readFileSync(".autofork/config.json")); fs.writeFileSync(".autofork/config.json", JSON.stringify({ ...c, verify: "node --check app.js" }))'
-else
-  sed -i 's/+ name/+ name.toUpperCase()/' app.js
-  node -e 'const fs = require("fs"); const c = JSON.parse(fs.readFileSync(".autofork/config.json")); fs.writeFileSync(".autofork/config.json", JSON.stringify({ ...c, setup: "echo installed" }))'
-fi
-`,
-  );
-  mkdirSync(join(mine, ".autofork/a-shout"), { recursive: true });
-  mkdirSync(join(mine, ".autofork/b-mark"), { recursive: true });
-  write(mine, ".autofork/config.json", JSON.stringify({ upstream: origin, agent: `sh ${script}` }));
-  write(mine, ".autofork/a-shout/PATCH.md", "greet() shouts the name.\n");
-  write(mine, ".autofork/b-mark/PATCH.md", "Marks the fork.\n");
-  sh(mine, "git add -A && git commit -qm 'shout and mark'");
-  expect(autofork(mine, "sync").ok).toBe(true);
-  expect(JSON.parse(file(mine, ".autofork/config.json")).provisional).toEqual({
-    setup: "echo installed",
-    verify: "node --check app.js",
-  });
-});
-
-test("a second failure on the same upstream commit skips the picks again instead of dropping them", () => {
-  const { origin, mine } = handmade("samecommit");
-  write(origin, "notes.txt", "two\n");
-  sh(origin, "git add -A && git commit -qm notes");
-  write(home, "samecommit-agent.sh", "exit 1\n");
-  expect(autofork(mine, "sync").log).toContain("skips the checks an agent picked");
-  mkdirSync(join(mine, ".autofork/wave"));
-  write(mine, ".autofork/wave/PATCH.md", "greet() waves.\n");
-  sh(mine, "git add -A && git commit -qm 'autofork: greet() waves'");
-  const { log } = autofork(mine, "sync");
-  expect(log).toContain("skips the checks an agent picked");
-  expect(log).not.toContain("are dropped");
-});
-
-test("picks proven on upstream alone that fail with the patches are dropped, not fixed for", () => {
-  const { origin, mine } = handmade("provenfail");
-  const verify = "! grep -q toUpperCase app.js";
-  const config = JSON.parse(file(mine, ".autofork/config.json"));
-  write(
-    mine,
-    ".autofork/config.json",
-    JSON.stringify({ ...config, verify, provisional: { verify } }),
-  );
-  sh(mine, "git commit -qam 'a pick'");
-  write(origin, "notes.txt", "two\n");
-  sh(origin, "git add -A && git commit -qm notes");
-  write(home, "provenfail-agent.sh", "exit 1\n");
-  const { ok, log } = autofork(mine, "sync");
-  expect(ok).toBe(true);
-  expect(log).toContain(`\`${verify}\` fails with the patches`);
-  expect(log).not.toContain("fixing");
-  expect(JSON.parse(file(mine, ".autofork/config.json")).verify).toBeUndefined();
-});
-
-test("a pick made after a proven one is dropped in the same sync stays unproven", () => {
-  const origin = join(home, "replaced");
-  const mine = join(home, "replaced-fork");
-  mkdirSync(origin);
-  write(origin, "app.js", 'export const greet = (name) => "hello " + name;\n');
-  write(origin, "b.txt", "one\n");
-  write(origin, "check.sh", "true\n");
-  sh(origin, "git init -q && git add -A && git commit -qm init");
-  sh(home, `git clone -q ${origin} replaced-fork`);
-  const script = join(home, "replaced-agent.sh");
-  const runs = join(home, "replaced-runs");
-  const pick = (verify: string) =>
-    `node -e 'const fs = require("fs"); const c = JSON.parse(fs.readFileSync(".autofork/config.json")); fs.writeFileSync(".autofork/config.json", JSON.stringify({ ...c, verify: "${verify}" }))'`;
-  write(
-    home,
-    "replaced-agent.sh",
-    `cat > /dev/null
-if [ -f ${runs} ]; then
-  printf 'two\\nmark\\n' > b.txt
-  ${pick("node --check app.js")}
-else
-  touch ${runs}
-  sed -i 's/+ name/+ name.toUpperCase()/' app.js
-  ${pick("sh check.sh")}
-fi
-`,
-  );
-  mkdirSync(join(mine, ".autofork/a-shout"), { recursive: true });
-  mkdirSync(join(mine, ".autofork/b-mark"), { recursive: true });
-  write(mine, ".autofork/config.json", JSON.stringify({ upstream: origin, agent: `sh ${script}` }));
-  write(mine, ".autofork/a-shout/PATCH.md", "greet() shouts the name.\n");
-  write(mine, ".autofork/b-mark/PATCH.md", "Marks b.txt.\n");
-  write(mine, "b.txt", "one\nmark\n");
-  expect(autofork(mine, "save", "b-mark").ok).toBe(true);
-  sh(mine, "git add -A && git commit -qm 'shout and mark'");
-  expect(autofork(mine, "sync").ok).toBe(true);
-  expect(JSON.parse(file(mine, ".autofork/config.json")).provisional).toEqual({
-    verify: "sh check.sh",
-  });
-  write(origin, "check.sh", "! grep -q toUpperCase app.js\n");
-  write(origin, "b.txt", "two\n");
-  sh(origin, "git commit -qam 'check and two'");
-  const { ok, log } = autofork(mine, "sync");
-  expect(ok).toBe(true);
-  expect(log).toContain("`sh check.sh` fails with the patches");
-  expect(JSON.parse(file(mine, ".autofork/config.json")).provisional).toEqual({
-    verify: "node --check app.js",
-  });
-});
-
-test("an unproven pick failing on a rebuilt patch doesn't get that patch blamed for the user's check", () => {
-  const origin = join(home, "blamed");
-  const mine = join(home, "blamed-fork");
-  mkdirSync(origin);
-  write(origin, "app.js", 'export const greet = (name) => "hello " + name;\n');
-  write(origin, "check.sh", "true\n");
-  sh(origin, "git init -q && git add -A && git commit -qm init");
-  sh(home, `git clone -q ${origin} blamed-fork`);
-  const runs = join(home, "blamed-runs");
-  write(
-    home,
-    "blamed-agent.sh",
-    `cat > /dev/null
-if [ -f ${runs} ]; then
-  printf 'fixed\\n' > mark.txt
-  git -c user.name=a -c user.email=a@a commit -qa --amend --no-edit
-else
-  touch ${runs}
-  sed -i 's/+ name/+ name.toUpperCase()/' app.js
-  node -e 'const fs = require("fs"); const c = JSON.parse(fs.readFileSync(".autofork/config.json")); fs.writeFileSync(".autofork/config.json", JSON.stringify({ ...c, verify: "! grep -q toUpperCase app.js" }))'
-fi
-`,
-  );
-  mkdirSync(join(mine, ".autofork/a-shout"), { recursive: true });
-  mkdirSync(join(mine, ".autofork/b-mark"), { recursive: true });
-  write(
-    mine,
-    ".autofork/config.json",
-    JSON.stringify({
-      upstream: origin,
-      agent: `sh ${join(home, "blamed-agent.sh")}`,
-      setup: "sh check.sh",
-    }),
-  );
-  write(mine, ".autofork/a-shout/PATCH.md", "greet() shouts the name.\n");
-  write(mine, ".autofork/b-mark/PATCH.md", "Marks the fork.\n");
-  write(mine, "mark.txt", "mark\n");
-  expect(autofork(mine, "save", "b-mark").ok).toBe(true);
-  sh(mine, "git add -A && git commit -qm 'shout and mark'");
-  write(origin, "check.sh", "! grep -qs mark mark.txt\n");
-  sh(origin, "git commit -qam check");
-  const { ok, log } = autofork(mine, "sync");
-  expect(log).not.toContain("which the agent built");
-  expect(log).toContain("fixing setup in the patches");
-  expect(ok).toBe(true);
-  expect(file(mine, "mark.txt")).toBe("fixed\n");
-});
-
-test("a check the user changed from the agent's pick is never dropped", () => {
-  const { origin, mine, tool } = handmade("edited");
-  const config = JSON.parse(file(mine, ".autofork/config.json"));
-  write(mine, ".autofork/config.json", JSON.stringify({ ...config, verify: `test -e ${tool}` }));
-  sh(mine, "git commit -qam 'my verify'");
-  write(origin, "notes.txt", "two\n");
-  sh(origin, "git add -A && git commit -qm notes");
-  write(home, "edited-agent.sh", "exit 1\n");
+test("a check an agent picks that fails with the patch it built stops the sync instead of shipping the patch", () => {
+  const { mine, runs, agent } = picking("broken");
+  agent({ verify: `node -e "import('./app.js')"` }, `printf 'export const broken = ;\\n' > app.js`);
   const head = sh(mine, "git rev-parse HEAD");
   const { ok, log } = autofork(mine, "sync");
   expect(ok).toBe(false);
+  expect(log).toContain(
+    `verify fails with shout, which the agent built: node -e "import('./app.js')"`,
+  );
+  expect(readFileSync(runs, "utf8")).toBe("ran\n");
+  expect(sh(mine, "git rev-parse HEAD")).toBe(head);
+});
+
+test("a check an agent picks that an earlier saved patch fails gets that patch fixed, instead of failing the one the agent built", () => {
+  const { mine, script, runs } = picking("earlier");
+  mkdirSync(join(mine, ".autofork/amark"));
+  write(mine, ".autofork/amark/PATCH.md", "mark.txt marks the fork.\n");
+  write(mine, "mark.txt", "bad\n");
+  expect(autofork(mine, "save", "amark").ok).toBe(true);
+  sh(mine, "git add -A && git commit -qm mark");
+  writeFileSync(
+    script,
+    `prompt="$(cat)"
+case "$prompt" in
+  *'named by its id'*) echo fix >> ${runs}; ${fixup({ amark: "printf 'good\\n' > mark.txt" })} ;;
+  *) echo shout >> ${runs}; sed -i 's/+ name/+ name.toUpperCase()/' app.js; node -e 'const fs = require("fs"); const c = JSON.parse(fs.readFileSync(".autofork/config.json")); fs.writeFileSync(".autofork/config.json", JSON.stringify({ ...c, verify: "! grep -qs bad mark.txt" }))' ;;
+esac
+`,
+  );
+  const { ok, log } = autofork(mine, "sync");
+  expect(ok).toBe(true);
+  expect(log).toContain("healed amark");
+  expect(readFileSync(runs, "utf8")).toBe("shout\nfix\n");
+  expect(file(mine, "mark.txt")).toBe("good\n");
+  expect(file(mine, "app.js")).toContain("name.toUpperCase()");
+  expect(JSON.parse(file(mine, ".autofork/config.json")).picked).toEqual({
+    verify: "! grep -qs bad mark.txt",
+  });
+});
+
+test("a picked verify that fails on upstream alone is dropped even when a patch broke setup, and the patch is still fixed", () => {
+  const tool = join(home, "caught-tool");
+  const { mine, script, runs, moveUpstream } = picking("caught", {
+    setup: "! grep -qs bad mark.txt",
+    picked: { verify: `test -f ${tool}` },
+  });
+  sh(mine, "git rm -rq .autofork/shout && git commit -qm 'no shout'");
+  mkdirSync(join(mine, ".autofork/zmark"));
+  write(mine, ".autofork/zmark/PATCH.md", "mark.txt marks the fork.\n");
+  write(mine, "mark.txt", "bad\n");
+  expect(autofork(mine, "save", "zmark").ok).toBe(true);
+  sh(mine, "git add -A && git commit -qm zmark");
+  moveUpstream();
+  writeFileSync(
+    script,
+    `cat > /dev/null\necho fix >> ${runs}\n${fixup({ zmark: "printf 'good\\n' > mark.txt" })}\n`,
+  );
+  const { ok, log } = autofork(mine, "sync");
+  expect(ok).toBe(true);
+  expect(log).toContain(
+    `\`test -f ${tool}\` fails on upstream alone, so the checks an agent picked are dropped`,
+  );
+  expect(log).toContain("healed zmark");
+  expect(file(mine, "mark.txt")).toBe("good\n");
+  expect(readFileSync(runs, "utf8")).toBe("fix\n");
+  const config = JSON.parse(file(mine, ".autofork/config.json"));
+  expect(config.setup).toBe("! grep -qs bad mark.txt");
+  expect(config.picked).toBeUndefined();
+});
+
+test("a check an agent picked that fails with a saved patch gets the patch fixed, like a check you wrote", () => {
+  const { mine, script, agent, moveUpstream } = picking("gate");
+  agent({ verify: "! grep -qs bad mark.txt" });
+  expect(autofork(mine, "sync").ok).toBe(true);
+  mkdirSync(join(mine, ".autofork/zmark"));
+  write(mine, ".autofork/zmark/PATCH.md", "mark.txt marks the fork.\n");
+  write(mine, "mark.txt", "bad\n");
+  expect(autofork(mine, "save", "zmark").ok).toBe(true);
+  sh(mine, "git add -A && git commit -qm mark");
+  moveUpstream();
+  writeFileSync(
+    script,
+    "cat > /dev/null\nprintf 'good\\n' > mark.txt\ngit -c user.name=a -c user.email=a@a commit -qa --amend --no-edit\n",
+  );
+  const { ok, log } = autofork(mine, "sync");
+  expect(ok).toBe(true);
+  expect(log).toContain("fixing verify in the patches");
+  expect(log).toContain("healed zmark");
+  expect(file(mine, "mark.txt")).toBe("good\n");
+  expect(JSON.parse(file(mine, ".autofork/config.json")).picked).toEqual({
+    verify: "! grep -qs bad mark.txt",
+  });
+});
+
+test("once you write your own verify, the agent's picks count as yours and stop the sync when upstream breaks them", () => {
+  const { origin, mine, agent, moveUpstream } = picking("owned");
+  agent({ setup: "test ! -f notes.txt", verify: "true" });
+  expect(autofork(mine, "sync").ok).toBe(true);
+  const config = JSON.parse(file(mine, ".autofork/config.json"));
+  write(mine, ".autofork/config.json", JSON.stringify({ ...config, verify: "true && true" }));
+  sh(mine, "git commit -qam 'my verify'");
+  moveUpstream();
+  agent({});
+  const head = sh(mine, "git rev-parse HEAD");
+  const { ok, log } = autofork(mine, "sync");
+  expect(ok).toBe(false);
+  expect(log).toContain(
+    `setup fails on upstream ${sh(origin, "git rev-parse HEAD").slice(0, 12)} itself: test ! -f notes.txt`,
+  );
   expect(log).not.toContain("dropped");
   expect(sh(mine, "git rev-parse HEAD")).toBe(head);
-});
-
-function pickChecks(name: string, verify: string) {
-  const origin = join(home, name);
-  const mine = join(home, `${name}-fork`);
-  mkdirSync(origin);
-  write(origin, "app.js", 'export const greet = (name) => "hello " + name;\n');
-  write(origin, ".gitignore", "config.json\n");
-  sh(origin, "git init -q && git add -A && git commit -qm init");
-  sh(home, `git clone -q ${origin} ${name}-fork`);
-  const script = join(home, `${name}-agent.sh`);
-  write(
-    home,
-    `${name}-agent.sh`,
-    `cat > /dev/null
-sed -i 's/+ name/+ name.toUpperCase()/' app.js
-node -e 'const fs = require("fs"); const c = JSON.parse(fs.readFileSync(".autofork/config.json")); fs.writeFileSync(".autofork/config.json", JSON.stringify({ ...c, verify: process.argv[1] }))' '${verify}'
-`,
-  );
-  mkdirSync(join(mine, ".autofork/shout"), { recursive: true });
-  write(mine, ".autofork/config.json", JSON.stringify({ upstream: origin, agent: `sh ${script}` }));
-  write(mine, ".autofork/shout/PATCH.md", "greet() shouts the name.\n");
-  sh(
-    mine,
-    "git add -A && git add -f .autofork && git commit -qm 'autofork: greet() shouts the name'",
-  );
-
-  const { ok, log } = autofork(mine, "sync");
-  expect(ok).toBe(true);
-  expect(log).toContain("built shout");
-  expect(file(mine, "app.js")).toContain("name.toUpperCase()");
-  return { origin, mine, log };
-}
-
-test("checks the agent picks that fail on upstream alone are skipped by the next sync, and it ships", () => {
-  const verify = "grep -q toUpperCase app.js";
-  const { origin, mine } = pickChecks("picky", verify);
-  expect(JSON.parse(file(mine, ".autofork/config.json")).provisional).toEqual({ verify });
-  write(origin, "notes.txt", "two\n");
-  sh(origin, "git add -A && git commit -qm notes");
-  const { ok, log } = autofork(mine, "sync");
-  expect(ok).toBe(true);
-  expect(log).toContain(`\`${verify}\` fails on upstream alone, so this sync skips the checks`);
-  expect(file(mine, "notes.txt")).toBe("two\n");
-});
-
-test("checks the agent picks that fail with its patch aren't kept, and the patch ships", () => {
-  const verify = "! grep -q toUpperCase app.js";
-  const { mine, log } = pickChecks("picky-patch", verify);
-  expect(log).toContain(
-    `\`${verify}\` fails with the patches, so the unproven checks an agent picked aren't kept`,
-  );
-  expect(JSON.parse(file(mine, ".autofork/config.json")).verify).toBeUndefined();
 });
 
 function spendFork(name: string, limits?: object) {
