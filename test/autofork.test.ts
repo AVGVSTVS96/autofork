@@ -23,7 +23,7 @@ writeFileSync(gitconfig, `[url "${github}/"]\n\tinsteadOf = https://github.com/\
 const fakeApi = join(home, "fake-api.mjs");
 writeFileSync(
   fakeApi,
-  `import { appendFileSync, readFileSync } from "node:fs";
+  `import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 globalThis.fetch = async (url, init = {}) => {
   url = String(url);
   const latest = process.env.LATEST_RELEASE;
@@ -37,6 +37,11 @@ globalThis.fetch = async (url, init = {}) => {
     let calls = 0;
     try { calls = readFileSync(log, "utf8").split("\\n").filter((line) => line.includes('"' + path + '"')).length; } catch {}
     const body = init.body && JSON.parse(init.body);
+    const once = process.env.SITE_FAIL_ONCE === path && log + ".failed";
+    if (once && !existsSync(once)) {
+      writeFileSync(once, "");
+      throw new TypeError("fetch failed");
+    }
     appendFileSync(log, JSON.stringify({ method: init.method ?? "GET", path, auth: init.headers?.authorization, body }) + "\\n");
     if (path === "/api/ledger" && !body) return process.env.SITE_TOTALS ? new Response(process.env.SITE_TOTALS) : new Response("{}", { status: 404 });
     if (path === "/api/ledger") return Response.json({ id: "row-1" }, { status: 201 });
@@ -2361,6 +2366,17 @@ echo '{"type":"result","subtype":"success","is_error":false,"result":"built it",
       },
     },
   ]);
+
+  wish(mine, "retried");
+  const retried = autoforkWith(
+    { ...site, SITE_TOTALS: '{"rebuilds":4,"spent":41.25}', SITE_FAIL_ONCE: "/api/ledger/close" },
+    mine,
+    "sync",
+  );
+  expect(retried.log).not.toContain("couldn't report");
+  expect(file(home, "billed-site.log")).toContain(
+    '"path":"/api/ledger/close","auth":"Bearer oidc-autofork","body":{"id":"row-1","status":"done"',
+  );
 
   wish(mine, "six");
   const capped = autoforkWith({ ...site, SITE_TOTALS: '{"rebuilds":3,"spent":190}' }, mine, "sync");
