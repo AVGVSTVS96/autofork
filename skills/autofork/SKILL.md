@@ -29,7 +29,7 @@ GitHub runs the workflow on the `cron` line in `.github/workflows/autofork.yml`,
 
 ## Change a fork
 
-Start from a fork that has had its first sync: after `fork`, wait for that run (`gh run watch --repo <fork>`), then `git pull`.
+Start from a fork that has had its first sync: after `fork`, wait until its first autofork run finishes (`gh run list --repo <fork> -w autofork.yml`), then `git pull`.
 
 1. Make the change.
 2. Write `.autofork/<id>/PATCH.md`, the prose an agent rebuilds the change from after upstream rewrites that code: what the user wants and why, and why it's built the way it is where upstream does it differently. Write it from what the user asked for; a commit message or diff only says how.
