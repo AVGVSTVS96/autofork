@@ -22,7 +22,7 @@ Start from upstream's release workflow, and save it under the same name in `.git
 - Build the commit the dispatch ran on, the fork's branch. Never check out upstream's tag, which has none of the patches.
 - Give the build the version from the tag explicitly. The fork's commit carries no tag, so tools that read the version from git get it wrong.
 - Keep the builds and the update files. Drop package registry publishing, deploys, announcements and anything else that needs upstream's secrets.
-- Publish the GitHub Release yourself, under the tag and at the built commit, with upstream's prerelease and latest flags for that tag. Never publish a draft. Updaters skip drafts.
+- Publish the GitHub Release yourself, under the tag and at the built commit, replacing one already there, with upstream's prerelease and latest flags for that tag. Never publish a draft. Updaters skip drafts.
 - Open an issue when a run doesn't publish, failed or cancelled, or comment on the one already open. GitHub tells only whoever started a run that it failed, and `autofork.yml`'s dispatch is started by GitHub's bot.
 - Run on GitHub's standard hosted runners, which cost nothing on a public fork. A private fork pays for every minute, and macOS minutes cost the most.
 
@@ -46,7 +46,7 @@ An updater installs a build only if it passes the updater's checks, and upstream
 
 ## 6. Check the real release
 
-Once these patches are on the fork, start the release workflow by hand for its first release, with the tag of the upstream release the fork is on: `gh workflow run release.yml --repo <fork> -f tag=<tag>`. Download that release, not a local build, and check:
+The fork's first release comes from its next sync to an upstream release. To have it now, when the fork's last `autofork: sync` commit names a release's commit (`git rev-parse <tag>^{commit}`) and no run has released that tag yet, start the release workflow by hand: `gh workflow run <release workflow> --repo <fork> -f tag=<tag>`. Download the fork's release, not a local build, and check:
 
 - The version is the upstream tag.
 - The feed file inside the app names the fork and the channel.
