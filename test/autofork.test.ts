@@ -79,10 +79,9 @@ function autoforkWith(extra: NodeJS.ProcessEnv, cwd: string, ...args: string[]) 
     encoding: "utf8",
   });
   const output = Object.fromEntries(
-    readFileSync(outputs, "utf8")
-      .split("\n")
-      .filter(Boolean)
-      .map((line) => line.split("=")),
+    [...readFileSync(outputs, "utf8").matchAll(/^(\w+)(?:=(.*)|<<(\S+)\n([\s\S]*?)\n\3)$/gm)].map(
+      ([, key, value, , block]) => [key, value ?? block],
+    ),
   );
   return { ok: result.status === 0, log: result.stderr, output };
 }
@@ -583,6 +582,10 @@ esac
   );
   expect(ok).toBe(true);
   expect(log).toContain("This repo is private");
+  expect(log).toContain(
+    String.raw`sh -c 'd=$(mktemp -d) && trap "rm -rf \"\$d\"" EXIT && CODEX_HOME="$d" codex login --device-auth && gh secret set CODEX_AUTH --repo me/app < "$d/auth.json"', then start its first sync: gh workflow run autofork.yml --repo me/app.`,
+  );
+  expect(log).toContain("start the first sync by hand: gh workflow run autofork.yml --repo me/app");
   expect(file(join(home, "mine"), ".github/workflows/autofork.yml")).toContain("17 * * * *");
   const calls = file(home, "gh.log");
   expect(calls).toContain("api -X PUT repos/me/app/actions/permissions -F enabled=true");
@@ -838,6 +841,9 @@ test("patches that still apply but fail verify are fixed in their own commits by
   expect(file(home, "prompt-fix.txt")).toContain("does not provide an export named 'name'");
   expect(file(home, "prompt-fix.txt")).toContain(
     "Patches after these aren't applied yet: c-wave. Each goes on top, so leave what its PATCH.md asks for to it.",
+  );
+  expect(file(home, "prompt-fix.txt")).toContain(
+    "The sync keeps your commits and puts .autofork/ and .github/workflows/ back after you, except what this asks you to write there.",
   );
   expect(file(checkedFork, "extra.js")).toContain("who().toUpperCase()");
   expect(file(checkedFork, "app.js")).toContain('who() + " o/"');
@@ -1184,7 +1190,9 @@ test("setup installs before the agent and verify run, and generated files are re
   const prompt = file(home, "prompt-dep-b.txt");
   expect(prompt).toContain(`Dependencies are installed: \`${setup}\` ran here`);
   expect(prompt).toContain("What's left: the conflict markers in package.json.");
-  expect(prompt).toContain("that git would pick up, but leave lock.txt, which the sync rebuilds.");
+  expect(prompt).toContain(
+    "The sync keeps your source change and puts .autofork/ and .github/workflows/ back after you, except what this asks you to write there. Remove anything your checks generated that git would pick up, but leave lock.txt, which the sync rebuilds.",
+  );
   expect(prompt).toContain(" -- package.json\n");
   expect(file(mine, "lock.txt")).toBe(
     'locked {\nlocked   "a": "1",\nlocked   "b": "1",\nlocked   "c": "1"\nlocked }\n',
@@ -1958,6 +1966,9 @@ test("init and fork write the limits, the schedule --every picks, id-token: writ
   const workflow = file(mine, ".github/workflows/autofork.yml");
   expect(workflow).toContain('- cron: "17 * * * *"');
   expect(workflow).toContain("  id-token: write\n");
+  expect(workflow).toContain(
+    "        with:\n          codex-auth-url: https://autofork.com/api/chatgpt/auth\n        env:\n          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}\n          CODEX_AUTH: ${{ secrets.CODEX_AUTH }}\n",
+  );
   sh(mine, "rm -rf .autofork .github");
   autofork(mine, "init", origin);
   expect(file(mine, ".github/workflows/autofork.yml")).toContain('- cron: "7-59/15 * * * *"');
@@ -2137,6 +2148,49 @@ echo '{"type":"result","subtype":"success","is_error":false,"result":"built it",
   expect(capped.log).toContain(
     "six waits: a rebuild may cost $20 and $10 of this month's $200 is left",
   );
+});
+
+test("on GitHub's runners, a rebuild with no agent signed in fails before it takes one of the month's rebuilds, and says what to add", () => {
+  const mine = spendFork("signed-out");
+  const bin = join(home, "signed-out-bin");
+  stub(
+    bin,
+    "claude",
+    `[ "$1 $2" = "auth status" ] && { printf '{\\n  "loggedIn": false,\\n  "authMethod": "none"\\n}\\n'; exit 1; }
+echo run >> ${home}/signed-out-runs`,
+  );
+  const ledger = join(home, "signed-out-ledger.json");
+  wish(mine, "ten");
+  const { ok, output } = autoforkWith(
+    {
+      PATH: `${bin}:${process.env.PATH}`,
+      CLAUDE_CODE_OAUTH_TOKEN: "",
+      CODEX_HOME: join(home, "signed-out-codex"),
+      RUNNER_ENVIRONMENT: "github-hosted",
+      AUTOFORK_LEDGER: ledger,
+    },
+    mine,
+    "sync",
+  );
+  expect(ok).toBe(false);
+  expect(output.error).toBe(
+    "Claude Code isn't signed in, so no agent can run: give the autofork step CLAUDE_CODE_OAUTH_TOKEN (claude setup-token prints one), or CODEX_AUTH for ChatGPT, from the fork's secrets",
+  );
+  expect(existsSync(join(home, "signed-out-runs"))).toBe(false);
+  expect(JSON.parse(file(home, "signed-out-ledger.json")).rebuilds).toEqual([]);
+  const local = autoforkWith(
+    {
+      PATH: `${bin}:${process.env.PATH}`,
+      CLAUDE_CODE_OAUTH_TOKEN: "",
+      CODEX_HOME: join(home, "signed-out-codex"),
+      RUNNER_ENVIRONMENT: "self-hosted",
+      AUTOFORK_LEDGER: ledger,
+    },
+    mine,
+    "sync",
+  );
+  expect(local.output.error).toBe("the agent changed nothing while building ten");
+  expect(file(home, "signed-out-runs")).toBe("run\n");
 });
 
 test("Codex's tokens are priced from LiteLLM's table for the model its session used", () => {

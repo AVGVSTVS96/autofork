@@ -1,10 +1,48 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+open_issue() {
+  gh issue list -R "$GITHUB_REPOSITORY" --state open --limit 1000 --json number,title \
+    --jq "map(select(.title == \"$1\"))[0].number // empty" 2> /dev/null
+}
+
+failed_title="autofork sync failed"
+run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/${GITHUB_RUN_ATTEMPT:-1}"
+
+close_failed() {
+  local issue
+  issue="$(open_issue "$failed_title")" || return 0
+  [ -z "$issue" ] || gh issue close "$issue" -R "$GITHUB_REPOSITORY" --comment "$1" > /dev/null || true
+}
+
+if [ "${1:-}" = failed ]; then
+  why="The sync was cancelled, ran out of time, or stopped without saying why. The run's log has the rest."
+  [ -z "${ERROR:-}" ] || why="$(printf '````\nautofork: %s\n````' "$ERROR")"
+  if issue="$(open_issue "$failed_title")" && [ -z "$issue" ]; then
+    gh issue create -R "$GITHUB_REPOSITORY" --title "$failed_title" --body "$why
+
+$run_url
+
+To try again now, run the workflow by hand. The next sync that goes through closes this issue." > /dev/null
+  elif [ -n "$issue" ] && last="$(gh issue view "$issue" -R "$GITHUB_REPOSITORY" --json body,comments --jq '[.body, .comments[].body] | last')"; then
+    [[ "$last" == "$why"$'\n\n'* ]] || gh issue comment "$issue" -R "$GITHUB_REPOSITORY" --body "$why"$'\n\n'"$run_url" > /dev/null
+  else
+    false
+  fi || echo "::warning::the sync failed, but autofork couldn't open an issue about it: turn on the fork's issues and give the workflow issues: write"
+  exit 0
+fi
+
+head="$(git rev-parse HEAD)"
 failed="$RUNNER_TEMP/autofork-failed"
 skip="$(cat "$failed" 2>/dev/null || true)"
 [ "${GITHUB_EVENT_NAME:-}" = schedule ] || [ "${GITHUB_TRIGGERING_ACTOR:-}" = "autofork-app[bot]" ] || skip=""
-head="$(git rev-parse HEAD)"
+[ "${GITHUB_RUN_ATTEMPT:-1}" = 1 ] || skip=""
+tip="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$GITHUB_REF_NAME" --jq .object.sha 2> /dev/null)" || tip="$head"
+if [ "$tip" != "$head" ]; then
+  echo "$GITHUB_REF_NAME moved since this run started, so the next run syncs it instead"
+  echo "result=moved" >> "$GITHUB_OUTPUT"
+  exit 0
+fi
 
 git config user.name "github-actions[bot]"
 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -54,14 +92,16 @@ if ! node "$GITHUB_ACTION_PATH/dist/autofork.js" sync ${skip:+--skip "$skip"} $h
   echo "result=failed" >> "$GITHUB_OUTPUT"
   exit 1
 fi
+[ "$(sed -n 's/^result=//p' "$GITHUB_OUTPUT" | tail -1)" != current ] || close_failed "Up to date in $run_url."
 
 if [ "$(git rev-parse HEAD)" != "$head" ]; then
   parents=()
   for parent in $(git log -1 --format=%P); do parents+=(-f "parents[]=$parent"); done
   pusher="$GH_TOKEN"
   if ! git diff --quiet "$head" HEAD -- .github/workflows && ! pusher="$(workflow_token)"; then
-    echo "::error::the sync changed workflows, but $WORKFLOW_TOKEN_URL gave no token to push them, so nothing was pushed"
-    printf 'result=failed\nkey=\n' >> "$GITHUB_OUTPUT"
+    error="the sync changed workflows, but $WORKFLOW_TOKEN_URL gave no token to push them, so nothing was pushed"
+    echo "::error::$error"
+    printf 'result=failed\nerror=%s\n' "$error" >> "$GITHUB_OUTPUT"
     exit 1
   fi
   remote="https://x-access-token:${pusher}@github.com/${GITHUB_REPOSITORY}.git"
@@ -72,8 +112,11 @@ if [ "$(git rev-parse HEAD)" != "$head" ]; then
   signed="$(GH_TOKEN="$pusher" gh api "repos/$GITHUB_REPOSITORY/git/commits" \
     -f message="$(git log -1 --format=%B)" -f tree="$(git rev-parse 'HEAD^{tree}')" "${parents[@]}" --jq .sha)"
   if ! moved="$(GH_TOKEN="$pusher" gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/heads/$GITHUB_REF_NAME" -f sha="$signed" 2>&1)"; then
-    if [ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$GITHUB_REF_NAME" --jq .object.sha)" = "$head" ]; then
+    tip="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$GITHUB_REF_NAME" --jq .object.sha 2> /dev/null)" || tip="$head"
+    if [ "$tip" = "$head" ]; then
       echo "$moved" >&2
+      reason="$(awk 'sub(/^gh: /, "") { print; exit }' <<< "$moved")"
+      printf "result=failed\nerror=GitHub didn't move %s to the sync's commit, so nothing was pushed%s\n" "$GITHUB_REF_NAME" "${reason:+: $reason}" >> "$GITHUB_OUTPUT"
       exit 1
     fi
     echo "$GITHUB_REF_NAME changed while this ran, so the next run syncs it instead"
@@ -81,6 +124,7 @@ if [ "$(git rev-parse HEAD)" != "$head" ]; then
     exit 0
   fi
   echo "pushed ${signed:0:12} to $GITHUB_REF_NAME, signed by GitHub"
+  close_failed "Synced in ${signed:0:12}."
 
   for doc in $(git diff --name-only --diff-filter=A "$head" HEAD -- '.autofork/*/UPSTREAM.md'); do
     id="$(basename "$(dirname "$doc")")"
@@ -93,8 +137,7 @@ if [ "$(git rev-parse HEAD)" != "$head" ]; then
   workflows="$(git log -1 --format=%B | sed -n 's/^upstream changed \(.*\) in \(.*\)$/- `\1`, in \2/p')"
   title="upstream changed workflows this fork copied"
   if [ -n "$workflows" ]; then
-    issue="$(gh issue list -R "$GITHUB_REPOSITORY" --state open --search "$title in:title" --json number,title \
-      --jq "map(select(.title == \"$title\"))[0].number // empty" 2> /dev/null || true)"
+    issue="$(open_issue "$title" || true)"
     if [ -n "$issue" ]; then
       gh issue comment "$issue" -R "$GITHUB_REPOSITORY" --body "Upstream changed these too, synced in ${signed:0:12}:"$'\n\n'"$workflows" > /dev/null
     else

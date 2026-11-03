@@ -59,3 +59,9 @@ runs:
       with:
         path: ${{ runner.temp }}/autofork-ledger.json
         key: autofork-ledger-${{ github.run_id }}-${{ github.run_attempt }}
+    - if: failure() || cancelled()
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        ERROR: ${{ steps.sync.outputs.error }}
+      run: '"$GITHUB_ACTION_PATH/action.sh" failed'
