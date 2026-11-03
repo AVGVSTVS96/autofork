@@ -561,9 +561,11 @@ function restoreControl(dir, base) {
   git(dir, "clean", "-fdxq", "--", ...CONTROL);
 }
 function workflowsBehind(root, base, source) {
+  if (run("git", ["merge-base", "--is-ancestor", source, base], root).ok)
+    return [];
   const files = (...args) => git(root, "diff", "--name-only", "--no-renames", ...args, "--", WORKFLOWS).split(`
 `);
-  const upstreamChanged = new Set(files(`${base}...${source}`));
+  const upstreamChanged = new Set(files(base, source));
   return files("--diff-filter=MD", "HEAD", source).filter((file) => file && upstreamChanged.has(file));
 }
 async function updateWorkflows(config, build, files, range) {
@@ -805,25 +807,27 @@ async function verify(config, build, from) {
   try {
     if (passesAt(config, build, build.steps.at(-1)))
       return;
-    if (!from)
-      throw new Drifted(`${build.failed.check} fails, so a patch needs rebuilding`);
     const failed = build.failed;
     const patched = build.steps.length > 1;
     if (patched)
       say(`${failed.check} fails, verify with upstream ${short(build.source)} alone`);
     if (!patched || !passesAt(config, build, build.steps[0])) {
       const { check } = build.failed;
-      if (config.picked?.[check]) {
+      const yours = !!config.verify && !config.picked?.verify;
+      if (!yours && config.picked?.[check]) {
         say(`\`${config[check]}\` fails on upstream alone, so the checks an agent picked are dropped and the next agent run picks new ones`);
         for (const key of Object.keys(config.picked))
           delete config[key];
         delete config.picked;
         return await verify(config, build, from);
       }
-      guard(config, build, from);
+      if (from)
+        guard(config, build, from);
       if (build.steps.length <= config.patches.length)
         return;
     }
+    if (!from)
+      throw new Drifted(`${failed.check} fails, so a patch needs rebuilding`);
     await fix(config, build, failed, from);
   } finally {
     reset(build.dir, build.steps.at(-1));
@@ -873,7 +877,7 @@ async function fix(config, build, failed, from) {
     throw new Failure(`${failed.check} fails on upstream ${short(build.source)}, which has every patch: ${command}`);
   }
   const last = ids.findLastIndex((id) => build.healed.has(id));
-  if (last >= 0 && (last === ids.length - 1 || !passesAt(config, build, build.steps[last + 1]))) {
+  if (last >= 0 && (last === 0 || passesAt(config, build, build.steps[last])) && (last === ids.length - 1 || !passesAt(config, build, build.steps[last + 1]))) {
     say(`${failed.check} fails with ${ids[last]}, which an agent just built, so run it again`);
     if (passesAt(config, build, before.at(-1)))
       return;

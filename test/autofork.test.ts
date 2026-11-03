@@ -1656,7 +1656,7 @@ node -e 'const fs = require("fs"); const c = JSON.parse(fs.readFileSync(".autofo
   return { origin, mine, tool, runs, prompt, script, agent, moveUpstream };
 }
 
-test("checks an agent picked that fail on upstream alone are dropped, and the sync ships without them", () => {
+test("checks an agent picked that fail on upstream alone are dropped, and the sync ships without them, even one that doesn't heal", () => {
   const { mine, tool, runs, prompt, agent, moveUpstream } = picking("handmade", { setup: "true" });
   agent({ verify: `test -f ${tool}` });
   expect(autofork(mine, "sync").ok).toBe(true);
@@ -1668,7 +1668,7 @@ test("checks an agent picked that fail on upstream alone are dropped, and the sy
   });
   rmSync(tool);
   moveUpstream();
-  const { ok, log } = autofork(mine, "sync");
+  const { ok, log } = autofork(mine, "sync", "--no-heal");
   expect(ok).toBe(true);
   expect(log).toContain(
     `\`test -f ${tool}\` fails on upstream alone, so the checks an agent picked are dropped`,
@@ -1718,6 +1718,33 @@ test("a check an agent picks that fails with the patch it built stops the sync i
   expect(sh(mine, "git rev-parse HEAD")).toBe(head);
 });
 
+test("a check an agent picks that an earlier saved patch fails gets that patch fixed, instead of failing the one the agent built", () => {
+  const { mine, script, runs } = picking("earlier");
+  mkdirSync(join(mine, ".autofork/amark"));
+  write(mine, ".autofork/amark/PATCH.md", "mark.txt marks the fork.\n");
+  write(mine, "mark.txt", "bad\n");
+  expect(autofork(mine, "save", "amark").ok).toBe(true);
+  sh(mine, "git add -A && git commit -qm mark");
+  writeFileSync(
+    script,
+    `prompt="$(cat)"
+case "$prompt" in
+  *'named by its id'*) echo fix >> ${runs}; ${fixup({ amark: "printf 'good\\n' > mark.txt" })} ;;
+  *) echo shout >> ${runs}; sed -i 's/+ name/+ name.toUpperCase()/' app.js; node -e 'const fs = require("fs"); const c = JSON.parse(fs.readFileSync(".autofork/config.json")); fs.writeFileSync(".autofork/config.json", JSON.stringify({ ...c, verify: "! grep -qs bad mark.txt" }))' ;;
+esac
+`,
+  );
+  const { ok, log } = autofork(mine, "sync");
+  expect(ok).toBe(true);
+  expect(log).toContain("healed amark");
+  expect(readFileSync(runs, "utf8")).toBe("shout\nfix\n");
+  expect(file(mine, "mark.txt")).toBe("good\n");
+  expect(file(mine, "app.js")).toContain("name.toUpperCase()");
+  expect(JSON.parse(file(mine, ".autofork/config.json")).picked).toEqual({
+    verify: "! grep -qs bad mark.txt",
+  });
+});
+
 test("a check an agent picked that fails with a saved patch gets the patch fixed, like a check you wrote", () => {
   const { mine, script, agent, moveUpstream } = picking("gate");
   agent({ verify: "! grep -qs bad mark.txt" });
@@ -1742,16 +1769,12 @@ test("a check an agent picked that fails with a saved patch gets the patch fixed
   });
 });
 
-test("a check you write in place of the agent's pick is yours, and stops the sync when upstream breaks it", () => {
+test("once you write your own verify, the agent's picks count as yours and stop the sync when upstream breaks them", () => {
   const { origin, mine, agent, moveUpstream } = picking("owned");
-  agent({ verify: "true" });
+  agent({ setup: "test ! -f notes.txt", verify: "true" });
   expect(autofork(mine, "sync").ok).toBe(true);
   const config = JSON.parse(file(mine, ".autofork/config.json"));
-  write(
-    mine,
-    ".autofork/config.json",
-    JSON.stringify({ ...config, verify: "test ! -f notes.txt" }),
-  );
+  write(mine, ".autofork/config.json", JSON.stringify({ ...config, verify: "true && true" }));
   sh(mine, "git commit -qam 'my verify'");
   moveUpstream();
   agent({});
@@ -1759,7 +1782,7 @@ test("a check you write in place of the agent's pick is yours, and stops the syn
   const { ok, log } = autofork(mine, "sync");
   expect(ok).toBe(false);
   expect(log).toContain(
-    `verify fails on upstream ${sh(origin, "git rev-parse HEAD").slice(0, 12)} itself: test ! -f notes.txt`,
+    `setup fails on upstream ${sh(origin, "git rev-parse HEAD").slice(0, 12)} itself: test ! -f notes.txt`,
   );
   expect(log).not.toContain("dropped");
   expect(sh(mine, "git rev-parse HEAD")).toBe(head);
