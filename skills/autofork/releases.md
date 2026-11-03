@@ -46,7 +46,7 @@ An updater installs a build only if it passes the updater's checks, and upstream
 
 ## 6. Check the real release
 
-A sync starts the release workflow itself when it builds a patch or moves to a new release. When the fork is already current and every patch was saved with `save`, start its first release by hand, with the newest release tag in its channel: `gh workflow run <release workflow> --repo <fork> -f tag=<tag>`. Download the fork's release, not a local build, and check:
+A sync that ends `synced` on an upstream release starts the release workflow itself. One that ends `current`, with the fork already on that release and every patch built, starts nothing, so start the fork's first release by hand then, with the tag of the release it follows (`gh release view -R owner/repo --json tagName -q .tagName` for `releases`, or the newest in its channel): `gh workflow run <release workflow> --repo <fork> -f tag=<tag>`. Download the fork's release, not a local build, and check:
 
 - The version is the upstream tag.
 - The feed file inside the app names the fork and the channel.
