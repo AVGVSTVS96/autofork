@@ -158,7 +158,7 @@ async function readConfig(root: string): Promise<Fork> {
   );
   if (config.generated?.length && !config.setup)
     throw new Failure(
-      `"generated" files are rebuilt by "setup", so set it too in ${DIR}/config.json`,
+      `"generated" files are rebuilt by "setup", so set your own in ${DIR}/config.json`,
     );
   limitsOf(config);
   const follow = config.follow ?? (await defaultFollow(root, config.upstream));
@@ -718,16 +718,19 @@ async function prices(model: string) {
   return rates[model] ?? rates[`openai/${model}`];
 }
 
-function checksIn(dir: string): Record<string, unknown> {
+function checksIn(dir: string): Record<string, unknown> | undefined {
   try {
     const written = JSON.parse(readFileSync(configFile(dir), "utf8"));
     if (written && typeof written === "object") return written;
   } catch {}
-  return {};
 }
 
-function keepChecks(config: Config, written: Record<string, unknown>) {
+function keepChecks(config: Config, written: Record<string, unknown> | undefined) {
   if (config.verify) return;
+  if (!written)
+    return say(
+      `the agent left ${DIR}/config.json unreadable, so the checks it picked weren't kept`,
+    );
   for (const key of CHECKS) {
     const command = written[key];
     if (config[key] || typeof command !== "string" || !command.trim()) continue;
@@ -906,11 +909,11 @@ function merge(dir: string, file: string, config: Config): Left {
 
 function prepare(config: Config, build: Build) {
   if (!config.setup) return true;
-  const head = git(build.dir, "rev-parse", "HEAD");
-  if (build.ready !== head) {
+  const ready = `${git(build.dir, "rev-parse", "HEAD")} ${config.setup}`;
+  if (build.ready !== ready) {
     say(`setup: ${config.setup}`);
     if (!succeeds(build, "setup", config.setup)) return false;
-    build.ready = head;
+    build.ready = ready;
     build.rebuilt = generatedChanges(config, build.dir);
     reset(build.dir);
   }

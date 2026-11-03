@@ -118,7 +118,7 @@ async function readConfig(root) {
   }
   const config = JSON.parse(readFileSync(configFile(root), "utf8"));
   if (config.generated?.length && !config.setup)
-    throw new Failure(`"generated" files are rebuilt by "setup", so set it too in ${DIR}/config.json`);
+    throw new Failure(`"generated" files are rebuilt by "setup", so set your own in ${DIR}/config.json`);
   limitsOf(config);
   const follow = config.follow ?? await defaultFollow(root, config.upstream);
   const picked = {};
@@ -539,11 +539,12 @@ function checksIn(dir) {
     if (written && typeof written === "object")
       return written;
   } catch {}
-  return {};
 }
 function keepChecks(config, written) {
   if (config.verify)
     return;
+  if (!written)
+    return say(`the agent left ${DIR}/config.json unreadable, so the checks it picked weren't kept`);
   for (const key of CHECKS) {
     const command = written[key];
     if (config[key] || typeof command !== "string" || !command.trim())
@@ -679,12 +680,12 @@ function merge(dir, file, config) {
 function prepare(config, build) {
   if (!config.setup)
     return true;
-  const head = git(build.dir, "rev-parse", "HEAD");
-  if (build.ready !== head) {
+  const ready = `${git(build.dir, "rev-parse", "HEAD")} ${config.setup}`;
+  if (build.ready !== ready) {
     say(`setup: ${config.setup}`);
     if (!succeeds(build, "setup", config.setup))
       return false;
-    build.ready = head;
+    build.ready = ready;
     build.rebuilt = generatedChanges(config, build.dir);
     reset(build.dir);
   }

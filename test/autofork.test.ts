@@ -1754,6 +1754,43 @@ test("checks an agent picked that fail on upstream alone are dropped before it r
   });
 });
 
+test("new picks that replace dropped ones run their own setup on upstream alone, so a patch that breaks them still stops the sync", () => {
+  const ready = join(home, "replaced-ready");
+  const { origin, mine, tool, runs, agent } = picking("replaced");
+  agent({ setup: "true", verify: `test -f ${tool}` });
+  expect(autofork(mine, "sync").ok).toBe(true);
+  rmSync(tool);
+  write(origin, "app.js", 'export const greet = (name) => "hi " + name;\n');
+  sh(origin, "git commit -qam hi");
+  agent(
+    { setup: `! grep -q broken app.js && touch ${ready}`, verify: `test -f ${ready}` },
+    `printf 'export const greet = (name) => "hi " + name.toUpperCase(); // broken\\n' > app.js`,
+  );
+  const head = sh(mine, "git rev-parse HEAD");
+  const { ok, log } = autofork(mine, "sync");
+  expect(ok).toBe(false);
+  expect(log).toContain("the checks an agent picked are dropped");
+  expect(log).toContain("setup fails with shout, which the agent healed");
+  expect(readFileSync(runs, "utf8")).toBe("ran\nran\n");
+  expect(sh(mine, "git rev-parse HEAD")).toBe(head);
+});
+
+test("checks an agent leaves in an unreadable config aren't kept, and the sync says so", () => {
+  const { mine, script } = picking("unreadable");
+  writeFileSync(
+    script,
+    `cat > /dev/null
+sed -i 's/+ name/+ name.toUpperCase()/' app.js
+printf '{"verify": ' > .autofork/config.json
+`,
+  );
+  const { ok, log } = autofork(mine, "sync");
+  expect(ok).toBe(true);
+  expect(log).toContain("the agent left .autofork/config.json unreadable");
+  expect(file(mine, "app.js")).toContain("name.toUpperCase()");
+  expect(JSON.parse(file(mine, ".autofork/config.json")).picked).toBeUndefined();
+});
+
 test("a check an agent picks that fails with the patch it built stops the sync instead of shipping the patch", () => {
   const { mine, runs, agent } = picking("broken");
   agent({ verify: `node -e "import('./app.js')"` }, `printf 'export const broken = ;\\n' > app.js`);
