@@ -1064,7 +1064,7 @@ async function verify(config: Fork, build: Build, from?: string): Promise<void> 
       const yours = !!config.verify && !config.picked?.verify;
       if (!yours && config.picked?.[check]) {
         say(
-          `\`${config[check]}\` fails on upstream alone, so the checks an agent picked are dropped and the next agent run picks new ones`,
+          `\`${config[check]}\` fails on upstream alone, so the checks an agent picked are dropped and the next agent that builds or heals a patch picks new ones`,
         );
         for (const key of Object.keys(config.picked) as (keyof Checks)[]) delete config[key];
         delete config.picked;
