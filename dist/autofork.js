@@ -563,7 +563,7 @@ function restoreControl(dir, base) {
 function workflowsBehind(root, base, source) {
   const files = (...args) => git(root, "diff", "--name-only", "--no-renames", ...args, "--", WORKFLOWS).split(`
 `);
-  const upstreamChanged = new Set(files(base, source));
+  const upstreamChanged = new Set(files(`${base}...${source}`));
   return files("--diff-filter=MD", "HEAD", source).filter((file) => file && upstreamChanged.has(file));
 }
 async function updateWorkflows(config, build, files, range) {

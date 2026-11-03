@@ -377,18 +377,23 @@ test("a new fork starts at the release it follows, and one with changes of its o
   mkdirSync(app, { recursive: true });
   sh(
     app,
-    "git init -q && echo one > notes.txt && git add -A && git commit -qm one && git tag v1.0.0 && echo unreleased > notes.txt && git commit -qam unreleased",
+    "git init -q && mkdir -p .github/workflows && echo one | tee notes.txt > .github/workflows/ci.yml && git add -A && git commit -qm one && git tag v1.0.0 && echo unreleased | tee notes.txt > .github/workflows/ci.yml && git commit -qam unreleased",
   );
   sh(home, `git clone -q ${app} stable && git clone -q ${app} stable-mine`);
   const mine = join(home, "stable");
   expect(autofork(mine, "init", "acme/stable").log).toContain(
     "autofork follows acme/stable's releases.",
   );
+  const runs = join(home, "stable-runs.log");
+  const config = JSON.parse(file(mine, ".autofork/config.json"));
+  write(mine, ".autofork/config.json", JSON.stringify({ ...config, agent: `echo ran >> ${runs}` }));
   sh(mine, "git add -A && git commit -qm 'track upstream'");
-  const { ok, output } = autofork(mine, "sync");
+  const { ok, log, output } = autofork(mine, "sync");
   expect(ok).toBe(true);
   expect(output).toMatchObject({ result: "synced", tag: "v1.0.0" });
   expect(file(mine, "notes.txt")).toBe("one\n");
+  expect(log).not.toContain("upstream changed");
+  expect(existsSync(runs)).toBe(false);
 
   const own = join(home, "stable-mine");
   expect(autofork(own, "init", "acme/stable").ok).toBe(true);
