@@ -2331,7 +2331,12 @@ echo '{"type":"result","subtype":"success","is_error":false,"result":"built it",
   };
   wish(mine, "five");
   const { ok, log } = autoforkWith(
-    { ...site, SITE_TOTALS: '{"rebuilds":3,"spent":40}' },
+    {
+      ...site,
+      SITE_TOTALS: '{"rebuilds":3,"spent":40}',
+      CLAUDECODE: "1",
+      CLAUDE_CODE_ENTRYPOINT: "sdk-cli",
+    },
     mine,
     "sync",
   );
