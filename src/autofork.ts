@@ -302,21 +302,20 @@ async function defaultFollow(root: string, upstream: string) {
 }
 
 function lastSync(root: string) {
-  const synced = git(
+  for (const subject of git(
     root,
     "log",
     "--first-parent",
-    "-1",
     "--format=%s",
     "-E",
     "--grep=^auto(fork|patch): sync ",
     "HEAD",
-  )
-    .split(" ")
-    .at(-1);
-  const last =
-    synced && run("git", ["rev-parse", "--verify", "--quiet", `${synced}^{commit}`], root);
-  return last && last.ok ? last : undefined;
+  ).split("\n")) {
+    const synced = subject.match(/^auto(?:fork|patch): sync .+ to ([0-9a-f]{7,40})$/)?.[1];
+    const last =
+      synced && run("git", ["rev-parse", "--verify", "--quiet", `${synced}^{commit}`], root);
+    if (last && last.ok) return last;
+  }
 }
 
 function baseline(root: string) {
@@ -342,14 +341,8 @@ async function newestGreen(root: string, config: Config, base: string, tip: stri
   for (const sha of git(root, "rev-list", "--first-parent", "--max-count=30", `${base}..${tip}`)
     .split("\n")
     .filter(Boolean)) {
-    const response = await github(`repos/${repo}/commits/${sha}/check-runs?per_page=100`);
-    if (!response.ok) {
-      say(`can't read upstream checks (${response.status}), using upstream's tip`);
-      return tip;
-    }
-    const conclusions: (string | null)[] = (await response.json()).check_runs.map(
-      (check: { conclusion: string | null }) => check.conclusion,
-    );
+    const conclusions = await checkRuns(repo, sha);
+    if (!conclusions) return tip;
     if (conclusions.includes(null) || conclusions.some((conclusion) => RED.includes(conclusion!)))
       continue;
     if (sha !== tip) say(`upstream's tip isn't green yet, using ${short(sha)}`);
@@ -358,6 +351,22 @@ async function newestGreen(root: string, config: Config, base: string, tip: stri
   if (base !== tip)
     say(`no newer upstream commit has passed its checks yet, staying on ${short(base)}`);
   return base;
+}
+
+async function checkRuns(repo: string, sha: string) {
+  const conclusions: (string | null)[] = [];
+  for (let page = 1; ; page++) {
+    const response = await github(
+      `repos/${repo}/commits/${sha}/check-runs?per_page=100&page=${page}`,
+    );
+    if (!response.ok) {
+      say(`can't read upstream checks (${response.status}), using upstream's tip`);
+      return;
+    }
+    const { total_count, check_runs } = await response.json();
+    conclusions.push(...check_runs.map((check: { conclusion: string | null }) => check.conclusion));
+    if (!check_runs.length || conclusions.length >= total_count) return conclusions;
+  }
 }
 
 function intent(root: string, id: string) {
@@ -994,7 +1003,7 @@ function scratch(root: string) {
 
 function worktree(root: string, base: string) {
   const dir = scratch(root);
-  if (existsSync(dir)) run("git", ["worktree", "remove", "--force", dir], root);
+  run("git", ["worktree", "remove", "--force", "--force", dir], root);
   rmSync(dir, { recursive: true, force: true });
   git(root, "worktree", "prune");
   git(root, "worktree", "add", "--detach", "--quiet", dir, base);
@@ -1535,9 +1544,12 @@ async function setup(
   await fetchUpstream(root, config);
   const { base, drift } = await check(root, { ...config, patches: [] }, workingTree(root));
   const readme = addNote(root, upstream, base, drift);
-  const inherited = git(root, "ls-files", ".github/workflows")
+  const upstreamHas = new Set(
+    git(root, "ls-tree", "-r", "--name-only", base, "--", WORKFLOWS).split("\n"),
+  );
+  const inherited = git(root, "ls-files", WORKFLOWS)
     .split("\n")
-    .filter((file) => file && !file.endsWith("/autofork.yml"));
+    .filter((file) => file && upstreamHas.has(file));
   if ("branch" in parseFollow(follow)) {
     say(
       `autofork follows ${upstream}'s ${follow} branch${chosen.follow ? "" : ", since it has no releases"}.`,
@@ -1605,6 +1617,8 @@ function claim(root: string, upstream: string) {
   run("gh", ["api", "-X", "PUT", `repos/${repo}/actions/permissions`, "-F", "enabled=true"], root);
   run("gh", ["repo", "edit", repo, "--enable-issues"], root);
   if (fork.parent?.full_name.toLowerCase() !== githubRepo(upstream)?.toLowerCase()) return;
+  const own = fork.description?.trim() ?? "";
+  if (/autofork/i.test(own)) return;
   const owner = api(`users/${fork.owner.login}`);
   const who =
     (owner?.type === "User" ? owner.name?.trim().split(/\s+/)[0] : owner?.name?.trim()) ||
@@ -1614,7 +1628,7 @@ function claim(root: string, upstream: string) {
     "PATCH",
     `repos/${repo}`,
     "-f",
-    `description=${[`${who}'s autofork`, fork.parent.description].filter(Boolean).join(" · ")}`,
+    `description=${[`${who}'s autofork`, own].filter(Boolean).join(" · ")}`,
   );
 }
 
