@@ -1633,7 +1633,7 @@ function picking(name: string, own: object = {}) {
 echo ran >> ${runs}
 touch ${tool}
 ${edit}
-node -e 'const fs = require("fs"); const c = JSON.parse(fs.readFileSync(".autofork/config.json")); fs.writeFileSync(".autofork/config.json", JSON.stringify({ ...c, ...JSON.parse(process.argv[1]) }))' '${JSON.stringify(checks)}'
+node -e 'const fs = require("fs"); const c = JSON.parse(fs.readFileSync(".autofork/config.json")); fs.writeFileSync(".autofork/config.json", JSON.stringify({ ...c, ...JSON.parse(process.argv[1]) }))' '${JSON.stringify(checks).replaceAll("'", "'\\''")}'
 `,
     );
   mkdirSync(join(mine, ".autofork/shout"), { recursive: true });
@@ -1702,11 +1702,13 @@ test("checks an agent picked that fail on upstream alone are dropped before it r
 
 test("a check an agent picks that fails with the patch it built stops the sync instead of shipping the patch", () => {
   const { mine, runs, agent } = picking("broken");
-  agent({ verify: "node --check app.js" }, `printf 'export const broken = ;\\n' > app.js`);
+  agent({ verify: `node -e "import('./app.js')"` }, `printf 'export const broken = ;\\n' > app.js`);
   const head = sh(mine, "git rev-parse HEAD");
   const { ok, log } = autofork(mine, "sync");
   expect(ok).toBe(false);
-  expect(log).toContain("verify fails with shout, which the agent built: node --check app.js");
+  expect(log).toContain(
+    `verify fails with shout, which the agent built: node -e "import('./app.js')"`,
+  );
   expect(readFileSync(runs, "utf8")).toBe("ran\n");
   expect(sh(mine, "git rev-parse HEAD")).toBe(head);
 });
