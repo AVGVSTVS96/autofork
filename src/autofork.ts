@@ -12,7 +12,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 
@@ -140,10 +140,13 @@ const configFile = (dir: string) => join(dir, DIR, "config.json");
 function output(values: Record<string, string>) {
   const file = process.env.GITHUB_OUTPUT;
   if (!file) return;
+  const end = `autofork-${randomUUID()}`;
   writeFileSync(
     file,
     Object.entries(values)
-      .map(([key, value]) => `${key}=${value}\n`)
+      .map(([key, value]) =>
+        value.includes("\n") ? `${key}<<${end}\n${value}\n${end}\n` : `${key}=${value}\n`,
+      )
       .join(""),
     { flag: "a" },
   );
@@ -411,7 +414,7 @@ function healPrompt(config: Fork, build: Build, id: string, broken: string) {
       : [
           `${DIR}/${id}/${id}.patch is how it was done before. Use it as a guide, not as text to force in.`,
         ]),
-    "Build it on the current source, the smallest change that fully does what PATCH.md says. Build on what upstream has now: where upstream has its own version of what the patch touches, change that rather than bringing the old one back. Follow upstream's code and conventions, and leave everything else alone.",
+    "Build it on what upstream has now, the smallest change that fully does what PATCH.md says: where upstream has its own version of what the patch touches, change that rather than bringing the old one back. Follow upstream's code and conventions, and leave everything else alone.",
     ...(config.verify
       ? []
       : [
@@ -434,20 +437,20 @@ This checkout is upstream at ${build.source}${before.length ? `, with ${before.j
 
 ${steps.map((step, index) => `${index + 1}. ${step}`).join("\n")}
 
-Don't edit anything ${fresh || !config.verify ? "else " : ""}in ${DIR}/ or ${WORKFLOWS}/, and don't commit. Leave only your source change: remove anything your checks generated that git would pick up${config.generated?.length ? `, but leave ${config.generated.join(", ")}, which the sync rebuilds` : ""}.
+The sync keeps your source change and puts ${DIR}/ and ${WORKFLOWS}/ back after you, except what this asks you to write there. Remove anything your checks generated that git would pick up${config.generated?.length ? `, but leave ${config.generated.join(", ")}, which the sync rebuilds` : ""}.
 If upstream already does what PATCH.md asks, or something close enough that building it would duplicate upstream's own version, write one line saying what upstream does to ${DIR}/${id}/UPSTREAM.md, and the sync leaves the patch out.`;
 }
 
 const installed = (bin: string) => run("sh", ["-c", `command -v ${bin}`], ".").ok;
 
-/* Claude's 5-hour limit drains faster for claude -p's own label than for interactive Claude Code, and
-   a run labeled autofork drains at the interactive rate (pingdotgg/t3code#24649). A label inherited
-   from a Claude Code session autofork runs in is that session's, not the user's */
+/* Claude's plans count a claude -p run, labeled sdk-cli, as more usage per token than interactive
+   Claude Code, and a run labeled autofork like interactive Claude Code (anthropics/claude-code#97074).
+   A label inherited from a Claude Code session autofork runs in is that session's, not the user's */
 const entrypoint = (!process.env.CLAUDECODE && process.env.CLAUDE_CODE_ENTRYPOINT) || "autofork";
 
 const codexHome = () => process.env.CODEX_HOME ?? join(homedir(), ".codex");
 
-function agentCommand(config: Config, cap: number) {
+function agentCommand(config: Config, cap: number, dir: string) {
   if (config.agent) return { agent: "custom", command: config.agent } as const;
   if (!process.env.CLAUDE_CODE_OAUTH_TOKEN && existsSync(join(codexHome(), "auth.json"))) {
     const codex = installed("codex") ? "codex" : "npx -y @openai/codex";
@@ -457,6 +460,16 @@ function agentCommand(config: Config, cap: number) {
     } as const;
   }
   const claude = installed("claude") ? "claude" : "npx -y @anthropic-ai/claude-code";
+  if (
+    process.env.RUNNER_ENVIRONMENT === "github-hosted" &&
+    !process.env.CLAUDE_CODE_OAUTH_TOKEN &&
+    /"loggedIn":\s*false/.test(
+      run("sh", ["-c", `${claude} auth status --json`], dir).out.toString(),
+    )
+  )
+    throw new Failure(
+      "Claude Code isn't signed in, so no agent can run: give the autofork step CLAUDE_CODE_OAUTH_TOKEN (claude setup-token prints one), or CODEX_AUTH for ChatGPT, from the fork's secrets",
+    );
   return {
     agent: "claude",
     command: `${claude} -p --dangerously-skip-permissions --output-format json --max-budget-usd ${cap}`,
@@ -596,7 +609,7 @@ async function agent(
   const dir = build.dir;
   const { limits, full, why } = await room(config);
   if (full) throw new Waiting(`${what} waits: ${full}`, why);
-  const { agent, command } = agentCommand(config, limits.rebuild);
+  const { agent, command } = agentCommand(config, limits.rebuild, dir);
   const row: Row = {
     patch: what,
     agent,
@@ -770,9 +783,9 @@ async function updateWorkflows(config: Fork, build: Build, files: string[], rang
 
 Bring into this fork's copies what it needs from those changes, and keep what the fork does differently. Add a workflow only where upstream split or renamed one the fork keeps. Only what you change in ${WORKFLOWS}/ is kept, except autofork.yml, and the sync commits it.`,
   ).catch((error) => {
-    if (!(error instanceof Waiting)) throw error;
+    if (!(error instanceof Failure)) throw error;
     say(
-      `workflow update has no room: ${error.why}. The workflows stay as they were, and later syncs won't bring them over.`,
+      `workflow update ${error instanceof Waiting ? `has no room: ${error.why}` : `can't run: ${error.message}`}. The workflows stay as they were, and later syncs won't bring them over.`,
     );
   });
   git(build.dir, "reset", "--quiet", head);
@@ -1114,7 +1127,7 @@ ${failed.lines}
 
 Make it pass. Fold each fix into the commit of the patch it belongs to (git commit --fixup, then an autosquash rebase onto ${build.steps[0]}), built on what upstream has now and in upstream's code and conventions, so each patch still does what its PATCH.md says. When you're done, the commits on ${build.steps[0]} are these patches, one each, named by its id, in this order.${config.setup && failed.check === "verify" ? ` Dependencies are installed: \`${config.setup}\` ran here, so run it again if you change them.` : ""}${later.length ? ` Patches after these aren't applied yet: ${later.join(", ")}. Each goes on top, so leave what its PATCH.md asks for to it.` : ""}
 
-Don't edit anything in ${DIR}/ or ${WORKFLOWS}/. Leave out of your commits anything your checks generated${config.generated?.length ? `, and the changes setup made to ${config.generated.join(", ")}, which the sync rebuilds` : ""}.
+The sync keeps your commits and puts ${DIR}/ and ${WORKFLOWS}/ back after you, except what this asks you to write there. Leave out of your commits anything your checks generated${config.generated?.length ? `, and the changes setup made to ${config.generated.join(", ")}, which the sync rebuilds` : ""}.
 If upstream now does what a patch's PATCH.md asks, or something close enough that the patch would duplicate upstream's own version, edit that patch's commit so it's empty, keeping the commit, and write one line saying what upstream does to ${DIR}/<id>/UPSTREAM.md. The sync leaves the patch out.`;
 }
 
@@ -1461,8 +1474,11 @@ jobs:
       # Set up the tools your setup and verify commands need here (node, bun, rust, ...).
       - id: autofork
         uses: AVGVSTVS96/autofork@v1
+        with:
+          codex-auth-url: ${SITE}/api/chatgpt/auth
         env:
           CLAUDE_CODE_OAUTH_TOKEN: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          CODEX_AUTH: \${{ secrets.CODEX_AUTH }}
 `;
 
 function options(args: string[]) {
@@ -1609,8 +1625,10 @@ async function init(root: string, args: string[]) {
     );
   await setup(root, args[0], options(args));
   claim(root, args[0]);
+  const mine = origin(root);
+  const repo = mine && ` --repo ${mine}`;
   say(
-    "Add a CLAUDE_CODE_OAUTH_TOKEN secret (claude setup-token), commit, and push. If you pushed before the secret was set, start the first sync by hand: gh workflow run autofork.yml",
+    `Add a CLAUDE_CODE_OAUTH_TOKEN secret (claude setup-token prints one), commit, and push. If you pushed before the secret was set, start the first sync by hand: gh workflow run autofork.yml${repo}. ${CHATGPT(repo)}`,
   );
   say(LINK);
 }
@@ -1639,10 +1657,13 @@ async function fork(cwd: string, args: string[]) {
   say(`${repo} now keeps itself current with ${upstream}. It's cloned in ./${basename(root)}.`);
   if (!secret)
     say(
-      `Last step: run claude setup-token, then gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo ${repo}, then start its first sync: gh workflow run autofork.yml --repo ${repo}`,
+      `Last step: run claude setup-token, then gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo ${repo}, then start its first sync: gh workflow run autofork.yml --repo ${repo}. ${CHATGPT(` --repo ${repo}`)}`,
     );
   say(LINK.replace("npx", `cd ${basename(root)} && npx`));
 }
+
+const CHATGPT = (repo: string) =>
+  `For ChatGPT instead, give the fork a Codex sign-in of its own, since each refresh retires the last one. Turn on device code login in ChatGPT's security settings, run sh -c 'd=$(mktemp -d) && trap "rm -rf \\"\\$d\\"" EXIT && CODEX_HOME="$d" codex login --device-auth && gh secret set CODEX_AUTH${repo} < "$d/auth.json"', then start its first sync: gh workflow run autofork.yml${repo}. Link it too (below): only a linked fork saves Codex's refreshed sign-ins, and without them it stops working within about a week.`;
 
 const LINK =
   "GitHub's timer can run hours late. Run it on time and track spend: npx github:AVGVSTVS96/autofork link";
@@ -1757,6 +1778,7 @@ async function main([name, ...args]: string[]) {
 }
 
 main(process.argv.slice(2)).catch((error) => {
+  output({ error: (error instanceof Error ? error.message : String(error)).slice(0, 50_000) });
   if (!(error instanceof Failure)) throw error;
   say(`autofork: ${error.message}`);
   process.exitCode = 1;
