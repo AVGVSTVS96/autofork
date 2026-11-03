@@ -784,6 +784,7 @@ test("a patch that still applies but fails verify waits for a run that heals", (
   expect(log).toContain(
     "verify fails, so a patch needs rebuilding. The next run that heals rebuilds it.",
   );
+  expect(log).not.toContain("alone");
   expect(sh(checkedFork, "git rev-parse HEAD")).toBe(head);
 });
 

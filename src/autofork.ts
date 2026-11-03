@@ -1059,7 +1059,7 @@ async function verify(config: Fork, build: Build, from?: string): Promise<void> 
   try {
     if (passesAt(config, build, build.steps.at(-1)!)) return;
     const failed = build.failed!;
-    const patched = build.steps.length > 1;
+    const patched = build.steps.length > 1 && (!!from || !!config.picked);
     if (patched) say(`${failed.check} fails, verify with upstream ${short(build.source)} alone`);
     const alone = patched && passesAt(config, build, build.steps[0]);
     if (!alone) {
