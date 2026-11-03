@@ -46,7 +46,7 @@ An updater installs a build only if it passes the updater's checks, and upstream
 
 ## 6. Check the real release
 
-The fork's first release comes from its next sync to an upstream release. To have it now, when the fork's last `autofork: sync` commit names a release's commit (`git rev-parse <tag>^{commit}`) and no run has released that tag yet, start the release workflow by hand: `gh workflow run <release workflow> --repo <fork> -f tag=<tag>`. Download the fork's release, not a local build, and check:
+The fork's first release comes from its next sync to an upstream release. To have it now, when the commit the fork's last `autofork: sync` message names is the release's (`gh api repos/<upstream>/commits/<tag> --jq .sha` starts with it) and no run has released that tag yet, start the release workflow by hand: `gh workflow run <release workflow> --repo <fork> -f tag=<tag>`. Download the fork's release, not a local build, and check:
 
 - The version is the upstream tag.
 - The feed file inside the app names the fork and the channel.
@@ -64,4 +64,4 @@ Keep the bundle id and app id, so the app finds its existing data. Download with
 
 From then on, each upstream release in the channel reaches the install through its own updater.
 
-A change to a patch reaches installs with the next upstream release.
+A change to a patch reaches installs with the next upstream release. A sync that has an agent build a patch on the same upstream release republishes that tag's release, which installs already on that version don't pick up.

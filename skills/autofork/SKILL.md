@@ -19,7 +19,7 @@ A fork with an `.autofork/` folder is upstream plus patches. A workflow rebuilds
 npx autofork fork owner/repo
 ```
 
-It follows upstream's releases, or its default branch if it has none. `--follow <branch>` picks a branch; `--follow 'v*-nightly.*'` picks a channel of releases by tag; stable is `releases`, the default. To see the channels upstream publishes, list its releases (`gh release list -R owner/repo --exclude-drafts -L 100`) and its tags (`git ls-remote --tags --refs --sort=-v:refname <url> | head -100`), since a channel can be published as tags alone. A channel's pattern keeps the part of the tag that names it and puts `*` for the numbers, like `v*-nightly.*`: `*` matches anything, so a pattern without that part also matches other channels, and a `follow` without `*` is read as a branch. It needs `gh` logged in. In a fork that's already cloned, use `init owner/repo` instead, with upstream's name, and save the fork's own changes as patches before pushing.
+It follows upstream's releases, or its default branch if it has none. `--follow <branch>` picks a branch; `--follow 'v*-nightly.*'` picks a channel of releases by tag; stable is `releases`, the default. To see the channels upstream publishes, list its releases (`gh release list -R owner/repo --exclude-drafts -L 100`) and its tags (`git ls-remote --tags --refs --sort=-v:refname <url> | head -100`), since a channel can be published as tags alone. A channel's pattern keeps the part of the tag that names it and puts `*` for the numbers, like `v*-nightly.*`: `*` matches anything, so a pattern without that part also matches other channels, and a `follow` without `*` is read as a branch. It needs `gh` logged in. In a fork that's already cloned, use `npx autofork init owner/repo` instead, with upstream's name, and save the fork's own changes as patches before pushing.
 
 If `CLAUDE_CODE_OAUTH_TOKEN` is set, `fork` also adds that secret. Otherwise give the user the sign-in steps it prints, for Claude or ChatGPT, then run `gh workflow run autofork.yml --repo <fork>`: the run `fork`'s push started fails without the secret, and this one builds the README line if `fork` wrote one.
 
@@ -29,7 +29,7 @@ GitHub runs the workflow on the `cron` line in `.github/workflows/autofork.yml`,
 
 ## Change a fork
 
-Start from a fork that has had its first sync: after `fork`, wait until an autofork run has gone through (`gh run list --repo <fork> -w autofork.yml --status success`), then `git pull`.
+Start from a fork whose first sync has pushed: after `fork`, `git pull` until `git log -1 --grep='^autofork: sync'` shows a commit.
 
 1. Make the change.
 2. Write `.autofork/<id>/PATCH.md`, the prose an agent rebuilds the change from after upstream rewrites that code: what the user wants and why, and why it's built the way it is where upstream does it differently. Write it from what the user asked for; a commit message or diff only says how.
