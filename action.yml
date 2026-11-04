@@ -6,7 +6,7 @@ branding:
   color: green
 inputs:
   token:
-    description: Token that pushes the signed sync commit
+    description: Token that pushes the signed sync commit and opens its issues
     default: ${{ github.token }}
   heal:
     description: Let the agent rebuild patches that no longer apply or fail verify. When false, they wait for a run that heals.
