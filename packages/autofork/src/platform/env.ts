@@ -3,22 +3,20 @@ const { env } = process;
 const filled = (value: string | undefined) => (value === "" ? undefined : value);
 
 const withheld = (name: string) => {
-  const value = filled(env[name]);
+  const value = env[name];
 
   Reflect.deleteProperty(env, name);
 
   return value;
 };
 
-const oidcUrl = withheld("ACTIONS_ID_TOKEN_REQUEST_URL");
-const oidcToken = withheld("ACTIONS_ID_TOKEN_REQUEST_TOKEN");
+const oidcUrl = filled(withheld("ACTIONS_ID_TOKEN_REQUEST_URL"));
+const oidcToken = filled(withheld("ACTIONS_ID_TOKEN_REQUEST_TOKEN"));
 
 export const oidc =
   oidcUrl === undefined || oidcToken === undefined ? undefined : { url: oidcUrl, token: oidcToken };
 
-export const ledgerPath = env.AUTOFORK_LEDGER;
-
-Reflect.deleteProperty(env, "AUTOFORK_LEDGER");
+export const ledgerPath = withheld("AUTOFORK_LEDGER");
 
 export const site = env.AUTOFORK_URL ?? "https://autofork.com";
 export const githubOutput = filled(env.GITHUB_OUTPUT);
