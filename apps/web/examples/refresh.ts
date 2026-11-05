@@ -2,64 +2,99 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 
 import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import sharp from "sharp";
+import type { Sharp } from "sharp";
 
 import { detect } from "../server/icon.ts";
 import { squash } from "../shared/api.ts";
+import type { Repo } from "../shared/api.ts";
 
-interface Example {
-  app: string;
-  repo: string;
-  change: string;
-  issue?: number;
-}
-interface Examples {
-  refreshed: string;
-  examples: Example[];
-}
+const Example = Schema.Struct({
+  app: Schema.String,
+  repo: Schema.String.check(Schema.isPattern(/^[\w.-]+\/[\w.-]+$/u)),
+  change: Schema.String,
+  issue: Schema.optionalKey(Schema.Number),
+});
 
-const FILE = "src/examples.json";
-const KNOWN = "src/known.json";
+type Example = typeof Example.Type;
+
+const Examples = Schema.Struct({ refreshed: Schema.String, examples: Schema.Array(Example) });
+
+const Issue = Schema.Struct({
+  pull_request: Schema.optionalKey(Schema.Unknown),
+  state: Schema.String,
+  repository_url: Schema.String,
+  html_url: Schema.String,
+});
+
+const GitHubRepo = Schema.Struct({
+  full_name: Schema.String,
+  name: Schema.String,
+  description: Schema.NullOr(Schema.String),
+  stargazers_count: Schema.Number,
+  owner: Schema.Struct({ login: Schema.String }),
+});
+
+const FILE = "src/lib/repos/examples.json";
+const KNOWN = "src/lib/repos/known.json";
 const EVERY = 4;
 
 const today = new Date().toISOString().slice(0, 10);
 const ICONS = "public/repos";
 const ICON_SIZE = 96;
-const icon = (repo: string) => repo.split("/")[1]!.toLowerCase();
-const read = (text: string): Examples => JSON.parse(text);
+const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
 
-const output = (key: string, value: string) =>
-  process.env.GITHUB_OUTPUT && appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\n`);
+const ownerAndName = (repo: string) => {
+  const [owner = "", name = ""] = repo.split("/");
 
-const github = async (path: string) => {
-  const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
-
-  const response = await fetch(`https://api.github.com/${path}`, {
-    headers: {
-      accept: "application/vnd.github+json",
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
-    },
-  });
-
-  return response.ok ? await response.json() : undefined;
+  return { owner, name };
 };
 
-/* Icons are drawn at 18 to 44 pixels, so a raster one is saved at most 96 pixels across: photos stay JPEG, the rest become palette PNGs.
-   SVGs stay as they are, and so does anything sharp can't read, like .ico */
+const iconName = (repo: string) => ownerAndName(repo).name.toLowerCase();
+
+const read = Schema.decodeUnknownSync(Schema.fromJsonString(Examples));
+
+const output = (key: string, value: string) => {
+  if (process.env.GITHUB_OUTPUT !== undefined) {
+    appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\n`);
+  }
+};
+
+const github = async <A, I>(path: string, schema: Schema.Codec<A, I>) => {
+  const headers = new Headers({ accept: "application/vnd.github+json" });
+
+  if (token !== undefined) {
+    headers.set("authorization", `Bearer ${token}`);
+  }
+
+  const response = await fetch(`https://api.github.com/${path}`, { headers });
+
+  return response.ok ? Schema.decodeUnknownSync(schema)(await response.json()) : undefined;
+};
+
+const sharpFormat = async (image: Sharp) => {
+  try {
+    const { format } = await image.metadata();
+
+    return format;
+  } catch {
+    return null;
+  }
+};
+
 const optimize = async (bytes: Uint8Array, extension: string) => {
   if (extension === "svg") {
     return { bytes, extension };
   }
+
   const image = sharp(bytes);
+  const format = await sharpFormat(image);
 
-  const format = await image.metadata().then(
-    ({ format }) => format,
-    () => {},
-  );
-
-  if (!format) {
+  if (format === null) {
     return { bytes, extension };
   }
+
   const small = image.resize(ICON_SIZE, ICON_SIZE, { fit: "inside", withoutEnlargement: true });
 
   return format === "jpeg"
@@ -75,28 +110,30 @@ const optimize = async (bytes: Uint8Array, extension: string) => {
       };
 };
 
-/* The icon T3 Code would show for the repo, as server/icon.ts detects it for any repo, saved next to the site
-   so the examples never wait on GitHub; a repo without one gets its owner's avatar */
-const repoIcon = async (repo: string) => {
-  const [owner, name] = repo.split("/") as [string, string];
+const download = async (url: string) => {
+  const response = await fetch(url);
 
-  const found = await Effect.runPromise(
-    detect(process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN, owner, name),
-  );
+  return new Uint8Array(await response.arrayBuffer());
+};
+
+const saveRepoIcon = async (repo: string) => {
+  const { owner, name } = ownerAndName(repo);
+  const found = await Effect.runPromise(detect(token, owner, name));
 
   if (!found) {
     throw new Error(`${repo} isn't a public GitHub repo`);
   }
-  const original =
-    found.icon?.bytes ?? new Uint8Array(await (await fetch(found.avatar)).arrayBuffer());
 
+  const original = found.icon?.bytes ?? (await download(found.avatar));
   const { bytes, extension } = await optimize(original, found.icon?.extension ?? "png");
-  const file = `${icon(repo)}.${extension}`;
+  const file = `${iconName(repo)}.${extension}`;
 
   for (const old of readdirSync(ICONS)) {
-    if (old !== file && old.slice(0, old.lastIndexOf(".")) === icon(repo))
+    if (old !== file && old.slice(0, old.lastIndexOf(".")) === iconName(repo)) {
       rmSync(`${ICONS}/${old}`);
+    }
   }
+
   writeFileSync(`${ICONS}/${file}`, bytes);
   console.log(
     `${repo}: ${found.icon ? found.icon.path : "no icon of its own, so its owner's avatar"}, ${original.length} bytes saved as ${bytes.length}`,
@@ -118,12 +155,43 @@ const due = () => {
   output("due", String(now));
 };
 
+const unlinked = (examples: readonly Example[]) =>
+  examples.filter(({ issue }) => issue === undefined).length;
+
+const issueProblems = async ({ app, repo, issue }: Example) => {
+  if (issue === undefined) {
+    return [];
+  }
+
+  const found = await github(`repos/${repo}/issues/${issue}`, Issue);
+
+  if (!found) {
+    return [`${app}: ${repo}#${issue} doesn't exist`];
+  }
+
+  const problems: string[] = [];
+
+  if (found.pull_request !== undefined) {
+    problems.push(`${app}: ${repo}#${issue} is a pull request, not an issue`);
+  }
+
+  if (found.state !== "open") {
+    problems.push(`${app}: ${repo}#${issue} is ${found.state}`);
+  }
+
+  if (!found.repository_url.toLowerCase().endsWith(`/repos/${repo.toLowerCase()}`)) {
+    problems.push(`${app}: ${repo}#${issue} moved to ${found.html_url}`);
+  }
+
+  return problems;
+};
+
 const check = async () => {
-  const before = read(execFileSync("git", ["show", `HEAD:${FILE}`], { encoding: "utf-8" }));
+  const before = read(execFileSync("git", ["show", `HEAD:./${FILE}`], { encoding: "utf-8" }));
   const after = read(readFileSync(FILE, "utf-8"));
   const problems: string[] = [];
 
-  before.examples.forEach((mine, index) => {
+  for (const [index, mine] of before.examples.entries()) {
     if (
       mine.issue === undefined &&
       JSON.stringify(after.examples[index]) !== JSON.stringify(mine)
@@ -132,81 +200,71 @@ const check = async () => {
         `${mine.app} is Bassim's own change and stays exactly as it was, at position ${index + 1}`,
       );
     }
-  });
-
-  const unlinked = (examples: Example[]) =>
-    examples.filter(({ issue }) => issue === undefined).length;
+  }
 
   if (unlinked(after.examples) !== unlinked(before.examples)) {
     problems.push("every example that isn't Bassim's names the open issue it comes from");
   }
+
   const apps = after.examples.map(({ app }) => squash(app));
 
   if (new Set(apps).size !== apps.length) {
     problems.push("each app appears once");
   }
 
-  const issues = await Promise.all(
-    after.examples.map(async ({ app, repo, issue }) => {
-      if (issue === undefined) {
-        return undefined;
-      }
-      const found = await github(`repos/${repo}/issues/${issue}`);
+  const [issues, repos] = await Promise.all([
+    Promise.all(after.examples.map(issueProblems)),
+    Promise.all(
+      after.examples.map(async (example) => ({
+        example,
+        found: await github(`repos/${example.repo}`, GitHubRepo),
+      })),
+    ),
+  ]);
 
-      if (!found) {
-        return void problems.push(`${app}: ${repo}#${issue} doesn't exist`);
-      }
-      if (found.pull_request) {
-        problems.push(`${app}: ${repo}#${issue} is a pull request, not an issue`);
-      }
-      if (found.state !== "open") {
-        problems.push(`${app}: ${repo}#${issue} is ${found.state}`);
-      }
-      if (!found.repository_url.toLowerCase().endsWith(`/repos/${repo.toLowerCase()}`)) {
-        problems.push(`${app}: ${repo}#${issue} moved to ${found.html_url}`);
-      }
-      return `${app} #${issue}`;
-    }),
-  );
+  problems.push(...issues.flat());
 
-  const repos = await Promise.all(after.examples.map(async ({ repo }) => github(`repos/${repo}`)));
-  after.examples.forEach(({ app, repo }, index) => {
-    if (!repos[index]) {
-      problems.push(`${app}: ${repo} isn't a public GitHub repo`);
+  for (const { example, found } of repos) {
+    if (!found) {
+      problems.push(`${example.app}: ${example.repo} isn't a public GitHub repo`);
     }
-  });
+  }
 
-  if (problems.length) {
+  if (problems.length > 0) {
     console.error(problems.map((problem) => `- ${problem}`).join("\n"));
     process.exit(1);
   }
 
-  const known: Record<string, unknown> = {};
+  const known: Record<string, { repo: Repo; others: readonly Repo[] }> = {};
 
-  for (const [index, { app, repo }] of after.examples.entries()) {
-    const found = repos[index];
-    const image = await repoIcon(found.full_name);
-    known[squash(app)] = {
-      repo: {
-        owner: found.owner.login,
-        name: found.name,
-        description: found.description,
-        stars: found.stargazers_count,
-        avatar: image,
-      },
-      others: [],
-    };
+  for (const { example, found } of repos) {
+    if (found) {
+      known[squash(example.app)] = {
+        repo: {
+          owner: found.owner.login,
+          name: found.name,
+          description: found.description,
+          stars: found.stargazers_count,
+          // oxlint-disable-next-line eslint/no-await-in-loop -- one repo at a time, as GitHub asks: https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api#avoid-concurrent-requests
+          avatar: await saveRepoIcon(found.full_name),
+        },
+        others: [],
+      };
+    }
   }
 
   writeFileSync(KNOWN, `${JSON.stringify(known, null, 2)}\n`);
   writeFileSync(
     FILE,
     `${JSON.stringify({ ...after, refreshed: today }, null, 2)
-      .replaceAll(/\n {6}/g, " ")
-      .replaceAll(/\n {4}\}/g, " }")}\n`,
+      .replaceAll(/\n {6}/gu, " ")
+      .replaceAll(/\n {4}\}/gu, " }")}\n`,
   );
 
-  const asks = issues.filter(Boolean);
+  const asks = after.examples.flatMap(({ app, issue }) =>
+    issue === undefined ? [] : [`${app} #${issue}`],
+  );
+
   console.log(`every example checks out: ${asks.join(", ")}`);
   output(
     "message",
@@ -214,4 +272,10 @@ const check = async () => {
   );
 };
 
-await ({ due, check } as Record<string, () => unknown>)[process.argv[2]!]!();
+const command = Schema.decodeUnknownSync(Schema.Literals(["due", "check"]))(process.argv[2]);
+
+if (command === "due") {
+  due();
+} else {
+  await check();
+}

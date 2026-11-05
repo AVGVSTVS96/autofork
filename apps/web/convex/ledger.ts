@@ -11,10 +11,11 @@ export const monthStart = (now = Date.now()) => {
 
 const PER_RUN = 50;
 const PER_MONTH = 200;
+const ENGINE_RETRY_WINDOW = 30_000;
 
-/* Queries take the month's start as an argument: Convex caches a query until what it read changes, not when the clock does */
+// Queries take the month's start as an argument: https://docs.convex.dev/understanding/best-practices/#date-in-queries
 export const thisMonth = async (ctx: QueryCtx, repoId: number, since = monthStart()) =>
-  ctx.db
+  await ctx.db
     .query("rebuilds")
     .withIndex("repoId", (q) => q.eq("repoId", repoId).gte("_creationTime", since))
     .order("desc")
@@ -42,22 +43,23 @@ export const open = internalMutation({
   handler: async (ctx, row) => {
     const month = await thisMonth(ctx, row.repoId);
 
-    /* The engine waits 10 s for an answer, so the same patch opened again in the same run within 30 s is that open retried, and gets its row */
-    const again = month.find(
+    const retried = month.find(
       (rebuild) =>
         rebuild.status === "running" &&
         rebuild.runId === row.runId &&
         (rebuild.attempt ?? 1) === row.attempt &&
         rebuild.patch === row.patch &&
-        rebuild._creationTime > Date.now() - 30_000,
+        rebuild._creationTime > Date.now() - ENGINE_RETRY_WINDOW,
     );
 
-    if (again) {
-      return { id: again._id };
+    if (retried) {
+      return { id: retried._id };
     }
+
     if (month.length >= PER_MONTH) {
       return { full: `autofork records up to ${PER_MONTH} rebuilds a fork a month` };
     }
+
     if (
       month.filter(
         (rebuild) => rebuild.runId === row.runId && (rebuild.attempt ?? 1) === row.attempt,
@@ -65,6 +67,7 @@ export const open = internalMutation({
     ) {
       return { full: `autofork records up to ${PER_RUN} rebuilds a run` };
     }
+
     return {
       id: await ctx.db.insert("rebuilds", {
         ...row,
@@ -91,16 +94,17 @@ export const close = internalMutation({
   },
   handler: async (ctx, { repoId, id, status, cost, model, inputTokens, outputTokens }) => {
     const key = ctx.db.normalizeId("rebuilds", id);
-    const row = key && (await ctx.db.get(key));
+    const row = key === null ? null : await ctx.db.get(key);
 
-    if (!row || row.repoId !== repoId || row.status !== "running") {
+    if (row === null || row.repoId !== repoId || row.status !== "running") {
       return false;
     }
+
     await ctx.db.patch(row._id, {
       status,
       endedAt: Date.now(),
-      ...(cost === undefined ? {} : { cost }),
-      model: model ?? null,
+      cost: cost ?? row.cost,
+      model: model?.slice(0, 100) ?? null,
       inputTokens: inputTokens ?? null,
       outputTokens: outputTokens ?? null,
     });
@@ -109,17 +113,23 @@ export const close = internalMutation({
   },
 });
 
-/* GitHub ends any job after 6 hours, so a rebuild still open after that never reported; it closes as stopped and keeps its cap, since what it spent is unknown */
+// GitHub ends a job after 6 hours: https://docs.github.com/en/actions/reference/limits
+const JOB_TIME_LIMIT = 6 * 3_600_000;
+
 export const expire = internalMutation({
   args: {},
   handler: async (ctx) => {
-    const cutoff = Date.now() - 6 * 3_600_000;
-
-    for (const row of await ctx.db
+    const unreported = await ctx.db
       .query("rebuilds")
-      .withIndex("status", (q) => q.eq("status", "running").lt("_creationTime", cutoff))
-      .take(500)) {
-      await ctx.db.patch(row._id, { status: "stopped", endedAt: Date.now() });
-    }
+      .withIndex("status", (q) =>
+        q.eq("status", "running").lt("_creationTime", Date.now() - JOB_TIME_LIMIT),
+      )
+      .take(500);
+
+    await Promise.all(
+      unreported.map(async (row) => {
+        await ctx.db.patch(row._id, { status: "stopped", endedAt: Date.now() });
+      }),
+    );
   },
 });

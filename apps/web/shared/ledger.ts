@@ -2,9 +2,7 @@ import type { LedgerClose, LedgerOpen, LinkAsk } from "@autofork/contract";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
-const Usd = Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0));
-
-const Count = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+import { Count, Usd } from "./settings.ts";
 
 const RepoPart = Schema.String.check(Schema.isPattern(/^(?!\.\.?$)[\w.-]+$/u));
 
