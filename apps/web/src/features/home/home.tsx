@@ -11,7 +11,7 @@ import { ClaudeIcon, OpenAIIcon } from "../../ui/icons.tsx";
 import { Nav } from "../../ui/nav.tsx";
 import { Ask } from "./ask.tsx";
 import type { AskHandle } from "./ask.tsx";
-import { start } from "./landing.ts";
+import { start } from "./landing/start.ts";
 import { Flow } from "./plan.tsx";
 import { History, Meant, MineToday, RunItYourself } from "./sections.tsx";
 import type { Mine } from "./sections.tsx";
