@@ -1,6 +1,7 @@
 import { getRouteApi } from "@tanstack/react-router";
 
-import { Nav, useTitle } from "./ui.tsx";
+import { Nav } from "../../ui/Nav.tsx";
+import { useTitle } from "../../ui/useTitle.ts";
 
 const route = getRouteApi("/verify");
 

@@ -1,7 +1,7 @@
 import { useState } from "react";
 
-import facts from "./facts.json";
-import { repoIcon } from "./known.ts";
+import facts from "../../lib/facts.json";
+import { repoIcon } from "../../lib/repos/known.ts";
 
 const [t3fork] = facts.forks;
 const install = `npx skills add ${facts.owner}/autofork`;

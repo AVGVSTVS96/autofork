@@ -1,5 +1,5 @@
+import { savedIcon } from "../../lib/repos/known.ts";
 import { claudePath } from "./claude-path.ts";
-import { savedIcon } from "./known.ts";
 
 /* T3 Code as it looks today, transcribed from its source (apps/web/src), with my context-usage change in the composer.
    The threads switch, and the context button toggles compact-before-send like the real one. */

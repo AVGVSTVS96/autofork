@@ -1,8 +1,10 @@
 import { useState } from "react";
 
-import type { Fork, Settings } from "../shared/api.ts";
-import { Live, useSpend } from "./live.tsx";
-import { SettingsCard, SignInAgain, SpendCard } from "./Spend.tsx";
+import type { Fork, Settings } from "../../../shared/api.ts";
+import { Live, useSpend } from "../../lib/spend/live.tsx";
+import { SignInAgain } from "../../ui/SignInAgain.tsx";
+import { SettingsCard } from "./SettingsCard.tsx";
+import { SpendCard } from "./SpendCard.tsx";
 
 const Cards = ({ fork }: { fork: Fork }) => {
   const forks = useSpend();

@@ -1,5 +1,5 @@
-import { squash } from "../shared/api.ts";
-import type { Repo } from "../shared/api.ts";
+import { squash } from "../../../shared/api.ts";
+import type { Repo } from "../../../shared/api.ts";
 import found from "./known.json";
 
 export interface Found {

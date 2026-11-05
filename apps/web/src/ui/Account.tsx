@@ -6,9 +6,9 @@ import type * as AtomRegistry from "effect/reactivity/AtomRegistry";
 import { useContext, useEffect, useId, useRef, useState } from "react";
 import type { KeyboardEvent, MouseEvent, PointerEvent } from "react";
 
-import type { MyFork } from "../shared/api.ts";
-import * as client from "./client.ts";
-import { repoIcon } from "./known.ts";
+import type { MyFork } from "../../shared/api.ts";
+import * as client from "../lib/api/client.ts";
+import { repoIcon } from "../lib/repos/known.ts";
 
 const INTENT = 120;
 const GRACE = 300;

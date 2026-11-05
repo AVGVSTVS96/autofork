@@ -1,7 +1,7 @@
 import { ConvexProvider, ConvexReactClient, useQuery } from "convex/react";
 import type { ReactNode } from "react";
 
-import { api } from "../convex/_generated/api";
+import { api } from "../../../convex/_generated/api";
 
 const url = import.meta.env.VITE_CONVEX_URL as string | undefined;
 const convex = url ? new ConvexReactClient(url) : undefined;

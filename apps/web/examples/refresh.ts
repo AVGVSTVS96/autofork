@@ -19,8 +19,8 @@ interface Examples {
   examples: Example[];
 }
 
-const FILE = "src/examples.json";
-const KNOWN = "src/known.json";
+const FILE = "src/lib/repos/examples.json";
+const KNOWN = "src/lib/repos/known.json";
 const EVERY = 4;
 
 const today = new Date().toISOString().slice(0, 10);

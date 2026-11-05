@@ -7,7 +7,7 @@ import * as HttpClientError from "effect/http/HttpClientError";
 import type * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as AtomHttpApi from "effect/reactivity/AtomHttpApi";
 
-import { Api } from "../shared/api.ts";
+import { Api } from "../../../shared/api.ts";
 
 export const report = (what: string, detail: Record<string, unknown>) => {
   const entry = {

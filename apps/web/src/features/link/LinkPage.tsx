@@ -3,8 +3,9 @@ import { getRouteApi } from "@tanstack/react-router";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import { useEffect, useState } from "react";
 
-import * as client from "./client.ts";
-import { Nav, useTitle } from "./ui.tsx";
+import * as client from "../../lib/api/client.ts";
+import { Nav } from "../../ui/Nav.tsx";
+import { useTitle } from "../../ui/useTitle.ts";
 
 const route = getRouteApi("/link/$owner/$name");
 

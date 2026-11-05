@@ -5,20 +5,15 @@ import * as AsyncResult from "effect/reactivity/AsyncResult";
 import { Component, lazy, Suspense, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
-import type { Fork, Run } from "../shared/api.ts";
-import * as client from "./client.ts";
-import { repoIcon } from "./known.ts";
-import {
-  ClaudeIcon,
-  Composer,
-  ForkIcon,
-  GitHubIcon,
-  Item,
-  Nav,
-  OpenAIIcon,
-  Retry,
-  useTitle,
-} from "./ui.tsx";
+import type { Fork, Run } from "../../../shared/api.ts";
+import * as client from "../../lib/api/client.ts";
+import { repoIcon } from "../../lib/repos/known.ts";
+import { ClaudeIcon, ForkIcon, GitHubIcon, OpenAIIcon } from "../../ui/icons.tsx";
+import { Item } from "../../ui/Item.tsx";
+import { Nav } from "../../ui/Nav.tsx";
+import { Retry } from "../../ui/Retry.tsx";
+import { useTitle } from "../../ui/useTitle.ts";
+import { Composer } from "./Composer.tsx";
 
 const route = getRouteApi("/$owner/$name");
 

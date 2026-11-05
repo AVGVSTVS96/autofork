@@ -2,13 +2,16 @@ import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { getRouteApi, Link } from "@tanstack/react-router";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 
-import type { MyFork } from "../shared/api.ts";
-import * as client from "./client.ts";
-import { repoIcon } from "./known.ts";
-import { Live, money, rebuilding, useSpend } from "./live.tsx";
-import type { Spend } from "./live.tsx";
-import { Meter, SignInAgain } from "./Spend.tsx";
-import { Nav, Retry, useTitle } from "./ui.tsx";
+import type { MyFork } from "../../../shared/api.ts";
+import * as client from "../../lib/api/client.ts";
+import { repoIcon } from "../../lib/repos/known.ts";
+import { Live, money, rebuilding, useSpend } from "../../lib/spend/live.tsx";
+import type { Spend } from "../../lib/spend/live.tsx";
+import { Meter } from "../../ui/Meter.tsx";
+import { Nav } from "../../ui/Nav.tsx";
+import { Retry } from "../../ui/Retry.tsx";
+import { SignInAgain } from "../../ui/SignInAgain.tsx";
+import { useTitle } from "../../ui/useTitle.ts";
 
 const route = getRouteApi("/forks");
 
