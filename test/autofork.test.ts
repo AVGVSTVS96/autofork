@@ -2698,3 +2698,22 @@ test("re-saving a patch under a later one that changes a CRLF file's last line, 
   expect(file(mine, ".autofork/b/b.patch")).toContain("-12\n\\ No newline at end of file\n+b\n");
   replays(mine, origin, lines("A", "b"));
 });
+
+test("re-saving a patch keeps its line between two of a later patch's changes", () => {
+  const mine = stacked("resave-between", { "list.txt": list({ 5: "a", 7: "b", 9: "b" }) });
+  write(mine, "list.txt", list({ 5: "a", 7: "b", 8: "A", 9: "b" }));
+  expect(autofork(mine, "save", "a").ok).toBe(true);
+  expect(file(mine, ".autofork/a/a.patch")).toContain("-8\n+A\n");
+  expect(file(mine, ".autofork/b/b.patch")).toContain("-7\n+b\n A\n-9\n+b\n");
+  holds(mine);
+});
+
+test("re-saving a patch with a line added below lines a later patch adds keeps it in place", () => {
+  const mine = stacked("resave-below", { "list.txt": list({ 2: "2\nb", 5: "a" }) });
+  const text = list({ 2: "2\nb", 5: "a", 9: "9\nA" });
+  write(mine, "list.txt", text);
+  expect(autofork(mine, "save", "a").ok).toBe(true);
+  expect(file(mine, ".autofork/a/a.patch")).toContain(" 9\n+A\n");
+  expect(file(mine, "list.txt")).toBe(text);
+  holds(mine);
+});

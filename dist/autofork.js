@@ -1112,21 +1112,28 @@ async function save(root, args) {
 function putUnder(config, build, id, changed) {
   const { dir, steps } = build;
   const file = join(git(dir, "rev-parse", "--path-format=absolute", "--git-dir"), "autofork-save.patch");
-  const applied = (tree, from, to, ...flags) => {
-    const diff = gitBytes(dir, "diff-tree", "-p", "--binary", "--full-index", from, to, "--", ...sourcePaths(config));
+  const applied = (tree, from, to, context, ...flags) => {
+    const diff = gitBytes(dir, "diff-tree", "-p", "--binary", "--full-index", `--unified=${context}`, from, to, "--", ...sourcePaths(config));
     if (!diff.length)
       return tree;
     writeFileSync(file, diff);
     git(dir, "read-tree", tree);
-    const args = ["apply", "--cached", "-C0", "--whitespace=nowarn", ...flags, file];
-    return run("git", args, dir).ok ? git(dir, "write-tree") : undefined;
+    const args = ["apply", "--cached", "-C0", "--unidiff-zero", "--whitespace=nowarn", ...flags];
+    return run("git", [...args, file], dir).ok ? git(dir, "write-tree") : undefined;
+  };
+  const takenOff = (mine, before, after) => {
+    for (const context of [3, 0]) {
+      const off = applied(mine, before, after, context, "--reverse");
+      const on = applied(before, after, mine, context);
+      if (off && on && !differing(dir, config, off, on).length)
+        return off;
+    }
   };
   let mine = changed;
   for (let index = config.patches.length - 1;config.patches[index] !== id; index--) {
     const later = config.patches[index];
-    const off = applied(mine, steps[index], steps[index + 1], "--reverse");
-    const on = applied(steps[index], steps[index + 1], mine);
-    if (!off || !on || differing(dir, config, off, on).length)
+    const off = takenOff(mine, steps[index], steps[index + 1]);
+    if (!off)
       throw new Failure(`your changes touch what ${later} changes, and ${later} goes on top of ${id}: save them to ${later}`);
     steps[index + 1] = mine;
     mine = off;

@@ -1458,22 +1458,23 @@ async function save(root: string, args: string[]) {
 }
 
 /* Your changes are made on top of every patch, so each patch after id is taken out from under them.
-   Next to a patch's lines git can place them only without context, which can put a line in the
-   wrong place, so a move counts only when both ways round agree: the patch taken off your changes,
-   and your changes put on the code before the patch */
+   Next to a patch's lines git can place them only with less context, or none between two of the
+   patch's changes, which can put a line in the wrong place, so a move counts only when both ways
+   round agree: the patch taken off your changes, and your changes put on the code before the patch */
 function putUnder(config: Fork, build: Build, id: string, changed: string) {
   const { dir, steps } = build;
   const file = join(
     git(dir, "rev-parse", "--path-format=absolute", "--git-dir"),
     "autofork-save.patch",
   );
-  const applied = (tree: string, from: string, to: string, ...flags: string[]) => {
+  const applied = (tree: string, from: string, to: string, context: number, ...flags: string[]) => {
     const diff = gitBytes(
       dir,
       "diff-tree",
       "-p",
       "--binary",
       "--full-index",
+      `--unified=${context}`,
       from,
       to,
       "--",
@@ -1482,15 +1483,23 @@ function putUnder(config: Fork, build: Build, id: string, changed: string) {
     if (!diff.length) return tree;
     writeFileSync(file, diff);
     git(dir, "read-tree", tree);
-    const args = ["apply", "--cached", "-C0", "--whitespace=nowarn", ...flags, file];
-    return run("git", args, dir).ok ? git(dir, "write-tree") : undefined;
+    const args = ["apply", "--cached", "-C0", "--unidiff-zero", "--whitespace=nowarn", ...flags];
+    return run("git", [...args, file], dir).ok ? git(dir, "write-tree") : undefined;
+  };
+  /* Context places a line that only a patch's lines are around; none places one between two of its
+     changes */
+  const takenOff = (mine: string, before: string, after: string) => {
+    for (const context of [3, 0]) {
+      const off = applied(mine, before, after, context, "--reverse");
+      const on = applied(before, after, mine, context);
+      if (off && on && !differing(dir, config, off, on).length) return off;
+    }
   };
   let mine = changed;
   for (let index = config.patches.length - 1; config.patches[index] !== id; index--) {
     const later = config.patches[index];
-    const off = applied(mine, steps[index], steps[index + 1], "--reverse");
-    const on = applied(steps[index], steps[index + 1], mine);
-    if (!off || !on || differing(dir, config, off, on).length)
+    const off = takenOff(mine, steps[index], steps[index + 1]);
+    if (!off)
       throw new Failure(
         `your changes touch what ${later} changes, and ${later} goes on top of ${id}: save them to ${later}`,
       );
