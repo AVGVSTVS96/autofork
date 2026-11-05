@@ -1,4 +1,3 @@
-// oxlint-disable max-classes-per-file -- a run ends in one of three ways, and each is a subclass of the one before
 export class AutoforkError extends Error {
   override readonly name: string = "AutoforkError";
 }

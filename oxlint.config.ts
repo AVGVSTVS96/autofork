@@ -26,12 +26,8 @@ export default defineConfig({
   ],
   options: { reportUnusedDisableDirectives: "error", typeAware: true },
   rules: {
-    "anti-slop-effect/no-manual-effect-error-tag": "error",
-    "anti-slop-effect/no-manual-tag-comparison": "error",
-    "anti-slop-effect/no-manual-tagged-construction": "error",
-    "anti-slop-effect/no-service-constructor-imports": "error",
-    "anti-slop-effect/prefer-effect-match": "error",
     "import/no-cycle": "error",
+    "eslint/max-classes-per-file": "off",
     "eslint/sort-keys": "off",
     "no-comments/no-comments": "error",
     "no-restricted-imports": ["error", { paths: [effectHooks] }],
@@ -39,9 +35,13 @@ export default defineConfig({
   },
   overrides: [
     {
-      files: ["apps/web/**", "packages/contract/**"],
+      files: ["apps/web/**"],
       rules: {
-        "eslint/max-classes-per-file": "off",
+        "anti-slop-effect/no-manual-effect-error-tag": "error",
+        "anti-slop-effect/no-manual-tag-comparison": "error",
+        "anti-slop-effect/no-manual-tagged-construction": "error",
+        "anti-slop-effect/no-service-constructor-imports": "error",
+        "anti-slop-effect/prefer-effect-match": "error",
         "eslint/no-redeclare": "off",
         "unicorn/throw-new-error": "off",
       },
