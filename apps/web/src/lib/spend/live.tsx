@@ -1,52 +1,92 @@
 import { ConvexProvider, ConvexReactClient, useQuery } from "convex/react";
-import type { ReactNode } from "react";
+import * as Data from "effect/Data";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
+import * as Schedule from "effect/Schedule";
+import * as Schema from "effect/Schema";
+import type { ReactElement } from "react";
 
 import { api } from "../../../convex/_generated/api";
 
-const url = import.meta.env.VITE_CONVEX_URL as string | undefined;
-const convex = url ? new ConvexReactClient(url) : undefined;
+const convex = Option.map(
+  Schema.decodeUnknownOption(Schema.NonEmptyString)(import.meta.env.VITE_CONVEX_URL),
+  (url) => new ConvexReactClient(url),
+);
 
-/* Only a 401 means signed out: a throw would leave Convex's socket paused, and null for a hiccup would show "sign in again" to someone signed in */
-const token = async ({ forceRefreshToken }: { forceRefreshToken: boolean }) => {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      const response = await fetch(`/api/auth/token${forceRefreshToken ? "?fresh=1" : ""}`);
+class Unauthorized extends Data.TaggedError("Unauthorized") {}
 
-      if (response.status === 401 && attempt > 2) {
-        return null;
-      }
+class Unavailable extends Data.TaggedError("Unavailable") {}
 
-      if (response.ok) {
-        return ((await response.json()) as { token: string }).token;
-      }
-    } catch {}
+const TokenBody = Schema.Struct({ token: Schema.String });
 
-    await new Promise((resolve) =>
-      setTimeout(resolve, Math.min(30_000, 1000 * 2 ** attempt) * (0.5 + Math.random())),
-    );
+const readToken = (response: Response): Effect.Effect<string, Unauthorized | Unavailable> => {
+  if (response.status === 401) {
+    return Effect.fail(new Unauthorized());
   }
+
+  if (!response.ok) {
+    return Effect.fail(new Unavailable());
+  }
+
+  return Effect.tryPromise({
+    try: async () => Schema.decodeUnknownSync(TokenBody)(await response.json()).token,
+    catch: () => new Unavailable(),
+  });
 };
 
-convex?.setAuth(token);
+const fetchToken = (fresh: boolean) =>
+  Effect.tryPromise({
+    try: async () => await fetch(`/api/auth/token${fresh ? "?fresh=1" : ""}`),
+    catch: () => new Unavailable(),
+  }).pipe(Effect.flatMap(readToken));
 
-export const Live = ({ children }: { children: ReactNode }) =>
-  convex ? <ConvexProvider client={convex}>{children}</ConvexProvider> : <>{children}</>;
+const backoff = Schedule.exponential("1 second").pipe(
+  Schedule.modifyDelay(({ duration }) =>
+    Effect.succeed(Duration.min(duration, Duration.seconds(30))),
+  ),
+  Schedule.jittered,
+);
 
-export const monthStart = () => {
+const tokenOrSignedOut = async ({ forceRefreshToken }: { forceRefreshToken: boolean }) =>
+  await Effect.runPromise(
+    fetchToken(forceRefreshToken).pipe(
+      Effect.retry({ schedule: backoff, while: Predicate.isTagged("Unavailable") }),
+      Effect.retry({ schedule: backoff, times: 3 }),
+      Effect.catchTag("Unauthorized", () => Effect.succeed(null)),
+    ),
+  );
+
+if (Option.isSome(convex)) {
+  convex.value.setAuth(tokenOrSignedOut);
+}
+
+export const Live = ({ children }: { children: ReactElement }) =>
+  Option.isSome(convex) ? (
+    <ConvexProvider client={convex.value}>{children}</ConvexProvider>
+  ) : (
+    children
+  );
+
+const monthStart = () => {
   const now = new Date();
 
   return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
 };
 
+const useLiveSpend = () => useQuery(api.dashboard.forks, { since: monthStart() });
+
+const useNoSpend = (): ReturnType<typeof useLiveSpend> => undefined;
+
+export const useSpend = Option.isSome(convex) ? useLiveSpend : useNoSpend;
+
 export type Spend = NonNullable<ReturnType<typeof useSpend>>[number];
 
-/* undefined while loading, null when signed out; only forks the viewer can push to */
-export const useSpend: () => ReturnType<typeof useQuery<typeof api.dashboard.forks>> | undefined =
-  convex ? () => useQuery(api.dashboard.forks, { since: monthStart() }) : () => {};
+const GITHUB_JOB_TIME_LIMIT = 6 * 3_600_000;
 
-/* A rebuild that hasn't reported after GitHub's longest job time never will; it keeps counting at its cap */
 export const rebuilding = (row: { status: string; startedAt: number }) =>
-  row.status === "running" && Date.now() - row.startedAt < 6 * 3_600_000;
+  row.status === "running" && Date.now() - row.startedAt < GITHUB_JOB_TIME_LIMIT;
 
 export const money = (usd: number) =>
-  `$${usd < 10 && usd % 1 ? usd.toFixed(2) : Math.round(usd).toLocaleString()}`;
+  `$${usd < 10 && usd % 1 !== 0 ? usd.toFixed(2) : Math.round(usd).toLocaleString()}`;

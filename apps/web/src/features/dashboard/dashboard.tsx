@@ -14,6 +14,14 @@ import { SignInAgain } from "../../ui/sign-in-again.tsx";
 
 const route = getRouteApi("/forks");
 
+const schedule = (spend: Spend | undefined) => {
+  if (spend === undefined) {
+    return "";
+  }
+
+  return spend.linked ? "on time" : "GitHub's schedule";
+};
+
 const Row = ({ fork, spend }: { fork: MyFork; spend: Spend | undefined }) => {
   const { limits } = fork.settings;
   const running = spend?.rebuilds.some(rebuilding);
@@ -28,7 +36,9 @@ const Row = ({ fork, spend }: { fork: MyFork; spend: Spend | undefined }) => {
       >
         <img
           src={
-            fork.upstream ? repoIcon(fork.upstream) : `https://github.com/${fork.owner}.png?size=40`
+            fork.upstream === null
+              ? `https://github.com/${fork.owner}.png?size=40`
+              : repoIcon(fork.upstream)
           }
           alt=""
         />
@@ -37,8 +47,8 @@ const Row = ({ fork, spend }: { fork: MyFork; spend: Spend | undefined }) => {
             {fork.owner}/{fork.name}
           </b>
           <small>
-            {spend ? (spend.linked ? "on time" : "GitHub's schedule") : ""}
-            {running ? " · rebuilding now" : ""}
+            {schedule(spend)}
+            {running === true ? " · rebuilding now" : ""}
           </small>
         </span>
       </Link>
@@ -68,43 +78,33 @@ const Forks = () => {
     return <p className="note wait">Loading your forks…</p>;
   }
 
-  if (!mine.value.length) {
+  if (mine.value.length === 0) {
     return (
       <p className="note">
-        Forks you make on autofork show up here, with what each one's rebuilds cost.
+        Forks you make on autofork show up here, with what each one&apos;s rebuilds cost.
       </p>
     );
   }
 
-  const total = mine.value.reduce(
-    (sum, fork) => sum + (spend?.find((row) => row.repoId === fork.repoId)?.spent ?? 0),
-    0,
-  );
+  const spendOf = (fork: MyFork) => spend?.find((row) => row.repoId === fork.repoId);
+  const counted = mine.value.some((fork) => spendOf(fork) !== undefined);
+  const total = mine.value.reduce((sum, fork) => sum + (spendOf(fork)?.spent ?? 0), 0);
 
   return (
     <>
       {spend === null ? <SignInAgain back="/forks" many /> : null}
-      {spend && !spend.some((row) => mine.value.some((fork) => fork.repoId === row.repoId)) ? (
-        <p className="fine">Spend isn't available yet. Reload in a minute.</p>
+      {spend !== null && spend !== undefined && !counted ? (
+        <p className="fine">Spend isn&apos;t available yet. Reload in a minute.</p>
       ) : null}
       <p className="facts">
         <span>
-          {spend?.some((row) => mine.value.some((fork) => fork.repoId === row.repoId))
-            ? money(total)
-            : "–"}{" "}
-          this month across {mine.value.length} fork{mine.value.length === 1 ? "" : "s"}, at API
-          prices
+          {counted ? money(total) : "–"} this month across {mine.value.length} fork
+          {mine.value.length === 1 ? "" : "s"}, at API prices
         </span>
       </p>
       <ul className="card list dash">
         {mine.value.map((fork) => (
-          <Row
-            key={fork.repoId}
-            fork={fork}
-            spend={
-              spend ? (spend.find((row) => row.repoId === fork.repoId) ?? undefined) : undefined
-            }
-          />
+          <Row key={fork.repoId} fork={fork} spend={spendOf(fork)} />
         ))}
       </ul>
     </>
@@ -113,7 +113,7 @@ const Forks = () => {
 
 export const Dashboard = () => {
   const me = useAtomValue(client.me);
-  const signedOut = AsyncResult.isSuccess(me) && !me.value;
+  const signedOut = AsyncResult.isSuccess(me) && me.value === null;
   const { error } = route.useSearch();
 
   return (
@@ -123,7 +123,7 @@ export const Dashboard = () => {
         <header className="fork-head">
           <h1>Your forks</h1>
         </header>
-        {error ? <p className="bad">{error}</p> : null}
+        {error === undefined ? null : <p className="bad">{error}</p>}
         {signedOut ? (
           <p className="note">
             <a className="btn primary" href="/api/github/start?back=/forks">

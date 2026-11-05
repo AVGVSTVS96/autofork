@@ -1,4 +1,4 @@
-import type { FormEvent } from "react";
+import type { SubmitEvent } from "react";
 
 export const Composer = ({
   value,
@@ -17,7 +17,7 @@ export const Composer = ({
   action: string;
   disabled: boolean;
 }) => {
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const submit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     const text = value.trim();
 

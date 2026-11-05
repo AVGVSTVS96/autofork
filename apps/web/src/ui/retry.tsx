@@ -7,7 +7,7 @@ export const Retry = ({
   onRetry: () => void;
   className?: string;
 }) => (
-  <div className={className ? `retry ${className}` : "retry"} role="alert">
+  <div className={className === undefined ? "retry" : `retry ${className}`} role="alert">
     <p className="bad">{message}</p>
     <button type="button" className="btn" onClick={onRetry}>
       Try again
