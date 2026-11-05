@@ -1,0 +1,150 @@
+# PATCH.md
+
+**A spec for defining agent-healable source patches in markdown**
+
+`v0.0.1` · [patchmd.vercel.app](https://patchmd.vercel.app)
+
+PATCH.md is a proposed new spec for defining agent-healable source patches in markdown. With a single markdown file, agents can self-heal, updating patch definitions when the source changes and re-applying patches.
+
+The file holds two things:
+
+- **intent**: written in plain prose
+- **patch edits**: any format diff, patch, edit, or search/replace hunk
+
+That pair is enough to maintain a [self-healing fork](#example-a-self-healing-fork) of an upstream repo from CI alone: a script applies the edits, and when one drifts, an agent reads the file and heals it.
+
+<!-- spec:start -->
+
+<!-- Generated from apps/website/src/spec.mdx. Edit that file instead, then run: vp run gen-readme -->
+
+## The spec
+
+A `PATCH.md` file kept at `<patch-id>/PATCH.md`. The `<patch-id>` can be a custom or generated name, id, etc.
+
+### Structure
+
+No frontmatter or headings are required. The file is the patch's intent, in plain prose:
+
+```md
+# Patch Title
+
+> What the patch does and why, in plain prose. Helps the agent understand
+> the original intent so it can easily heal or redesign the patch.
+```
+
+Write it so an agent could build the patch on whatever the source looks like at the time.
+
+### Patch format
+
+The patch is a `<patch-id>.patch` git diff next to the `PATCH.md`, which `git apply` takes as is:
+
+```txt
+<patch-id>/
+├── PATCH.md
+└── <patch-id>.patch
+```
+
+Edits can also live inside the `PATCH.md` as fenced code blocks. Use any diff or patch format you like. The same `search/replace` and `diff` formats agents already produce work here, as do conventional patches supported by `git apply`, `patch`, or a library like Google's `diff-match-patch`. Some examples:
+
+A `search/replace` block, showing the full before and after:
+
+```patch file=dist/package-manager-cli.js
+<<<<<<< SEARCH
+    console.log(chalk.green(`Updated ${APP_NAME}`));
+=======
+    console.log(chalk.green(`Updated ${APP_NAME}`));
+    try { (await import("node:child_process")).spawnSync("pi-patcher", ["reconcile"], { stdio: "inherit" }); } catch {}
+>>>>>>> REPLACE
+```
+
+A `diff` hunk, marking only the changed lines:
+
+```diff file=dist/package-manager-cli.js
+@@ pi self update success branch @@
+    console.log(chalk.green(`Updated ${APP_NAME}`));
++    try { (await import("node:child_process")).spawnSync("pi-patcher", ["reconcile"], { stdio: "inherit" }); } catch {}
+```
+
+A standard `git patch`, applicable as-is with existing tools:
+
+```diff
+diff --git a/dist/package-manager-cli.js b/dist/package-manager-cli.js
+--- a/dist/package-manager-cli.js
++++ b/dist/package-manager-cli.js
+@@ -842,6 +842,7 @@
+    console.log(chalk.green(`Updated ${APP_NAME}`));
++    try { (await import("node:child_process")).spawnSync("pi-patcher", ["reconcile"], { stdio: "inherit" }); } catch {}
+```
+
+> [!NOTE]
+> Each edit needs to identify the file it targets. A git or unified diff already carries the path in its header; for formats that don't, add `file=<path>` to the fence so tools can find the target without interpreting prose.
+
+All edits in a patch should apply together or not at all. If any edit fails, the patch has drifted.
+
+### Agent-driven healing
+
+You can use existing tools to apply patches when they apply cleanly, and call an agent when they drift or don't exist yet. The agent builds the patch from the intent on the current source. If the source already does what the intent asks, it says so and the patch is dropped. Verify a healed patch with the project's tests or checks before accepting it.
+
+You can also have agents handle the full process of applying and healing patches, which can be as simple as `SKILL.md` or `AGENTS.md` instructions. You can even set up a GitHub workflow that maintains a project fork, integrating new upstream commits on a set schedule.
+
+### Example: a self-healing fork
+
+A patched fork of an upstream repo, maintained with no bespoke tooling. The fork's entire divergence from upstream is the `patches/` tree, and the fork branch is rebuilt from it on every sync:
+
+```txt
+my-fork/
+├── patches/
+│   ├── disable-telemetry/
+│   │   ├── PATCH.md
+│   │   └── disable-telemetry.patch
+│   └── custom-auth/
+│       ├── PATCH.md
+│       └── custom-auth.patch
+└── .github/workflows/sync-upstream.yml
+```
+
+On a schedule or on upstream release, the workflow:
+
+1. resets the fork branch to upstream
+2. applies each patch with `git apply`
+3. calls an agent to heal any patch that fails, and saves the fresh diff
+4. runs the project's tests to verify each patch still does what its intent says
+5. pushes when everything is clean, or opens a PR for review when a patch was healed
+
+When every patch applies cleanly, no model is called. When one drifts, its `PATCH.md` becomes the prompt.
+
+[autopatch](https://github.com/AVGVSTVS96/autopatch) packages this workflow as one GitHub Action and CLI.
+
+### Tools built on PATCH.md
+
+- [pi-patcher](https://github.com/AVGVSTVS96/pi-patcher)
+- [autopatch](https://github.com/AVGVSTVS96/autopatch)
+
+### Example
+
+The `bootstrap-hook` patch from [pi-patcher](https://github.com/AVGVSTVS96/pi-patcher), defined as a single `PATCH.md`:
+
+````md
+# Bootstrap hook
+
+Patches Pi to run `pi-patcher reconcile` after `pi update`.
+
+After `pi update` finishes updating, run `pi-patcher reconcile` so every
+installed patch is re-applied to the freshly updated install.
+
+The hook goes right after the existing `Updated ${APP_NAME}` success log in pi's
+self-update path. It must stay valid in pi's compiled ESM output, and it must not
+change update behavior if `pi-patcher` is missing or fails to start.
+
+```diff file=dist/package-manager-cli.js
+@@ pi self update success branch @@
+    console.log(chalk.green(`Updated ${APP_NAME}`));
++    try { (await import("node:child_process")).spawnSync("pi-patcher", ["reconcile"], { stdio: "inherit" }); } catch {}
+```
+````
+
+<!-- spec:end -->
+
+---
+
+Contributions and proposals are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
