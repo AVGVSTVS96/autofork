@@ -2480,12 +2480,12 @@ test("a patch whose deletion upstream made too is healed when the agent finds no
 });
 
 test("save has an agent rebuild a patch whose change overlaps a later patch's lines", () => {
-  const origin = join(home, "overlap");
-  const mine = join(home, "overlap-fork");
+  const origin = join(home, "refold");
+  const mine = join(home, "refold-fork");
   mkdirSync(origin);
   write(origin, "lines.txt", "one\ntwo\nthree\nfour\n");
   sh(origin, "git init -q && git add -A && git commit -qm init");
-  sh(home, `git clone -q ${origin} overlap-fork`);
+  sh(home, `git clone -q ${origin} refold-fork`);
   expect(autofork(mine, "init", origin).ok).toBe(true);
   sh(mine, "git add -A && git commit -qm track");
   for (const [id, from, to] of [
@@ -2497,10 +2497,10 @@ test("save has an agent rebuild a patch whose change overlaps a later patch's li
     expect(autofork(mine, "save", id).ok).toBe(true);
     sh(mine, `git add -A && git add -f .autofork && git commit -qm ${id}`);
   }
-  const script = join(home, "overlap-agent.sh");
+  const script = join(home, "refold-agent.sh");
   write(
     home,
-    "overlap-agent.sh",
+    "refold-agent.sh",
     `grep -q '^<<<<<<<' lines.txt || exit 1
 case "$(cat)" in
   *.autofork/b/PATCH.md*) printf 'one\\nTwo!\\nTHREE\\nfour\\n' > lines.txt ;;
