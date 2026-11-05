@@ -6,7 +6,9 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: write
   contents: write
+  pull-requests: write
 
 concurrency: examples
 
@@ -47,16 +49,14 @@ jobs:
           git diff --cached --quiet && exit 0
           tree="$(git write-tree)"
           remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          scratch="refs/heads/examples-objects-${GITHUB_RUN_ID}"
+          branch="examples/${GITHUB_RUN_ID}"
           git -c user.name=autofork -c user.email=autofork@users.noreply.github.com commit --quiet -m "$MESSAGE"
-          git push --quiet "$remote" "HEAD:$scratch"
+          git push --quiet "$remote" "HEAD:refs/heads/$branch"
           signed="$(gh api "repos/$GITHUB_REPOSITORY/git/commits" -f message="$MESSAGE" -f tree="$tree" -f "parents[]=$GITHUB_SHA" --jq .sha)"
-          if gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/heads/main" -f sha="$signed" > /dev/null; then
-            echo "pushed ${signed:0:12} to main, signed by GitHub"
-          else
-            echo "::warning::main moved while this ran, so tomorrow's run refreshes again"
-          fi
-          git push --quiet "$remote" --delete "$scratch"
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/heads/$branch" -f sha="$signed" -F force=true > /dev/null
+          gh pr create --head "$branch" --title "$MESSAGE" --body "The daily examples refresh."
+          gh workflow run check.yml --ref "$branch"
+          gh pr merge "$branch" --squash --auto --delete-branch
 
       - name: Capture Claude accounting
         if: always()
