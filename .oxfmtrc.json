@@ -7,6 +7,7 @@
     ".github/actions/**",
     "apps/web/convex/_generated/**",
     "packages/autofork/dist/**",
+    "packages/contract/dist/**",
     "apps/spec/README.md"
   ]
 }

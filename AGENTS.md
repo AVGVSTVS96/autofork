@@ -13,15 +13,15 @@ Forks are the first job. The same agent is meant to grow into automatic maintena
 
 ## Map
 
-| Folder                    | Job                                                 | Imports                       |
-| ------------------------- | --------------------------------------------------- | ----------------------------- |
-| `action.yml`, `action.sh` | the action forks run as `AVGVSTVS96/autofork@v1`    | `packages/autofork/dist`      |
-| `packages/contract`       | the fork workflow, schedules, limits, ledger bodies | nothing                       |
-| `packages/autofork`       | the engine and CLI, published to npm as `autofork`  | contract, bundled into `dist` |
-| `apps/web`                | autofork.com: Vite app, Effect server, Convex       | contract                      |
-| `apps/spec`               | the PATCH.md spec site, patchmd.vercel.app          | nothing                       |
-| `brand`                   | logo, fonts, copy, launch kit, videos               | nothing                       |
-| `skills/autofork`         | the skill agents install                            | nothing                       |
+| Folder                    | Job                                                                               | Imports                       |
+| ------------------------- | --------------------------------------------------------------------------------- | ----------------------------- |
+| `action.yml`, `action.sh` | the action forks run as `AVGVSTVS96/autofork@v1`                                  | `packages/autofork/dist`      |
+| `packages/contract`       | the fork workflow, schedules, limits, ledger bodies, `dist/` committed for Vercel | nothing                       |
+| `packages/autofork`       | the engine and CLI, published to npm as `autofork`                                | contract, bundled into `dist` |
+| `apps/web`                | autofork.com: Vite app, Effect server, Convex                                     | contract                      |
+| `apps/spec`               | the PATCH.md spec site, patchmd.vercel.app                                        | nothing                       |
+| `brand`                   | logo, fonts, copy, launch kit, videos                                             | nothing                       |
+| `skills/autofork`         | the skill agents install                                                          | nothing                       |
 
 ## Rules and what enforces them
 
@@ -32,7 +32,7 @@ Forks are the first job. The same agent is meant to grow into automatic maintena
 | No import reaches outside its package                       | `rootDir` in each `tsconfig.json` |
 | No comments, `as`, `any` or `useEffect`                     | `oxlint.config.ts`                |
 | A page in `apps/web/src/features` never imports another     | `oxlint.config.ts` override       |
-| `dist/autofork.js` matches the source                       | CI's `git diff --exit-code`       |
+| Each `dist/` matches its source                             | CI's `git diff --exit-code`       |
 | The action download stays small                             | `.gitattributes` `export-ignore`  |
 
 ## Principles

@@ -19,6 +19,7 @@ export default defineConfig({
     "tools/oxlint/anti-slop-effect/**",
     "apps/web/convex/_generated/**",
     "packages/autofork/dist/**",
+    "packages/contract/dist/**",
   ],
   jsPlugins: [
     { name: "no-comments", specifier: "./tools/oxlint/no-comments.ts" },

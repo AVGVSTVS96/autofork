@@ -2,3 +2,4 @@ apps/** export-ignore
 brand/** export-ignore
 packages/autofork/src/** export-ignore
 packages/autofork/test/** export-ignore
+packages/contract/dist/** -diff linguist-generated
