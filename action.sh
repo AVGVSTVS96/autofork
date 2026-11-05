@@ -95,6 +95,8 @@ fi
 [ "$(sed -n 's/^result=//p' "$GITHUB_OUTPUT" | tail -1)" != current ] || close_failed "Up to date in $run_url."
 
 if [ "$(git rev-parse HEAD)" != "$head" ]; then
+  # Until the branch moves, a failing step means nothing was pushed, whatever the sync said
+  trap 'printf "result=failed\nerror=the sync built its commit, but pushing it to %s failed, so nothing was pushed. The run'"'"'s log says why.\n" "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"' ERR
   parents=()
   for parent in $(git log -1 --format=%P); do parents+=(-f "parents[]=$parent"); done
   pusher="$GH_TOKEN"
@@ -123,6 +125,7 @@ if [ "$(git rev-parse HEAD)" != "$head" ]; then
     echo "result=moved" >> "$GITHUB_OUTPUT"
     exit 0
   fi
+  trap - ERR
   echo "pushed ${signed:0:12} to $GITHUB_REF_NAME, signed by GitHub"
   close_failed "Synced in ${signed:0:12}."
 
