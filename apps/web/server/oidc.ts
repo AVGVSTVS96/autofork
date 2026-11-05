@@ -7,11 +7,11 @@ import { Refused, verifyOidc } from "../shared/oidc.ts";
 import * as GitHub from "./github.ts";
 
 const verify = (authorization: string | undefined) =>
-  Effect.tryPromise({ try: async () => verifyOidc(authorization), catch: (error) => error }).pipe(
-    Effect.catch((error) =>
-      error instanceof Refused
-        ? Effect.fail(new Problem({ message: error.message }))
-        : Effect.die(error),
+  Effect.promise(async () => await verifyOidc(authorization)).pipe(
+    Effect.catchDefect((defect) =>
+      defect instanceof Refused
+        ? Effect.fail(new Problem({ message: defect.message }))
+        : Effect.die(defect),
     ),
   );
 
@@ -24,24 +24,25 @@ const hiccups = {
 
 const CodexAuth = Schema.Struct({ tokens: Schema.Struct({ refresh_token: Schema.String }) });
 
-export const saveCodexAuth = (authorization: string | undefined, body: string) =>
-  Effect.gen(function* saveCodexAuth() {
-    const claims = yield* verify(authorization);
-    yield* Schema.decodeUnknownEffect(Schema.fromJsonString(CodexAuth))(body).pipe(
-      Effect.mapError(() => new Problem({ message: "that isn't a Codex sign-in" })),
-    );
-    const [owner = "", name = ""] = claims.repository.split("/");
-    yield* GitHub.repoToken(owner, name).pipe(
-      Effect.flatMap((token) => GitHub.setSecret(token, owner, name, "CODEX_AUTH", body)),
-      Effect.retry(hiccups),
-    );
-  });
+export const saveCodexAuth = Effect.fn(function* saveCodexAuth(
+  authorization: string | undefined,
+  body: string,
+) {
+  const claims = yield* verify(authorization);
+  yield* Schema.decodeUnknownEffect(Schema.fromJsonString(CodexAuth))(body).pipe(
+    Effect.mapError(() => new Problem({ message: "that isn't a Codex sign-in" })),
+  );
+  const [owner = "", name = ""] = claims.repository.split("/");
+  yield* GitHub.repoToken(owner, name).pipe(
+    Effect.flatMap((token) => GitHub.setSecret(token, owner, name, "CODEX_AUTH", body)),
+    Effect.retry(hiccups),
+  );
+});
 
-export const workflowToken = (authorization: string | undefined) =>
-  Effect.gen(function* workflowToken() {
-    const claims = yield* verify(authorization);
-    const [owner = "", name = ""] = claims.repository.split("/");
-    const { token } = yield* GitHub.workflowToken(owner, name).pipe(Effect.retry(hiccups));
+export const workflowToken = Effect.fn(function* workflowToken(authorization: string | undefined) {
+  const claims = yield* verify(authorization);
+  const [owner = "", name = ""] = claims.repository.split("/");
+  const { token } = yield* GitHub.workflowToken(owner, name).pipe(Effect.retry(hiccups));
 
-    return token;
-  });
+  return token;
+});
