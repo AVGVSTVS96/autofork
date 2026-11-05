@@ -20,6 +20,7 @@ const warm = (registry: AtomRegistry.AtomRegistry) => {
   if (Date.now() - warmed < 10_000) {
     return;
   }
+
   warmed = Date.now();
   registry.refresh(client.mine);
   registry.mount(client.mine)();
@@ -51,6 +52,7 @@ export const Account = ({ login, avatar }: { login: string; avatar: string }) =>
     if (panel.current?.contains(document.activeElement)) {
       trigger.current?.focus({ preventScroll: true });
     }
+
     setOpened(null);
   };
 
@@ -66,6 +68,7 @@ export const Account = ({ login, avatar }: { login: string; avatar: string }) =>
     if (!open) {
       return;
     }
+
     const outside = (event: globalThis.PointerEvent) => {
       if (!root.current!.contains(event.target as Node)) {
         close();
@@ -90,6 +93,7 @@ export const Account = ({ login, avatar }: { login: string; avatar: string }) =>
     if (event.pointerType !== "mouse") {
       return;
     }
+
     warm(registry);
     clearTimeout(timer.current);
 
@@ -104,6 +108,7 @@ export const Account = ({ login, avatar }: { login: string; avatar: string }) =>
     if (event.pointerType !== "mouse") {
       return;
     }
+
     clearTimeout(timer.current);
 
     if (opened === "hover") {
@@ -114,8 +119,10 @@ export const Account = ({ login, avatar }: { login: string; avatar: string }) =>
   const toggle = (event: MouseEvent) => {
     if (opened === "click") {
       close();
+
       return;
     }
+
     show("click");
 
     if (event.detail === 0) {
@@ -134,8 +141,10 @@ export const Account = ({ login, avatar }: { login: string; avatar: string }) =>
 
     if (event.key === "Tab") {
       open ? close() : undefined;
+
       return;
     }
+
     const move = ({ ArrowDown: "next", ArrowUp: "previous", Home: "first", End: "last" } as const)[
       event.key
     ];
@@ -143,11 +152,13 @@ export const Account = ({ login, avatar }: { login: string; avatar: string }) =>
     if (!move || (!open && (move === "first" || move === "last"))) {
       return;
     }
+
     event.preventDefault();
 
     if (!open) {
       show("click");
     }
+
     step(move);
   };
 
@@ -263,6 +274,7 @@ const SignOut = () => {
       client.failure(exit.cause);
 
       setState("failed");
+
       return;
     }
 

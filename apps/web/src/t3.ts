@@ -98,6 +98,7 @@ const identity = (project: string) => {
   if (ownIcons[project]) {
     return ownIcons[project];
   }
+
   const words = project.match(/[\p{L}\p{N}]+/gu) ?? [];
   const glyphs = [...(words[0] ?? "P")];
 
@@ -111,6 +112,7 @@ const identity = (project: string) => {
   for (const g of project.toLowerCase()) {
     i = (i * 31 + g.codePointAt(0)!) % names.length;
   }
+
   return { text: `${glyphs[0]}${second}`.toUpperCase(), color: names[i]! };
 };
 
@@ -129,6 +131,7 @@ const mono = (project: string) => {
   if (favicon) {
     return `<img class="favicon" src="${favicon}" alt="" data-project="${project}">`;
   }
+
   const { text, color } = identity(project);
   const [light, dark] = hues[color]!;
 
@@ -229,6 +232,7 @@ const promptCache = (t: Thread) => {
   if (hours < 1) {
     return "Prompt cache warm, 59m left";
   }
+
   const expired = hours - 1;
 
   return `Prompt cache expired ${expired === 0 ? "just now" : expired < 24 ? `${expired}h ago` : `${Math.floor(expired / 24)}d ago`}`;
@@ -238,6 +242,7 @@ export function mount(root: HTMLElement | null) {
   if (!root) {
     return;
   }
+
   let active = 0;
   const compact = new Set<number>([4]);
 
@@ -319,6 +324,7 @@ export function mount(root: HTMLElement | null) {
   for (const r of [...rows, ...tabs]) {
     r.addEventListener("click", () => +r.dataset.i! !== active && show(+r.dataset.i!));
   }
+
   ctx.addEventListener("click", () => {
     compact.has(active) ? compact.delete(active) : compact.add(active);
     paintCtx();
@@ -329,6 +335,7 @@ export function mount(root: HTMLElement | null) {
     if (ownIcons[project]) {
       continue;
     }
+
     const icon = new Image();
     icon.onload = () => {
       favicons.set(project, icon.src);

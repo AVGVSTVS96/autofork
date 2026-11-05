@@ -78,9 +78,11 @@ export const readableLimits = (config: string | null) => {
   if (limits === undefined) {
     return true;
   }
+
   if (!object(limits)) {
     return false;
   }
+
   const read: Record<string, number> = readSettings(config, null).limits;
 
   return Object.keys(LIMITS).every((key) => !(key in limits) || limits[key] === read[key]);

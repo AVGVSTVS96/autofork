@@ -87,6 +87,7 @@ const ForkPage = ({
     const seen = () => {
       document.visibilityState === "visible" ? tick() : clearTimeout(timer);
     };
+
     wait();
     document.addEventListener("visibilitychange", seen);
 
@@ -323,6 +324,7 @@ const useNow = (on: boolean) => {
     if (!on) {
       return;
     }
+
     const timer = setInterval(() => {
       setNow(Date.now());
     }, 1000);
@@ -362,6 +364,7 @@ const Progress = ({
   if (!run) {
     return null;
   }
+
   const steps = run.steps.flatMap((step) => {
     const text = label(step.name, fork, run, yours);
 

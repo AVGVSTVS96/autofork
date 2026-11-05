@@ -33,6 +33,7 @@ const check = async (owner: string, name: string): Promise<Linked> => {
     if (response.ok) {
       return await response.json();
     }
+
     if (response.status === 400) {
       return { error: "That isn't a GitHub repository name.", final: true };
     }
@@ -60,11 +61,13 @@ export const LinkRoute = () => {
       if (document.hidden) {
         return void (timer = setTimeout(poll, 3000));
       }
+
       const next = await check(owner, name);
 
       if (stop) {
         return;
       }
+
       setState((before) => ("checked" in next && !next.checked ? (before ?? next) : next));
       wait = Math.min(wait * 1.5, 30_000);
       const waiting = "linked" in next ? !next.linked && next.why !== "not on GitHub" : !next.final;

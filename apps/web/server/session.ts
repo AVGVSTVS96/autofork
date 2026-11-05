@@ -116,9 +116,11 @@ export const write = (session: Session) =>
     if (JSON.stringify(rest) !== JSON.stringify(restBefore)) {
       changes.push([COOKIE, yield* encrypt(rest)]);
     }
+
     if (JSON.stringify(next) !== JSON.stringify(saved)) {
       changes.push([ACCOUNT, yield* encrypt(next)]);
     }
+
     yield* HttpEffect.appendPreResponseHandler((_request, response) =>
       Effect.succeed(
         changes.reduce(

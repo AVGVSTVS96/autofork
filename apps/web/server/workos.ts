@@ -68,6 +68,7 @@ const authenticate = (grant: Record<string, string>) =>
             verify: { token: body.pending_authentication_token, email: body.email ?? "" },
           };
         }
+
         if (!response.ok) {
           throw new GitHubError({
             status: response.status,
@@ -75,6 +76,7 @@ const authenticate = (grant: Record<string, string>) =>
             message: body.error_description ?? body.message ?? "WorkOS sign-in failed",
           });
         }
+
         return body;
       },
       catch: (error) =>

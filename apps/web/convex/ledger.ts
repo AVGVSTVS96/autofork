@@ -55,9 +55,11 @@ export const open = internalMutation({
     if (again) {
       return { id: again._id };
     }
+
     if (month.length >= PER_MONTH) {
       return { full: `autofork records up to ${PER_MONTH} rebuilds a fork a month` };
     }
+
     if (
       month.filter(
         (rebuild) => rebuild.runId === row.runId && (rebuild.attempt ?? 1) === row.attempt,
@@ -65,6 +67,7 @@ export const open = internalMutation({
     ) {
       return { full: `autofork records up to ${PER_RUN} rebuilds a run` };
     }
+
     return {
       id: await ctx.db.insert("rebuilds", {
         ...row,
@@ -96,6 +99,7 @@ export const close = internalMutation({
     if (!row || row.repoId !== repoId || row.status !== "running") {
       return false;
     }
+
     await ctx.db.patch(row._id, {
       status,
       endedAt: Date.now(),

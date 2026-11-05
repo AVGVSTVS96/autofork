@@ -61,9 +61,11 @@ const Forks = () => {
   if (AsyncResult.isFailure(mine)) {
     return <Retry className="note" message={client.failure(mine.cause)} onRetry={retry} />;
   }
+
   if (!AsyncResult.isSuccess(mine)) {
     return <p className="note wait">Loading your forks…</p>;
   }
+
   if (!mine.value.length) {
     return (
       <p className="note">
@@ -71,6 +73,7 @@ const Forks = () => {
       </p>
     );
   }
+
   const total = mine.value.reduce(
     (sum, fork) => sum + (spend?.find((row) => row.repoId === fork.repoId)?.spent ?? 0),
     0,

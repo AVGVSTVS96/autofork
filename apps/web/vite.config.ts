@@ -15,8 +15,10 @@ const api = (): Plugin => ({
     server.middlewares.use(async (req, res, next) => {
       if (!req.url?.startsWith("/api/")) {
         next();
+
         return;
       }
+
       const { app } = (await server.ssrLoadModule(
         "/server/http.ts",
       )) as typeof import("./server/http.ts");
@@ -46,6 +48,7 @@ const api = (): Plugin => ({
       if (cookies.length) {
         res.setHeader("set-cookie", cookies);
       }
+
       res.end(Buffer.from(await response.arrayBuffer()));
     });
   },

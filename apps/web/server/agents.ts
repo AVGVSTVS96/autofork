@@ -81,6 +81,7 @@ export const claudeToken = (pasted: string, expected: { verifier: string; state:
         message: `Claude's sign-in answered ${status}. Try again in a minute.`,
       });
     }
+
     if (status !== 200 || !body.access_token) {
       return yield* new Problem({
         message:
@@ -142,6 +143,7 @@ export const chatgptAuth = (device: { id: string; code: string; at?: number }) =
     if ((poll.status === 403 || poll.status === 404) && poll.json) {
       return null;
     }
+
     if (poll.status !== 200 || !poll.body.authorization_code || !poll.body.code_verifier) {
       return yield* new Problem({
         message: `ChatGPT's sign-in answered ${poll.status} instead of a sign-in. Pick ChatGPT again for a new code.`,

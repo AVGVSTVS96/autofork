@@ -98,6 +98,7 @@ const call = (
       if (conditional && etag) {
         remember(key, { etag, body: text });
       }
+
       return text;
     },
     catch: (error) =>
@@ -145,6 +146,7 @@ const minted = (
     if (hit && hit.expires > Date.now()) {
       return hit.token;
     }
+
     const { token, expires_at } = yield* mint;
     tokens.set(key, { token, expires: Date.parse(expires_at) - 300_000 });
 
@@ -169,6 +171,7 @@ export const appToken = minted(
         message: "autofork isn't installed anywhere",
       });
     }
+
     return yield* request<{ token: string; expires_at: string }>(
       jwt,
       "POST",
@@ -325,6 +328,7 @@ const renew = (refresh: string) =>
     for (const [key, { at }] of renewals) {
       if (at < Date.now() - 600_000) renewals.delete(key);
     }
+
     const renewal = renewals.get(refresh) ?? {
       at: Date.now(),
       renewed: Effect.runPromiseExit(
@@ -340,6 +344,7 @@ const renew = (refresh: string) =>
     if (Exit.isFailure(renewed)) {
       renewals.delete(refresh);
     }
+
     return yield* renewed;
   });
 
@@ -349,6 +354,7 @@ export const signedIn = Effect.gen(function* signedIn() {
   if (user.expires > Date.now() + 60_000) {
     return user;
   }
+
   const tokens = yield* renew(user.refresh).pipe(
     Effect.catchIf(
       (error) => error.status === 401,

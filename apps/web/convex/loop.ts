@@ -39,6 +39,7 @@ const allWatches = async (ctx: ActionCtx) => {
     for (const { watch, ...fork } of page.forks) {
       watches.set(watch, [...(watches.get(watch) ?? []), fork]);
     }
+
     ({ cursor, done } = page);
   }
 
@@ -81,6 +82,7 @@ const mark = (key: string, found: Found) => {
   if (!found) {
     return null;
   }
+
   const kind = key.split(" ")[1];
   /* A moving tag like `nightly` keeps its name, so where it points is part of the mark */
   const newest = found.refs?.nodes[0];
@@ -94,20 +96,24 @@ const mark = (key: string, found: Found) => {
     if (!target) {
       return null;
     }
+
     const state = target.statusCheckRollup?.state;
 
     if (key.endsWith(" any")) {
       return target.oid;
     }
+
     if (!state) {
       return `${target.oid} unchecked`;
     }
+
     return state === "SUCCESS" ? target.oid : undefined;
   }
 
   if (kind === "channel") {
     return `${found.releases.nodes[0]?.tagName ?? ""} ${tag ?? ""}`;
   }
+
   return found.latestRelease?.tagName ?? tag ?? found.defaultBranchRef?.target?.oid ?? null;
 };
 
@@ -187,6 +193,7 @@ const read = async (asks: Map<number, Set<string>>) => {
           `installation ${installationId}: GitHub's answer for ${keys.length} upstreams had an error for none of them`,
         );
       }
+
       if (body.data) {
         keys.forEach((key, index) => {
           if (!failed.has(`w${index}`))
@@ -197,6 +204,7 @@ const read = async (asks: Map<number, Set<string>>) => {
       if (error instanceof GitHubError && error.status === 401) {
         dropToken(installationId);
       }
+
       console.warn(
         `installation ${installationId} couldn't check ${keys.length} upstreams: ${error}`,
       );
@@ -235,6 +243,7 @@ export const tick = internalAction({
     for (const [key, installationId] of reader) {
       ask(first, installationId, key);
     }
+
     const shared = await read(first);
     const own = new Map<number, Set<string>>();
 
@@ -244,6 +253,7 @@ export const tick = internalAction({
       if (seenFirst && (!seenFirst.isPrivate || fork.installationId === reader.get(key))) {
         return seenFirst;
       }
+
       ask(own, fork.installationId, key);
 
       return;
@@ -261,6 +271,7 @@ export const tick = internalAction({
       if (read === undefined) {
         return [];
       }
+
       /* "" records that upstream had nothing to follow yet, so the first thing it publishes still starts a run */
       const now = markOf(key, read);
 
@@ -268,6 +279,7 @@ export const tick = internalAction({
       if (now === undefined) {
         return fork.seen === null ? [{ fork, watch: key, now: "" }] : [];
       }
+
       return fork.seen === now ? [] : [{ fork, watch: key, now }];
     });
 
@@ -278,6 +290,7 @@ export const tick = internalAction({
     for (let at = 0; at < quiet.length; at += 1000) {
       await ctx.runMutation(internal.loop.seen, { forks: quiet.slice(at, at + 1000) });
     }
+
     await pool(
       due.filter(({ fork, now }) => fork.seen !== null && now !== ""),
       async ({ fork, watch, now }) => {
@@ -290,6 +303,7 @@ export const tick = internalAction({
             .runAfter(0, internal.forks.refresh, { name: fork.name })
             .catch(() => {}));
         }
+
         let token: string = minted;
 
         const dispatch = async () =>
@@ -303,6 +317,7 @@ export const tick = internalAction({
             if (!(error instanceof GitHubError && (error.status === 403 || error.status === 404))) {
               throw error;
             }
+
             dropToken(fork.installationId);
             token = await installationToken(fork.installationId);
 
@@ -320,6 +335,7 @@ export const tick = internalAction({
             ) {
               throw error;
             }
+
             const { body } = await request<{ state: string }>(
               token,
               "GET",
@@ -329,6 +345,7 @@ export const tick = internalAction({
             if (body.state !== "disabled_inactivity") {
               throw error;
             }
+
             await request(token, "PUT", `repos/${fork.name}/actions/workflows/autofork.yml/enable`);
             await dispatch();
           });
@@ -339,6 +356,7 @@ export const tick = internalAction({
           if (error instanceof GitHubError && error.status === 401) {
             dropToken(fork.installationId);
           }
+
           /* GitHub may have started a run it didn't answer for in time, so a timeout keeps the mark and leaves the rest to GitHub's schedule */
           const timedOut = error instanceof Error && error.name === "TimeoutError";
 
@@ -351,6 +369,7 @@ export const tick = internalAction({
           ) {
             return;
           }
+
           await ctx.scheduler
             .runAfter(0, internal.forks.refresh, { name: fork.name })
             .catch(() => {});

@@ -391,6 +391,7 @@ const Prepare = ({
       if (checking || settled || Date.now() - last < 3000) {
         return;
       }
+
       checking = true;
       clearTimeout(timer);
 
@@ -404,6 +405,7 @@ const Prepare = ({
       if (!live) {
         return;
       }
+
       try {
         const next = client.unwrap(exit);
         settled = next.status === "ready" || next.status === "new";
@@ -416,6 +418,7 @@ const Prepare = ({
       } catch (error_) {
         settled = true;
         setError((error_ as Error).message);
+
         if ((error_ as Error).message.startsWith("Your GitHub sign-in")) {
           meRefresh();
         }
@@ -626,6 +629,7 @@ const ChatGPT = ({ fork, change }: { fork: Fork | null; change: string }) => {
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [copied, setCopied] = useState(false);
+
   const signedIn = useEffectEvent(async (into: Fork) =>
     finish({ params: into, payload: { change } }),
   );
@@ -636,6 +640,7 @@ const ChatGPT = ({ fork, change }: { fork: Fork | null; change: string }) => {
       if (!live) {
         return;
       }
+
       try {
         setDevice(client.unwrap(exit));
       } catch (error_) {
@@ -652,6 +657,7 @@ const ChatGPT = ({ fork, change }: { fork: Fork | null; change: string }) => {
     if (!device || !fork || error) {
       return;
     }
+
     let live = true;
     let timer: ReturnType<typeof setTimeout>;
 
@@ -661,13 +667,16 @@ const ChatGPT = ({ fork, change }: { fork: Fork | null; change: string }) => {
       if (!live) {
         return;
       }
+
       try {
         const result = client.unwrap(exit);
 
         if (result.status === "started") {
           started(result);
+
           return;
         }
+
         timer = setTimeout(poll, 5000);
       } catch (error_) {
         setError((error_ as Error).message);
@@ -691,9 +700,11 @@ const ChatGPT = ({ fork, change }: { fork: Fork | null; change: string }) => {
   if (error) {
     return <Retry message={error} onRetry={retry} />;
   }
+
   if (!device) {
     return <p className="wait">Getting a code from ChatGPT…</p>;
   }
+
   return (
     <div className="device">
       <p>Open ChatGPT's sign-in page and enter this code:</p>
@@ -741,6 +752,7 @@ const Claude = ({ fork, change }: { fork: Fork | null; change: string }) => {
       if (!live) {
         return;
       }
+
       try {
         setUrl(client.unwrap(exit).url);
       } catch (error_) {
@@ -757,11 +769,13 @@ const Claude = ({ fork, change }: { fork: Fork | null; change: string }) => {
     if (!sent || !fork) {
       return;
     }
+
     let live = true;
     void connect({ owner: fork.owner, name: fork.name }, sent).then((exit) => {
       if (!live) {
         return;
       }
+
       try {
         started(client.unwrap(exit));
       } catch (error_) {

@@ -13,6 +13,7 @@ interface Example {
   change: string;
   issue?: number;
 }
+
 interface Examples {
   refreshed: string;
   examples: Example[];
@@ -50,6 +51,7 @@ const optimize = async (bytes: Uint8Array, extension: string) => {
   if (extension === "svg") {
     return { bytes, extension };
   }
+
   const image = sharp(bytes);
 
   const format = await image.metadata().then(
@@ -60,6 +62,7 @@ const optimize = async (bytes: Uint8Array, extension: string) => {
   if (!format) {
     return { bytes, extension };
   }
+
   const small = image.resize(ICON_SIZE, ICON_SIZE, { fit: "inside", withoutEnlargement: true });
 
   return format === "jpeg"
@@ -87,6 +90,7 @@ const repoIcon = async (repo: string) => {
   if (!found) {
     throw new Error(`${repo} isn't a public GitHub repo`);
   }
+
   const original =
     found.icon?.bytes ?? new Uint8Array(await (await fetch(found.avatar)).arrayBuffer());
 
@@ -97,6 +101,7 @@ const repoIcon = async (repo: string) => {
     if (old !== file && old.slice(0, old.lastIndexOf(".")) === icon(repo))
       rmSync(`${ICONS}/${old}`);
   }
+
   writeFileSync(`${ICONS}/${file}`, bytes);
   console.log(
     `${repo}: ${found.icon ? found.icon.path : "no icon of its own, so its owner's avatar"}, ${original.length} bytes saved as ${bytes.length}`,
@@ -140,6 +145,7 @@ const check = async () => {
   if (unlinked(after.examples) !== unlinked(before.examples)) {
     problems.push("every example that isn't Bassim's names the open issue it comes from");
   }
+
   const apps = after.examples.map(({ app }) => squash(app));
 
   if (new Set(apps).size !== apps.length) {
@@ -151,20 +157,25 @@ const check = async () => {
       if (issue === undefined) {
         return undefined;
       }
+
       const found = await github(`repos/${repo}/issues/${issue}`);
 
       if (!found) {
         return void problems.push(`${app}: ${repo}#${issue} doesn't exist`);
       }
+
       if (found.pull_request) {
         problems.push(`${app}: ${repo}#${issue} is a pull request, not an issue`);
       }
+
       if (found.state !== "open") {
         problems.push(`${app}: ${repo}#${issue} is ${found.state}`);
       }
+
       if (!found.repository_url.toLowerCase().endsWith(`/repos/${repo.toLowerCase()}`)) {
         problems.push(`${app}: ${repo}#${issue} moved to ${found.html_url}`);
       }
+
       return `${app} #${issue}`;
     }),
   );

@@ -15,6 +15,7 @@ const token = async ({ forceRefreshToken }: { forceRefreshToken: boolean }) => {
       if (response.status === 401 && attempt > 2) {
         return null;
       }
+
       if (response.ok) {
         return ((await response.json()) as { token: string }).token;
       }

@@ -140,6 +140,7 @@ const AppLive = HttpApiBuilder.group(Api, "app", (handlers) =>
           if (!claude) {
             return yield* new Problem({ message: "Start the Claude sign-in again." });
           }
+
           const token = yield* Agents.claudeToken(payload.code, claude);
 
           const started = yield* Forks.start(
@@ -177,11 +178,13 @@ const AppLive = HttpApiBuilder.group(Api, "app", (handlers) =>
           if (!chatgpt) {
             return yield* new Problem({ message: "Start the ChatGPT sign-in again." });
           }
+
           const auth = yield* Agents.chatgptAuth(chatgpt);
 
           if (!auth) {
             return { status: "waiting" as const };
           }
+
           const started = yield* Forks.start(
             user,
             params.owner,
@@ -205,12 +208,14 @@ const AppLive = HttpApiBuilder.group(Api, "app", (handlers) =>
         if (!user) {
           return false;
         }
+
         const repo = yield* Forks.yours(user, params.owner, params.name);
         const { account } = yield* Session.read;
 
         if (account && repo) {
           yield* allow(account.id, [{ id: repo.id, name: repo.name }], repo.push ? "add" : "drop");
         }
+
         return !!repo?.push;
       }),
     )
@@ -305,6 +310,7 @@ const accountCallback = HttpRouter.add("GET", "/api/auth/callback", (request) =>
     if (!signIn || query.get("state") !== signIn.state) {
       return failed("GitHub sign-in expired. Try again.");
     }
+
     const code = query.get("code");
 
     if (!code) {
@@ -313,6 +319,7 @@ const accountCallback = HttpRouter.add("GET", "/api/auth/callback", (request) =>
           `WorkOS sign-in: ${query.get("error")} ${query.get("error_description")}`,
         );
       }
+
       return query.get("error")
         ? failed("GitHub didn't finish signing you in. Try again.")
         : HttpServerResponse.redirect(signIn.back);
@@ -335,6 +342,7 @@ const signedIn = (
     if (signed._tag === "None") {
       return rejected("GitHub didn't finish signing you in. Try again.");
     }
+
     if ("verify" in signed.value) {
       yield* Session.write({
         ...session,
@@ -357,11 +365,13 @@ const signedIn = (
     if (!oauth_tokens) {
       return yield* lost();
     }
+
     const identified = yield* GitHub.identify(GitHub.fromWorkOS(oauth_tokens)).pipe(Effect.option);
 
     if (identified._tag === "None") {
       return yield* lost();
     }
+
     return yield* finish(
       session,
       signIn.back,
@@ -379,6 +389,7 @@ const verifyEmail = HttpRouter.add("POST", "/api/auth/verify", (request) =>
     if (!signIn?.verify) {
       return failed("GitHub sign-in expired. Try again.");
     }
+
     const form = new URLSearchParams(yield* request.text);
 
     const again = () =>
@@ -404,6 +415,7 @@ const callback = HttpRouter.add("GET", "/api/github/callback", (request) =>
     if (!signIn) {
       return failed("GitHub sign-in expired. Try again.");
     }
+
     if (session.user && session.account) {
       yield* Session.write({ user: session.user, account: session.account });
 
@@ -413,16 +425,19 @@ const callback = HttpRouter.add("GET", "/api/github/callback", (request) =>
     if (query.get("state") !== signIn.state) {
       return failed("GitHub sign-in expired. Try again.");
     }
+
     const code = query.get("code");
 
     if (!code) {
       return HttpServerResponse.redirect(signIn.back);
     }
+
     const signedIn = yield* GitHub.exchange(code).pipe(Effect.option);
 
     if (signedIn._tag === "None") {
       return failed("GitHub didn't finish signing you in. Try again.");
     }
+
     return yield* finish(
       session,
       signIn.back,
@@ -443,6 +458,7 @@ const install = HttpRouter.add("GET", "/api/github/install", (request) =>
     if (!REPO_PART.test(owner) || !REPO_PART.test(name)) {
       return HttpServerResponse.redirect("/");
     }
+
     const back = `/link/${owner}/${name}`;
     const user = yield* Effect.option(GitHub.signedIn);
     const { account } = yield* Session.read;
@@ -450,6 +466,7 @@ const install = HttpRouter.add("GET", "/api/github/install", (request) =>
     if (user._tag === "None" || !account) {
       return HttpServerResponse.redirect(`/api/github/start?back=${encodeURIComponent(back)}`);
     }
+
     const url = yield* Forks.installLink(user.value, owner, name, appSlug).pipe(Effect.option);
 
     if (url._tag === "None") {
@@ -457,6 +474,7 @@ const install = HttpRouter.add("GET", "/api/github/install", (request) =>
         `${back}?error=${encodeURIComponent(`Can't find github.com/${owner}/${name}.`)}`,
       );
     }
+
     const state = randomBytes(16).toString("base64url");
     url.value.searchParams.set("state", state);
     yield* Session.update((session) => ({ ...session, user: user.value, signIn: { state, back } }));
@@ -505,9 +523,11 @@ const convexToken = (fresh: boolean) =>
     if (!account) {
       return yield* new SignedOut();
     }
+
     if (!fresh && WorkOS.expiry(account.access) > Date.now() + 60_000) {
       return { token: account.access };
     }
+
     const env = yield* Env.Env;
 
     if (!renewals.has(account.refresh)) {
@@ -620,6 +640,7 @@ const icon = HttpRouter.add("GET", "/api/icon/:owner/:name", (request) =>
     if (!avatar) {
       return HttpServerResponse.empty({ status: 404, headers: { "cache-control": cache } });
     }
+
     const fallback = found?.avatar ?? `https://github.com/${encodeURIComponent(owner)}.png?size=96`;
 
     return HttpServerResponse.redirect(fallback, { headers: { "cache-control": cache } });

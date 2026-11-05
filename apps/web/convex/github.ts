@@ -33,6 +33,7 @@ export const request = async <A = unknown>(
   if (response.status === 304) {
     return { changed: false as const, etag: etag ?? null, body: undefined as A };
   }
+
   const text = await response.text();
 
   const limited =
@@ -46,6 +47,7 @@ export const request = async <A = unknown>(
   if (!response.ok) {
     throw new GitHubError(status, `${method} ${path}: ${response.status} ${text.slice(0, 300)}`);
   }
+
   return {
     changed: true as const,
     etag: response.headers.get("etag"),
@@ -119,6 +121,7 @@ export const installationToken = async (installationId: number) => {
   if (cached && cached.until > Date.now() + 300_000) {
     return cached.token;
   }
+
   const { token, expires_at } = await app<{ token: string; expires_at: string }>(
     "POST",
     `app/installations/${installationId}/access_tokens`,
@@ -142,6 +145,7 @@ export const repoInstallation = async (owner: string, name: string) =>
       if (error instanceof GitHubError && error.status === 404) {
         return null;
       }
+
       throw error;
     },
   );
@@ -161,6 +165,7 @@ export const file = async (token: string, repo: string, path: string, ref?: stri
     if (error instanceof GitHubError && error.status === 404) {
       return null;
     }
+
     throw error;
   }
 };
@@ -170,6 +175,7 @@ export const signed = async (body: string, signature: string | null) => {
   if (!signature?.startsWith("sha256=")) {
     return false;
   }
+
   const hmac = await crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(process.env.GITHUB_WEBHOOK_SECRET),
@@ -183,6 +189,7 @@ export const signed = async (body: string, signature: string | null) => {
   if (!/^[0-9a-f]{64}$/.test(hex)) {
     return false;
   }
+
   return await crypto.subtle.verify(
     "HMAC",
     hmac,

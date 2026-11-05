@@ -147,9 +147,11 @@ export const SettingsCard = ({
   if (AsyncResult.isFailure(loaded)) {
     return <p className="fine bad">{client.failure(loaded.cause)}</p>;
   }
+
   if (!draft) {
     return null;
   }
+
   const limit = (key: keyof Settings["limits"]) => (event: React.ChangeEvent<HTMLInputElement>) => {
     setDraft({
       ...draft,
@@ -167,8 +169,10 @@ export const SettingsCard = ({
 
     if (Object.values(draft.limits).some(Number.isNaN)) {
       setState({ busy: false, note: "Fill in every limit.", bad: true });
+
       return;
     }
+
     setState({ busy: true, note: null, bad: false });
 
     try {

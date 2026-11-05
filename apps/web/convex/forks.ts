@@ -21,12 +21,15 @@ export const watchFor = (upstream: string, given: string | undefined, green = tr
   if (!repo) {
     return null;
   }
+
   if (follow?.includes("*")) {
     return `${repo} channel`;
   }
+
   if (follow && follow !== "releases") {
     return `${repo} branch ${follow}${green ? "" : " any"}`;
   }
+
   return `${repo} releases`;
 };
 
@@ -61,12 +64,14 @@ export const refresh = internalAction({
       default_branch: string;
       private: boolean;
     }
+
     /* A token minted before a repo was added or permissions changed can't see it yet, so a refusal gets one fresh token */
     const { body: found } = await request<Repo>(token, "GET", `repos/${name}`).catch(
       async (error) => {
         if (!(error instanceof GitHubError && (error.status === 403 || error.status === 404))) {
           throw error;
         }
+
         dropToken(installationId);
         token = await installationToken(installationId);
 
@@ -135,6 +140,7 @@ export const refreshAll = internalAction({
     for (const [index, name] of wanted.slice(0, 100).entries()) {
       await ctx.scheduler.runAfter(index * 250, internal.forks.refresh, { name });
     }
+
     if (wanted.length > 100) {
       await ctx.scheduler.runAfter(25_000, internal.forks.refreshAll, { names: wanted.slice(100) });
     }
@@ -218,6 +224,7 @@ export const save = internalMutation({
     if (row && (row.readAt ?? 0) > fork.readAt) {
       return;
     }
+
     const gone = await ctx.db
       .query("gone")
       .withIndex("name", (q) => q.eq("name", fork.name))
@@ -230,9 +237,11 @@ export const save = internalMutation({
     ) {
       return;
     }
+
     if (gone) {
       await ctx.db.delete(gone._id);
     }
+
     for (const stale of await ctx.db
       .query("forks")
       .withIndex("name", (q) => q.eq("name", fork.name))
@@ -242,6 +251,7 @@ export const save = internalMutation({
         await ctx.db.delete(stale._id);
       }
     }
+
     if (row) {
       await ctx.db.replace(row._id, {
         ...fork,
@@ -276,6 +286,7 @@ export const unlink = internalMutation({
       .collect()) {
       if ((row.readAt ?? 0) <= readAt) await ctx.db.delete(row._id);
     }
+
     await forget(ctx, name, readAt);
   },
 });
@@ -325,6 +336,7 @@ export const mayCheck = internalMutation({
       .take(50)) {
       await ctx.db.delete(old._id);
     }
+
     if (
       (await ctx.db
         .query("checks")
@@ -333,9 +345,11 @@ export const mayCheck = internalMutation({
     ) {
       return false;
     }
+
     if ((await ctx.db.query("checks").withIndex("at").take(30)).length >= 30) {
       return false;
     }
+
     await ctx.db.insert("checks", { name, at: now });
 
     return true;

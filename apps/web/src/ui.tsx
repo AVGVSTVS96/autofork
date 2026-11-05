@@ -164,6 +164,7 @@ export const Composer = ({
             if (event.key !== "Enter" || event.nativeEvent.isComposing) {
               return;
             }
+
             event.preventDefault();
             event.currentTarget.form?.requestSubmit();
           }}
@@ -203,6 +204,7 @@ export interface Face {
   name: string;
   avatar: string;
 }
+
 export interface AskHandle {
   fill: (ask: { app: string; change: string; face?: Face; keyboard: boolean }) => void;
 }
@@ -255,8 +257,10 @@ export const Ask = ({
   useEffect(() => {
     if (!typed || example || words(typed) > 3) {
       setAsking("");
+
       return;
     }
+
     const later = setTimeout(() => {
       setAsking(typed);
     }, 320);
@@ -294,6 +298,7 @@ export const Ask = ({
         if (!keyboard && !matchMedia("(pointer: fine)").matches) {
           return;
         }
+
         requestAnimationFrame(() => {
           field.focus({ preventScroll: true });
           field.setSelectionRange(field.value.length, field.value.length);
@@ -305,6 +310,7 @@ export const Ask = ({
       if (arrival.current) {
         document.removeEventListener("scrollend", arrival.current);
       }
+
       arrival.current = undefined;
 
       if ((top >= 0 && bottom <= innerHeight) || !("onscrollend" in document)) {
@@ -343,9 +349,11 @@ export const Ask = ({
     if (app) {
       return change ? `${app}, but ${change}` : app;
     }
+
     if (!change) {
       return fallback;
     }
+
     const name = lead(change);
 
     return name ? `${name}, but ${change.slice(name.length).trim().replace(BUT, "")}` : change;
@@ -358,6 +366,7 @@ export const Ask = ({
     if (!initial || !matchMedia("(pointer: fine)").matches) {
       return;
     }
+
     field.focus();
     field.setSelectionRange(field.value.length, field.value.length);
   }, []);
@@ -408,6 +417,7 @@ export const Ask = ({
                 event.preventDefault();
 
                 unchip();
+
                 return;
               }
 
@@ -415,22 +425,28 @@ export const Ask = ({
                 event.preventDefault();
 
                 chip(guess.app);
+
                 return;
               }
 
               if (event.key !== "Enter" || event.nativeEvent.isComposing) {
                 return;
               }
+
               event.preventDefault();
 
               if (guess) {
                 chip(guess.app);
+
                 return;
               }
+
               if (typed && !lead(typed) && words(typed) <= 3) {
                 chip(typed);
+
                 return;
               }
+
               field.form?.requestSubmit();
             }}
             onFocus={() => {
@@ -483,6 +499,7 @@ const Recognize = ({ app, onFound }: { app: string; onFound: (guess: Guess) => v
     if (!repo || !close) {
       return;
     }
+
     let on = true;
 
     const shown = () => {
@@ -498,6 +515,7 @@ const Recognize = ({ app, onFound }: { app: string; onFound: (guess: Guess) => v
     } else {
       shown();
     }
+
     return () => {
       on = false;
     };
@@ -582,6 +600,7 @@ export const useTitle = (title: string | undefined) => {
     if (!title) {
       return;
     }
+
     const before = document.title;
     document.title = title;
 
@@ -689,6 +708,7 @@ const Typer = ({
       if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
         return void (text.textContent = change());
       }
+
       text.textContent = "";
       await wait(700);
 
@@ -699,11 +719,13 @@ const Typer = ({
         if (!on) {
           return;
         }
+
         await erase();
 
         if (!on) {
           return;
         }
+
         await roll((current.current + 1) % examples.length);
         await wait(160);
       }
@@ -715,6 +737,7 @@ const Typer = ({
     if (on) {
       void play();
     }
+
     return () => {
       on = false;
       box.classList.remove("typing");

@@ -73,6 +73,7 @@ const search = (app: string, token: GitHub.Token) =>
     if (hit && Date.now() - hit.at < 3_600_000) {
       return hit.repos;
     }
+
     const found = yield* GitHub.request<{ data?: { search?: { nodes: (Listed | null)[] } } }>(
       token,
       "POST",
@@ -89,6 +90,7 @@ const search = (app: string, token: GitHub.Token) =>
       if (hit) {
         return hit.repos;
       }
+
       return yield* new Problem({
         message: "GitHub search is busy. Name the repo as owner/name instead.",
       });
@@ -117,6 +119,7 @@ export const resolve = (q: string, token: GitHub.Token) =>
       if (repo.private) {
         return yield* missing();
       }
+
       return { repo: toRepo(repo), change, others: [] };
     }
 
@@ -129,6 +132,7 @@ export const resolve = (q: string, token: GitHub.Token) =>
         message: `No open source repo on GitHub matches "${app}". Try owner/name.`,
       });
     }
+
     return { repo, change, others: exact ? [] : repos.slice(1, 4) };
   });
 
@@ -155,6 +159,7 @@ const freshId = (entries: readonly { name: string }[], change: string) => {
   for (let n = 2; taken.has(id); n++) {
     id = `${slug(change)}-${n}`;
   }
+
   return id;
 };
 
@@ -290,11 +295,13 @@ export const prepare = (
     if (upstream.private) {
       return yield* new Problem({ message: "autofork works with public repos." });
     }
+
     if (upstream.owner.login === place) {
       return yield* new Problem({
         message: "That repo is already yours. Name the repo you'd fork.",
       });
     }
+
     const installation = installed.find((each) => each.account.login === place);
 
     if (!installation) {
@@ -366,6 +373,7 @@ const inheritedWorkflows = (token: GitHub.Token, repo: GitHubRepo, branch: strin
     if (!repo.parent) {
       return [];
     }
+
     const [parentOwner = "", parentName = ""] = repo.parent.full_name.split("/");
 
     const { merge_base_commit } = yield* GitHub.request<{ merge_base_commit: { sha: string } }>(
@@ -408,6 +416,7 @@ export const start = (
     if (!change.trim()) {
       return yield* new Problem({ message: "Say what you'd change." });
     }
+
     const repo = yield* GitHub.request<GitHubRepo>(
       user.token,
       "GET",
@@ -417,6 +426,7 @@ export const start = (
     if (!repo.permissions?.admin) {
       return yield* new Problem({ message: "That fork isn't yours." });
     }
+
     const branch = repo.default_branch;
     yield* GitHub.request(
       user.token,
@@ -459,6 +469,7 @@ export const start = (
         has_issues: true,
       }).pipe(Effect.ignore);
     }
+
     yield* describe(user.token, repo);
 
     const id = freshId(control, change);
@@ -522,11 +533,13 @@ export const addChange = (user: User, owner: string, name: string, change: strin
     if (!change.trim()) {
       return yield* new Problem({ message: "Say what you'd change." });
     }
+
     const repo = yield* GitHub.request<GitHubRepo>(user.token, "GET", `/repos/${owner}/${name}`);
 
     if (!repo.permissions?.push) {
       return yield* new Problem({ message: "That fork isn't yours." });
     }
+
     yield* describe(user.token, repo);
     const id = freshId(yield* listDir(user.token, owner, name, ".autofork"), change);
 
@@ -552,6 +565,7 @@ interface Job {
   completed_at: string | null;
   steps?: { name: string; status: string; conclusion: string | null }[];
 }
+
 interface WorkflowRun {
   id: number;
   run_attempt: number;
@@ -589,15 +603,19 @@ const synced = (message: string, name: (id: string) => string) =>
     ) {
       return [];
     }
+
     if ((match = /^built (\S+)$/.exec(line))) {
       return [`Built "${name(match[1]!)}"`];
     }
+
     if ((match = /^healed (\S+)$/.exec(line))) {
       return [`Rebuilt "${name(match[1]!)}" on the new release`];
     }
+
     if ((match = /^upstream has (\S+): (.+)$/.exec(line))) {
       return [`Paused "${name(match[1]!)}": ${match[2]}`];
     }
+
     return [];
   });
 
@@ -616,6 +634,7 @@ const unsynced = (raw: string, describe: (id: string) => string): Story => {
   if (moved) {
     return { log: [moved], moved: true, change: null };
   }
+
   const reason = lines.findLast((line) => line.startsWith("autofork: ") && !line.startsWith(SYNC));
 
   return {
@@ -642,6 +661,7 @@ const outcome = (
   if (hit) {
     return Effect.succeed(hit);
   }
+
   const query = new URLSearchParams({
     sha: run.head_branch,
     since: job.started_at,
@@ -743,6 +763,7 @@ const latestRun = (
     if (!newest) {
       return null;
     }
+
     const told = (run: WorkflowRun, job: Job | undefined) => {
       const untold: Story = { log: [], moved: false, change: null };
 
@@ -857,12 +878,14 @@ export const status = (owner: string, name: string) =>
     if (repo.private) {
       return yield* new NotFound({ from: null });
     }
+
     const control = yield* listDir(token, owner, name, ".autofork");
     const config = control.find((entry) => entry.name === "config.json" && entry.type === "file");
 
     if (!config) {
       return yield* new NotFound({ from: repo.parent?.full_name ?? repo.full_name });
     }
+
     const upstream = upstreamFor(
       yield* blob(token, owner, name, config.sha).pipe(Effect.orElseSucceed(() => null)),
       repo.full_name,
@@ -1031,17 +1054,20 @@ const everyRepo = <A>(token: string, query: string) =>
       if (!data && page > 0) {
         return { nodes, complete: false };
       }
+
       if (!data) {
         return yield* new Problem({
           message: `GitHub couldn't list your repositories${errors ? "" : " right now"}. Try again.`,
         });
       }
+
       failed ||= !!errors;
       nodes.push(...data.viewer.repositories.nodes.filter((node): node is A => node !== null));
 
       if (!data.viewer.repositories.pageInfo.hasNextPage) {
         return { nodes, complete: !failed };
       }
+
       after = data.viewer.repositories.pageInfo.endCursor;
     }
 
@@ -1102,6 +1128,7 @@ export const mine = (user: User) =>
       const nodes = [...forks.nodes, ...rest.nodes].sort((a, b) =>
         b.createdAt.localeCompare(a.createdAt),
       );
+
       return {
         complete: forks.complete && rest.complete,
         denied: nodes
@@ -1151,12 +1178,14 @@ const pushable = (user: User, owner: string, name: string) =>
     if (!repo.permissions?.push) {
       return yield* new Problem({ message: "That fork isn't yours." });
     }
+
     const head = yield* GitHub.head(user.token, owner, name, repo.default_branch);
     const [config, workflow] = yield* settingsAt(user, owner, name, head);
 
     if (config === null) {
       return yield* new Problem({ message: `${owner}/${name} has no .autofork/config.json.` });
     }
+
     return { repo, head, config, workflow };
   });
 
@@ -1187,6 +1216,7 @@ export const saveSettings = (user: User, owner: string, name: string, wanted: Se
         message: `${owner}/${name}'s .autofork/config.json isn't valid JSON. Fix it in the repo first.`,
       });
     }
+
     const now = readSettings(config, workflow);
 
     if (workflow && cronLines(workflow) > 1 && wanted.cron !== now.cron) {
@@ -1194,6 +1224,7 @@ export const saveSettings = (user: User, owner: string, name: string, wanted: Se
         message: "This fork's autofork.yml has more than one schedule. Change it in the repo.",
       });
     }
+
     if (
       wanted.cron !== null &&
       wanted.cron !== now.cron &&
@@ -1203,6 +1234,7 @@ export const saveSettings = (user: User, owner: string, name: string, wanted: Se
         message: "Pick one of the schedules, or set another in autofork.yml.",
       });
     }
+
     /* Limits are only checked, and only written, when they change, so a save of the schedule or follow keeps whatever the repo says */
     const newLimits = JSON.stringify(now.limits) !== JSON.stringify(wanted.limits);
     const { rebuilds, month, rebuild } = wanted.limits;
@@ -1210,19 +1242,23 @@ export const saveSettings = (user: User, owner: string, name: string, wanted: Se
     if (newLimits && (![rebuilds, month, rebuild].every(fine) || !Number.isInteger(rebuilds))) {
       return yield* new Problem({ message: "Limits are whole rebuilds and dollar amounts." });
     }
+
     if (newLimits && rebuilds > 200) {
       return yield* new Problem({ message: "autofork records up to 200 rebuilds a fork a month." });
     }
+
     if (newLimits && rebuild === 0) {
       return yield* new Problem({
         message: "A rebuild's cap has to be more than $0. To stop rebuilds, set rebuilds to 0.",
       });
     }
+
     if (newLimits && rebuild > month) {
       return yield* new Problem({
         message: "One rebuild's cap can't be more than the month's, or nothing would ever start.",
       });
     }
+
     const files: GitHub.File[] = [];
     const unchanged = now.follow === wanted.follow.trim() && !newLimits;
 
@@ -1231,11 +1267,13 @@ export const saveSettings = (user: User, owner: string, name: string, wanted: Se
         message: `${owner}/${name}'s "follow" in .autofork/config.json isn't text. Fix it in the repo first.`,
       });
     }
+
     if (newLimits && !readableLimits(config)) {
       return yield* new Problem({
         message: `${owner}/${name}'s "limits" in .autofork/config.json aren't numbers autofork can read. Fix them in the repo first.`,
       });
     }
+
     const nextConfig = unchanged
       ? config
       : withSettings(config, {
@@ -1246,12 +1284,14 @@ export const saveSettings = (user: User, owner: string, name: string, wanted: Se
     if (!unchanged) {
       files.push({ path: ".autofork/config.json", content: nextConfig });
     }
+
     if (wanted.cron && wanted.cron !== now.cron) {
       if (!workflow || now.cron === null) {
         return yield* new Problem({
           message: "This fork's autofork.yml has no schedule to change.",
         });
       }
+
       files.push({
         path: ".github/workflows/autofork.yml",
         content: withCron(workflow, wanted.cron),
@@ -1318,6 +1358,7 @@ export const installLink = (user: User, owner: string, name: string, slug: strin
       if (repoId) {
         url.searchParams.append("repository_ids[]", String(repoId));
       }
+
       return url;
     }),
   );

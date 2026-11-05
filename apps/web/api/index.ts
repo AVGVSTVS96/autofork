@@ -12,6 +12,7 @@ const cached = async (request: Request) => {
   if (policy && request.method === "GET" && response.ok && !response.headers.has("set-cookie")) {
     response.headers.set("cache-control", policy);
   }
+
   return response;
 };
 

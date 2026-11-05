@@ -8,6 +8,7 @@ const svgEl = (parent: Element, tag: string, attrs: Record<string, string | numb
   for (const k in attrs) {
     n.setAttribute(k, String(attrs[k]));
   }
+
   parent.append(n);
 
   return n as SVGGraphicsElement;
@@ -70,6 +71,7 @@ const graph = (page: HTMLElement) => {
       ] as const) {
         svgEl(fade, "stop", { offset, "stop-color": "#fff", "stop-opacity": opacity });
       }
+
       svgEl(mask, "rect", { x: 0, y: from, width: box.width, height: h, fill: `url(#${id})` });
     };
 
@@ -83,6 +85,7 @@ const graph = (page: HTMLElement) => {
       } else {
         el.classList.add("grow-in");
       }
+
       timed.push({ el, y });
 
       return el;
@@ -113,8 +116,10 @@ const graph = (page: HTMLElement) => {
 
       if (side === "left" && left - tag.offsetWidth < 4) {
         tag.remove();
+
         return;
       }
+
       Object.assign(tag.style, { top: `${y}px`, left: `${left}px` });
       timed.push({ el: tag, y });
     };
@@ -129,6 +134,7 @@ const graph = (page: HTMLElement) => {
           y,
         );
       }
+
       later(dot("y", x, y, 7), y);
     };
 
@@ -173,6 +179,7 @@ const graph = (page: HTMLElement) => {
       });
 
       grow();
+
       return;
     }
 
@@ -311,6 +318,7 @@ const story = (root: HTMLElement) => {
         if (!showing || token !== loop) {
           return;
         }
+
         rels.forEach((r, j) => r.classList.toggle("on", j === i));
         rel.classList.add("playing", "played");
         fill.style.width = `${rel.offsetLeft + rel.querySelector<HTMLElement>(".tag")!.offsetWidth}px`;
@@ -324,6 +332,7 @@ const story = (root: HTMLElement) => {
       if (!showing || token !== loop) {
         return;
       }
+
       reset();
       await wait(900);
     }
@@ -346,6 +355,7 @@ const story = (root: HTMLElement) => {
               r.classList.add("played", "on");
             });
           }
+
           continue;
         }
 
@@ -474,6 +484,7 @@ const lineage = (root: HTMLElement) => {
       for (const { at } of posts) {
         said(x(at), M);
       }
+
       for (const e of exp) {
         svgEl(s, "circle", { class: "e", cx: x(e.at), cy: E, r: 6 });
         label(s, x(e.at), E + 28, e.name, "small", "middle");
@@ -488,6 +499,7 @@ const lineage = (root: HTMLElement) => {
         end?: boolean;
         card?: HTMLElement;
       }
+
       const rows: Row[] = [
         { ...main[0]!, lane: 0 },
         { ...main[1]!, lane: 0 },
@@ -538,6 +550,7 @@ const lineage = (root: HTMLElement) => {
         if (it.card) {
           return said(X, ys[i]!);
         }
+
         const cx = it.lane ? L : X;
         svgEl(s, "circle", {
           class: it.lane ? "e" : it.end ? "n end" : "n",
@@ -575,6 +588,7 @@ const lineage = (root: HTMLElement) => {
     if (wide && seen) {
       root.classList.add("in");
     }
+
     reveal();
   };
 
@@ -582,6 +596,7 @@ const lineage = (root: HTMLElement) => {
     if (!drawn || root.classList.contains("wide") || still()) {
       return;
     }
+
     const edge = front() - drawn.getBoundingClientRect().top;
 
     for (const l of lines) {
@@ -589,6 +604,7 @@ const lineage = (root: HTMLElement) => {
         1 - Math.max(0, Math.min(1, (edge - l.from) / (l.to - l.from))),
       );
     }
+
     for (const m of marks) {
       if (m.y < edge) m.el.classList.add("in");
     }
@@ -599,6 +615,7 @@ const lineage = (root: HTMLElement) => {
   for (const el of [root, ...cards]) {
     sized.observe(el);
   }
+
   if (still()) {
     root.classList.add("in");
 
@@ -612,6 +629,7 @@ const lineage = (root: HTMLElement) => {
       if (!e!.isIntersecting) {
         return;
       }
+
       seen = true;
 
       if (root.classList.contains("wide")) {

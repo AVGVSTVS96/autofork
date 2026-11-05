@@ -20,11 +20,13 @@ const load = async () =>
       if (!response.ok) {
         throw new Error(`GitHub's signing keys answered ${response.status}`);
       }
+
       const { keys } = (await response.json()) as { keys?: Jwk[] };
 
       if (!Array.isArray(keys)) {
         throw new Error("GitHub's signing keys came back without keys");
       }
+
       return keys;
     },
   );
@@ -36,6 +38,7 @@ const jwks = async (fresh = false) => {
   if (keys && age < 3_600_000 && !(fresh && age > 60_000)) {
     return keys;
   }
+
   fetched = Date.now();
   const before = keys;
   const next = load();
@@ -82,6 +85,7 @@ export const verifyOidc = async (authorization: string | null | undefined): Prom
   if (!jwk) {
     throw new Refused("unknown signing key");
   }
+
   const key = await crypto.subtle.importKey(
     "jwk",
     jwk,
@@ -100,26 +104,31 @@ export const verifyOidc = async (authorization: string | null | undefined): Prom
   ) {
     throw new Refused("bad signature");
   }
+
   const text = (name: string) => (typeof claims[name] === "string" ? claims[name] : "");
 
   if (claims.iss !== ISSUER || claims.aud !== OIDC_AUDIENCE || typeof claims.exp !== "number") {
     throw new Refused("bad claims");
   }
+
   if (
     claims.exp * 1000 < Date.now() ||
     (typeof claims.nbf === "number" && claims.nbf * 1000 > Date.now() + 60_000)
   ) {
     throw new Refused("expired");
   }
+
   if (text("event_name").startsWith("pull_request")) {
     throw new Refused("not from pull requests");
   }
+
   if (
     !text("repository") ||
     !text("workflow_ref").startsWith(`${text("repository")}/${WORKFLOW_FILE}@`)
   ) {
     throw new Refused("only the autofork workflow can ask");
   }
+
   return {
     repository: text("repository"),
     repository_id: text("repository_id"),

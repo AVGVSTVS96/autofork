@@ -59,6 +59,7 @@ export const prune = internalMutation({
       .take(500)) {
       await ctx.db.delete(old._id);
     }
+
     if (!isDone) {
       await ctx.scheduler.runAfter(0, internal.dashboard.prune, { cursor: continueCursor });
     }
@@ -73,6 +74,7 @@ export const forks = query({
     if (!identity) {
       return null;
     }
+
     const access = await ctx.db
       .query("access")
       .withIndex("user", (q) => q.eq("user", identity.subject))

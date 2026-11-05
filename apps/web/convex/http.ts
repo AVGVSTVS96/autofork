@@ -30,9 +30,11 @@ const guarded = (handle: (ctx: ActionCtx, request: Request) => Promise<Response>
       if (error instanceof Refused || error instanceof SyntaxError) {
         return json({ error: error.message }, error instanceof Refused ? 403 : 400);
       }
+
       if (error instanceof GitHubError) {
         return json({ error: "GitHub didn't answer; try again in a minute" }, 502);
       }
+
       throw error;
     }
   });
@@ -40,6 +42,7 @@ const guarded = (handle: (ctx: ActionCtx, request: Request) => Promise<Response>
 const same = async (a: string, b: string) => {
   const digest = async (text: string) =>
     crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+
   const [x, y] = await Promise.all([digest(a), digest(b)]);
 
   return new Uint8Array(x).every((byte, index) => byte === new Uint8Array(y)[index]);
@@ -70,6 +73,7 @@ http.route({
     if (!asked) {
       return json({ error: "need patch, agent and cap" }, 400);
     }
+
     const opened = await ctx.runMutation(internal.ledger.open, {
       ...who,
       ...asked,
@@ -90,6 +94,7 @@ http.route({
     if (!asked) {
       return json({ error: "need id and status" }, 400);
     }
+
     const closed = await ctx.runMutation(internal.ledger.close, {
       repoId,
       ...asked,
@@ -111,6 +116,7 @@ http.route({
     if (!asked) {
       return json({ error: "need owner and name" }, 400);
     }
+
     const repo = `${asked.owner}/${asked.name}`.toLowerCase();
     /* Anyone can ask, so a private repo's answer is only yes or no */
     const row = await ctx.runQuery(internal.forks.byName, { name: repo });
@@ -118,14 +124,17 @@ http.route({
     if (row) {
       return json({ linked: true, cron: row.open ? row.cron : null });
     }
+
     if (!(await ctx.runMutation(internal.forks.mayCheck, { name: repo }))) {
       return json({ linked: false, cron: null, checked: false });
     }
+
     const found = await ctx.runAction(internal.forks.refresh, { name: repo }).catch(() => null);
 
     if (!found) {
       return json({ error: "GitHub didn't answer; try again in a minute" }, 502);
     }
+
     /* A repo that isn't public gets the same answer whether it's missing, private or not installed */
     return json(
       found.open
@@ -166,6 +175,7 @@ http.route({
     if (!(await signed(body, request.headers.get("x-hub-signature-256")))) {
       return json({ error: "bad signature" }, 401);
     }
+
     const event = request.headers.get("x-github-event");
     const hook = JSON.parse(body) as Hook;
 
@@ -212,6 +222,7 @@ http.route({
     ) {
       await refresh([hook.repository]);
     }
+
     return new Response(null, { status: 204 });
   }),
 });
@@ -226,11 +237,13 @@ http.route({
     if (!secret || !(await same(request.headers.get("authorization") ?? "", `Bearer ${secret}`))) {
       return json({ error: "not allowed" }, 403);
     }
+
     const { name } = (await request.json()) ?? {};
 
     if (typeof name !== "string") {
       return json({ error: "need name" }, 400);
     }
+
     await ctx.scheduler.runAfter(0, internal.forks.refresh, { name });
 
     return new Response(null, { status: 204 });
@@ -246,6 +259,7 @@ http.route({
     if (!secret || !(await same(request.headers.get("authorization") ?? "", `Bearer ${secret}`))) {
       return json({ error: "not allowed" }, 403);
     }
+
     const { user, repos, mode } = (await request.json()) ?? {};
 
     if (
@@ -256,6 +270,7 @@ http.route({
     ) {
       return json({ error: "need user, mode and repos" }, 400);
     }
+
     await ctx.runMutation(internal.dashboard.allow, {
       user,
       mode,

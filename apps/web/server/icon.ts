@@ -53,10 +53,12 @@ const extractIconHref = (source: string) => {
   if (html) {
     return html;
   }
+
   for (const run of source.split("}")) {
     if (!ICON_REL_RE.test(run)) {
       continue;
     }
+
     const href = ICON_HREF_RE.exec(run)?.[1];
 
     if (href) {
@@ -115,6 +117,7 @@ const icnsPng = (bytes: Uint8Array) => {
   if (bytes.length < 8 || ascii(bytes, 0, 4) !== "icns") {
     return null;
   }
+
   const end = Math.min(data.getUint32(4), bytes.length);
   let best: { png: Uint8Array; width: number } | null = null;
 
@@ -124,12 +127,14 @@ const icnsPng = (bytes: Uint8Array) => {
     if (length < 8 || offset + length > end) {
       break;
     }
+
     const entry = bytes.subarray(offset + 8, offset + length);
     offset += length;
 
     if (entry.length < 24 || !looksRight.png!(entry)) {
       continue;
     }
+
     const width = new DataView(entry.buffer, entry.byteOffset + 16, 4).getUint32(0);
 
     if (!best || (best.width < 96 ? width > best.width : width >= 96 && width < best.width)) {
@@ -211,6 +216,7 @@ export const detect = (token: GitHub.Token, owner: string, name: string) =>
     if (!repo) {
       return null;
     }
+
     const avatar = repo.owner.avatarUrl;
     const oid = repo.defaultBranchRef?.target.oid;
 
@@ -249,12 +255,14 @@ export const detect = (token: GitHub.Token, owner: string, name: string) =>
       if (size === undefined || !TYPES[type] || size > (type === "icns" ? LARGEST_ICNS : LARGEST)) {
         continue;
       }
+
       const raw = yield* download(owner, name, oid, path);
       const bytes = raw && type === "icns" ? icnsPng(raw) : raw;
 
       if (!bytes || bytes.length > LARGEST || !looksRight[type === "icns" ? "png" : type]!(bytes)) {
         continue;
       }
+
       return {
         icon: {
           path,
@@ -280,6 +288,7 @@ export const lookup = (owner: string, name: string) =>
     if (hit && Date.now() - hit.at < 3_600_000) {
       return hit.value;
     }
+
     const value = yield* detect(yield* GitHub.appToken, owner, name);
     found.delete(key);
     found.set(key, { at: Date.now(), value });
@@ -287,5 +296,6 @@ export const lookup = (owner: string, name: string) =>
     if (found.size > 200) {
       found.delete(found.keys().next().value!);
     }
+
     return value;
   });
