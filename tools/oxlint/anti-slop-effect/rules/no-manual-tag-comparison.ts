@@ -1,10 +1,10 @@
-import { defineRule } from "@oxlint/plugins"
+import { defineRule } from "@oxlint/plugins";
 
 import {
   isInsideBroadEffectHandler,
   isTagMember,
   tagMemberFromComparison,
-} from "../shared/tagged-values.ts"
+} from "../shared/tagged-values.ts";
 
 export const noManualTagComparisonRule = defineRule({
   meta: {
@@ -23,16 +23,16 @@ export const noManualTagComparisonRule = defineRule({
     return {
       BinaryExpression(node) {
         if (tagMemberFromComparison(node) === undefined || isInsideBroadEffectHandler(node)) {
-          return
+          return;
         }
-        context.report({ node, messageId: "manualComparison" })
+        context.report({ node, messageId: "manualComparison" });
       },
       SwitchStatement(node) {
         if (!isTagMember(node.discriminant) || isInsideBroadEffectHandler(node)) {
-          return
+          return;
         }
-        context.report({ node, messageId: "manualSwitch" })
+        context.report({ node, messageId: "manualSwitch" });
       },
-    }
+    };
   },
-})
+});

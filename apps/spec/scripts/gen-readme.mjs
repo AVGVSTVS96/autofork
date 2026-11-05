@@ -3,6 +3,7 @@
 // which this script owns. Run via `bun run readme`.
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+
 import { remark } from "remark";
 import { visit } from "unist-util-visit";
 

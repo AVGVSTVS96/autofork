@@ -1,5 +1,5 @@
-import { ArrowDownIcon, GitHubIcon } from "./components/Icons";
 import { CodeBlock } from "./components/CodeBlock";
+import { ArrowDownIcon, GitHubIcon } from "./components/Icons";
 import { Callout, SpecHeading } from "./components/SpecPrimitives";
 import Spec from "./spec.mdx";
 
@@ -35,16 +35,16 @@ function Header() {
 
 function Hero() {
   return (
-    <section id="top" className="w-full px-6 py-14 md:py-24 md:px-8">
-      <div className="max-w-2xl mx-auto">
+    <section id="top" className="w-full px-6 py-14 md:px-8 md:py-24">
+      <div className="mx-auto max-w-2xl">
         <span className="chip">v0.0.1</span>
         <h1 className="mt-5.5 text-[56px] font-semibold">
           PATCH<span className="text-accent">.md</span>
         </h1>
-        <p className="max-w-2xl mt-6 text-balance text-lg">
+        <p className="mt-6 max-w-2xl text-lg text-balance">
           A spec for defining agent-healable source patches in markdown
         </p>
-        <a className="card-link mt-4 flex flex-wrap w-max" href="#spec">
+        <a className="mt-4 card-link flex w-max flex-wrap" href="#spec">
           <ArrowDownIcon />
           Read the spec
         </a>
@@ -56,14 +56,14 @@ function Hero() {
 function Intro() {
   return (
     <section className="border-t border-border px-6 py-14 md:px-8">
-      <div className="mx-auto max-w-2xl *:first:mb-5 *:not-first:mb-3">
+      <div className="mx-auto max-w-2xl *:not-first:mb-3 *:first:mb-5">
         <p>
-          <span className="text-text-h font-semibold">PATCH.md</span> is a proposed new spec for
+          <span className="font-semibold text-text-h">PATCH.md</span> is a proposed new spec for
           defining agent-healable source patches in markdown. With a single markdown file, agents
           can self-heal, updating patch definitions when the source changes and re-applying patches.
         </p>
         <p>The file holds two things:</p>
-        <ul className="list-['–__'] marker:text-accent pl-5 space-y-1 [&_b]:text-text-h [&_b]:mr-1 [&_b]:font-semibold">
+        <ul className="list-['–__'] space-y-1 pl-5 marker:text-accent [&_b]:mr-1 [&_b]:font-semibold [&_b]:text-text-h">
           <li>
             <b>intent</b> written in plain prose
           </li>
@@ -97,7 +97,7 @@ export function App() {
       <Intro />
       <div className="ticks" />
       <section id="spec" className="border-t border-border px-6 py-16 md:px-8 md:py-20">
-        <div className="spec-content mx-auto max-w-2xl">
+        <div className="mx-auto spec-content max-w-2xl">
           <Spec components={mdxComponents} />
         </div>
       </section>

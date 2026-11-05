@@ -1,15 +1,16 @@
-import { useState } from "react"
-import facts from "./facts.json"
-import { repoIcon } from "./known.ts"
+import { useState } from "react";
 
-const [t3fork] = facts.forks
-const install = `npx skills add ${facts.owner}/autofork`
+import facts from "./facts.json";
+import { repoIcon } from "./known.ts";
+
+const [t3fork] = facts.forks;
+const install = `npx skills add ${facts.owner}/autofork`;
 
 const Minimize = () => (
   <svg viewBox="0 0 24 24" aria-hidden="true">
     <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" />
   </svg>
-)
+);
 
 const Send = () => (
   <i className="m-send">
@@ -17,20 +18,21 @@ const Send = () => (
       <path d="M7 11.5V2.5M7 2.5L3 6.5M7 2.5L11 6.5" />
     </svg>
   </i>
-)
+);
 
 const Model = () => (
   <i className="m-model">
     <i className="claude-dot" />
     Opus 5.5
   </i>
-)
+);
 
 export const Meant = () => (
   <section className="meant" id="how">
     <h2 data-node>Your change is kept in plain words.</h2>
     <p className="line">
-      Each new release, your changes go back on top. When one no longer fits their new code, an agent rebuilds it from your words.
+      Each new release, your changes go back on top. When one no longer fits their new code, an
+      agent rebuilds it from your words.
     </p>
 
     <div className="story" data-story>
@@ -38,7 +40,8 @@ export const Meant = () => (
         <span className="wish-label">You asked</span>
         <p>always show context usage</p>
         <span className="wish-file">
-          <b>PATCH.md</b> Always show the thread's context usage in the composer. Build it on whatever T3 Code shows for context at the time.
+          <b>PATCH.md</b> Always show the thread's context usage in the composer. Build it on
+          whatever T3 Code shows for context at the time.
         </span>
       </div>
 
@@ -119,16 +122,27 @@ export const Meant = () => (
         </article>
       </div>
     </div>
-    <p className="foot">An example on T3 Code. If they ship exactly what you asked for, yours pauses and you decide.</p>
+    <p className="foot">
+      An example on T3 Code. If they ship exactly what you asked for, yours pauses and you decide.
+    </p>
   </section>
-)
+);
 
-export type Mine = { repo: string; name: string; about?: string; change: string; ask?: string }
+export type Mine = { repo: string; name: string; about?: string; change: string; ask?: string };
 
 const mine: ReadonlyArray<Mine> = [
-  { repo: "davidmokos/expo-gpt-live", name: "expo-gpt-live", about: "an Expo voice app template", change: "it calls my assistant, and I maintain it now" },
+  {
+    repo: "davidmokos/expo-gpt-live",
+    name: "expo-gpt-live",
+    about: "an Expo voice app template",
+    change: "it calls my assistant, and I maintain it now",
+  },
   { repo: "herdrdev/herdr", name: "herdr", change: "every pane shows its ID on its border" },
-  { repo: "block/buzz", name: "Buzz", change: "my agents share files with me, and I can suggest edits" },
+  {
+    repo: "block/buzz",
+    name: "Buzz",
+    change: "my agents share files with me, and I can suggest edits",
+  },
   {
     repo: "anthropics/claude-plugins-official",
     name: "Claude Code's Telegram plugin",
@@ -136,14 +150,19 @@ const mine: ReadonlyArray<Mine> = [
     ask: "its Telegram plugin runs many sessions on one bot, one for each forum topic",
   },
   { repo: "pingdotgg/t3code", name: "T3 Code", change: "the window title shows the thread I'm on" },
-  { repo: "AVGVSTVS96/autofork-app", name: "autofork.com", change: "its examples are real open requests, refreshed every 4 days" },
-]
+  {
+    repo: "AVGVSTVS96/autofork-app",
+    name: "autofork.com",
+    change: "its examples are real open requests, refreshed every 4 days",
+  },
+];
 
 export const MineToday = ({ onPick }: { onPick: (fork: Mine, keyboard: boolean) => void }) => (
   <section className="mine-today">
     <h2 data-node>My forks, today.</h2>
     <p className="line">
-      My T3 Code fork took {t3fork!.upstreamCommitsAbsorbed} commits from T3 Code in its first two days, and I never rebased it. One change broke on day one and the agent rebuilt it.
+      My T3 Code fork took {t3fork!.upstreamCommitsAbsorbed} commits from T3 Code in its first two
+      days, and I never rebased it. One change broke on day one and the agent rebuilt it.
     </p>
     <div className="t3" data-t3 />
     <ul className="asks">
@@ -160,21 +179,24 @@ export const MineToday = ({ onPick }: { onPick: (fork: Mine, keyboard: boolean) 
       ))}
     </ul>
   </section>
-)
+);
 
 export const Yours = () => {
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState(false);
   const copy = () =>
     void navigator.clipboard.writeText(install).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1400)
-    })
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
+    });
   return (
     <section className="yours" id="self">
       <div className="yours-card">
         <div>
           <h2 data-node>It runs in your GitHub.</h2>
-          <p className="line">Your fork lives in your GitHub account and updates itself in its own GitHub Actions, on the ChatGPT or Claude plan you already pay for. Free on public forks.</p>
+          <p className="line">
+            Your fork lives in your GitHub account and updates itself in its own GitHub Actions, on
+            the ChatGPT or Claude plan you already pay for. Free on public forks.
+          </p>
         </div>
         <div className="gh">
           <div className="gh-name">
@@ -203,8 +225,8 @@ export const Yours = () => {
         </div>
       </div>
     </section>
-  )
-}
+  );
+};
 
 const posts = [
   {
@@ -219,7 +241,8 @@ const posts = [
     when: "Oct 6",
     at: 0.73,
     text: "automatic repo maintenance/patching is a cool technique i’ve been using to make forking and modifying existing projects more approachable\n\nbots track upstream and maintain the repo automatically\n\ni think it would be good to package this so anyone can set up their own auto-maintained fork",
-    quote: "i have an idea:\n\ntake open source repos that rarely merge/review contributor PRs and set up an auto maintenance bot to keep up with upstream while copying and merging good contributor PRs the maintainers never merge",
+    quote:
+      "i have an idea:\n\ntake open source repos that rarely merge/review contributor PRs and set up an auto maintenance bot to keep up with upstream while copying and merging good contributor PRs the maintainers never merge",
   },
   {
     id: "2108047388304871934",
@@ -228,15 +251,16 @@ const posts = [
     to: "theo",
     text: "auto patching/repo-maintenance is game-changing. i can fork and customize anything, the agents will autonomously track upstream and re-implement my changes",
   },
-]
+];
 
-const Paragraphs = ({ text }: { text: string }) => text.split("\n\n").map((p) => <p key={p}>{p}</p>)
+const Paragraphs = ({ text }: { text: string }) =>
+  text.split("\n\n").map((p) => <p key={p}>{p}</p>);
 
 const XMark = () => (
   <svg viewBox="0 0 24 24" aria-hidden="true">
     <path d="M18.9 1.15h3.68l-8.04 9.19L24 22.85h-7.4l-5.8-7.59-6.64 7.59H.47l8.6-9.83L0 1.15h7.6l5.24 6.93Zm-1.29 19.5h2.04L6.49 3.24H4.3Z" />
   </svg>
-)
+);
 
 export const History = () => (
   <section className="history">
@@ -269,4 +293,4 @@ export const History = () => (
       </ol>
     </div>
   </section>
-)
+);

@@ -1,11 +1,11 @@
-import { defineRule } from "@oxlint/plugins"
+import { defineRule } from "@oxlint/plugins";
 
 import {
   isInsideBroadEffectHandler,
   isReasonTagMember,
   isTagMember,
   tagMemberFromComparison,
-} from "../shared/tagged-values.ts"
+} from "../shared/tagged-values.ts";
 
 export const noManualEffectErrorTagRule = defineRule({
   meta: {
@@ -23,24 +23,24 @@ export const noManualEffectErrorTagRule = defineRule({
   createOnce(context) {
     return {
       BinaryExpression(node) {
-        const tagMember = tagMemberFromComparison(node)
+        const tagMember = tagMemberFromComparison(node);
         if (tagMember === undefined || !isInsideBroadEffectHandler(node)) {
-          return
+          return;
         }
         context.report({
           node,
           messageId: isReasonTagMember(tagMember) ? "reason" : "tag",
-        })
+        });
       },
       SwitchStatement(node) {
         if (!isTagMember(node.discriminant) || !isInsideBroadEffectHandler(node)) {
-          return
+          return;
         }
         context.report({
           node,
           messageId: isReasonTagMember(node.discriminant) ? "reason" : "tag",
-        })
+        });
       },
-    }
+    };
   },
-})
+});

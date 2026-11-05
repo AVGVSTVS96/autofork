@@ -1,4 +1,4 @@
-const clientId = process.env.WORKOS_CLIENT_ID
+const clientId = process.env.WORKOS_CLIENT_ID;
 
 export default {
   providers: [
@@ -16,4 +16,4 @@ export default {
       jwks: `https://api.workos.com/sso/jwks/${clientId}`,
     },
   ],
-}
+};

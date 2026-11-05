@@ -2,9 +2,8 @@
   "name": "autofork",
   "version": "0.2.4",
   "description": "Customized forks that maintain themselves. Personal forks of open-source apps auto-track upstream: every release, your changes are reapplied, and an agent rebuilds any that break.",
-  "type": "module",
-  "license": "MIT",
   "homepage": "https://autofork.com",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/AVGVSTVS96/autofork.git",
@@ -16,9 +15,7 @@
   "files": [
     "dist"
   ],
-  "engines": {
-    "node": ">=20"
-  },
+  "type": "module",
   "scripts": {
     "build": "bun build src/autofork.ts --target node --outfile dist/autofork.js",
     "test": "bun run build && bun test",
@@ -28,5 +25,8 @@
     "@types/bun": "1.4.3",
     "@types/node": "catalog:",
     "typescript": "catalog:"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

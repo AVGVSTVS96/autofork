@@ -1,6 +1,8 @@
-import { createHash, randomBytes } from "node:crypto"
-import * as Effect from "effect/Effect"
-import { Problem } from "../shared/api.ts"
+import { createHash, randomBytes } from "node:crypto";
+
+import * as Effect from "effect/Effect";
+
+import { Problem } from "../shared/api.ts";
 
 const post = <A>(url: string, body: Record<string, string | number>, form = false) =>
   Effect.tryPromise({
@@ -11,13 +13,16 @@ const post = <A>(url: string, body: Record<string, string | number>, form = fals
           "content-type": form ? "application/x-www-form-urlencoded" : "application/json",
           "user-agent": "autofork",
         },
-        body: form ? new URLSearchParams(Object.entries(body).map(([key, value]) => [key, String(value)])) : JSON.stringify(body),
-      })
-      const parsed = (await response.json().catch(() => undefined)) as A | undefined
-      return { status: response.status, json: parsed !== undefined, body: parsed ?? ({} as A) }
+        body: form
+          ? new URLSearchParams(Object.entries(body).map(([key, value]) => [key, String(value)]))
+          : JSON.stringify(body),
+      });
+      const parsed = (await response.json().catch(() => undefined)) as A | undefined;
+      return { status: response.status, json: parsed !== undefined, body: parsed ?? ({} as A) };
     },
-    catch: () => new Problem({ message: `Couldn't reach ${new URL(url).host}. Try again in a moment.` }),
-  })
+    catch: () =>
+      new Problem({ message: `Couldn't reach ${new URL(url).host}. Try again in a moment.` }),
+  });
 
 // Claude Code's own sign-in, the one `claude setup-token` runs: a year-long token for inference only.
 const CLAUDE = {
@@ -26,14 +31,14 @@ const CLAUDE = {
   token: "https://platform.claude.com/v1/oauth/token",
   redirect: "https://platform.claude.com/oauth/code/callback",
   year: 31536000,
-}
+};
 
-const base64url = (bytes: Buffer) => bytes.toString("base64url")
+const base64url = (bytes: Buffer) => bytes.toString("base64url");
 
 export const claudeStart = () => {
-  const verifier = base64url(randomBytes(32))
-  const state = base64url(randomBytes(32))
-  const url = new URL(CLAUDE.authorize)
+  const verifier = base64url(randomBytes(32));
+  const state = base64url(randomBytes(32));
+  const url = new URL(CLAUDE.authorize);
   url.search = new URLSearchParams({
     code: "true",
     client_id: CLAUDE.client,
@@ -43,15 +48,18 @@ export const claudeStart = () => {
     code_challenge: base64url(createHash("sha256").update(verifier).digest()),
     code_challenge_method: "S256",
     state,
-  }).toString()
-  return { url: url.toString(), verifier, state }
-}
+  }).toString();
+  return { url: url.toString(), verifier, state };
+};
 
 export const claudeToken = (pasted: string, expected: { verifier: string; state: string }) =>
   Effect.gen(function* () {
-    const [code, state] = pasted.trim().split("#")
+    const [code, state] = pasted.trim().split("#");
     if (!code || state !== expected.state) {
-      return yield* new Problem({ message: "That isn't the code from this sign-in. Copy the whole code from Claude's page and paste it again." })
+      return yield* new Problem({
+        message:
+          "That isn't the code from this sign-in. Copy the whole code from Claude's page and paste it again.",
+      });
     }
     const { status, body } = yield* post<{ access_token?: string }>(CLAUDE.token, {
       grant_type: "authorization_code",
@@ -61,49 +69,75 @@ export const claudeToken = (pasted: string, expected: { verifier: string; state:
       client_id: CLAUDE.client,
       code_verifier: expected.verifier,
       expires_in: CLAUDE.year,
-    })
-    if (status !== 200 && status !== 400 && status !== 401) return yield* new Problem({ message: `Claude's sign-in answered ${status}. Try again in a minute.` })
+    });
+    if (status !== 200 && status !== 400 && status !== 401)
+      return yield* new Problem({
+        message: `Claude's sign-in answered ${status}. Try again in a minute.`,
+      });
     if (status !== 200 || !body.access_token) {
-      return yield* new Problem({ message: "Claude didn't accept that code. Codes work once and expire quickly, so sign in again for a new one." })
+      return yield* new Problem({
+        message:
+          "Claude didn't accept that code. Codes work once and expire quickly, so sign in again for a new one.",
+      });
     }
-    return body.access_token
-  })
+    return body.access_token;
+  });
 
 // Codex's device sign-in, the one `codex login --device-auth` runs.
 const CHATGPT = {
   client: "app_EMoamEEZ73f0CkXaXp7hrann",
   issuer: "https://auth.openai.com",
   page: "https://auth.openai.com/codex/device",
-}
+};
 
 export const chatgptStart = Effect.gen(function* () {
-  const { status, body } = yield* post<{ device_auth_id?: string; user_code?: string }>(`${CHATGPT.issuer}/api/accounts/deviceauth/usercode`, {
-    client_id: CHATGPT.client,
-  })
+  const { status, body } = yield* post<{ device_auth_id?: string; user_code?: string }>(
+    `${CHATGPT.issuer}/api/accounts/deviceauth/usercode`,
+    {
+      client_id: CHATGPT.client,
+    },
+  );
   if (!body.device_auth_id || !body.user_code) {
-    return yield* new Problem({ message: `ChatGPT sign-in isn't available right now (it answered ${status}). Try again in a moment.` })
+    return yield* new Problem({
+      message: `ChatGPT sign-in isn't available right now (it answered ${status}). Try again in a moment.`,
+    });
   }
-  return { id: body.device_auth_id, code: body.user_code, url: CHATGPT.page, at: Date.now() }
-})
+  return { id: body.device_auth_id, code: body.user_code, url: CHATGPT.page, at: Date.now() };
+});
 
-const claims = (jwt: string) => JSON.parse(Buffer.from(jwt.split(".")[1] ?? "", "base64url").toString()) as Record<string, unknown>
+const claims = (jwt: string) =>
+  JSON.parse(Buffer.from(jwt.split(".")[1] ?? "", "base64url").toString()) as Record<
+    string,
+    unknown
+  >;
 
 /* Codex's own client treats 403 and 404 as "not signed in yet" and gives up after 15 minutes:
    https://github.com/openai/codex/blob/main/codex-rs/login/src/device_code_auth.rs */
 export const chatgptAuth = (device: { id: string; code: string; at?: number }) =>
   Effect.gen(function* () {
     if (device.at && Date.now() - device.at > 15 * 60_000) {
-      return yield* new Problem({ message: "That ChatGPT code expired. Pick ChatGPT again for a new one." })
+      return yield* new Problem({
+        message: "That ChatGPT code expired. Pick ChatGPT again for a new one.",
+      });
     }
-    const poll = yield* post<{ authorization_code?: string; code_verifier?: string }>(`${CHATGPT.issuer}/api/accounts/deviceauth/token`, {
-      device_auth_id: device.id,
-      user_code: device.code,
-    })
-    if ((poll.status === 403 || poll.status === 404) && poll.json) return null
+    const poll = yield* post<{ authorization_code?: string; code_verifier?: string }>(
+      `${CHATGPT.issuer}/api/accounts/deviceauth/token`,
+      {
+        device_auth_id: device.id,
+        user_code: device.code,
+      },
+    );
+    if ((poll.status === 403 || poll.status === 404) && poll.json) return null;
     if (poll.status !== 200 || !poll.body.authorization_code || !poll.body.code_verifier) {
-      return yield* new Problem({ message: `ChatGPT's sign-in answered ${poll.status} instead of a sign-in. Pick ChatGPT again for a new code.` })
+      return yield* new Problem({
+        message: `ChatGPT's sign-in answered ${poll.status} instead of a sign-in. Pick ChatGPT again for a new code.`,
+      });
     }
-    const { status, body } = yield* post<{ id_token?: string; access_token?: string; refresh_token?: string }>(
+    const { status, body } = yield* post<{
+      id_token?: string;
+      access_token?: string;
+      refresh_token?: string;
+    }>(
       `${CHATGPT.issuer}/oauth/token`,
       {
         grant_type: "authorization_code",
@@ -113,11 +147,15 @@ export const chatgptAuth = (device: { id: string; code: string; at?: number }) =
         code_verifier: poll.body.code_verifier,
       },
       true,
-    )
+    );
     if (!body.id_token || !body.access_token || !body.refresh_token) {
-      return yield* new Problem({ message: `ChatGPT sign-in didn't finish (it answered ${status}). Start it again for a new code.` })
+      return yield* new Problem({
+        message: `ChatGPT sign-in didn't finish (it answered ${status}). Start it again for a new code.`,
+      });
     }
-    const auth = claims(body.id_token)["https://api.openai.com/auth"] as { chatgpt_account_id?: string } | undefined
+    const auth = claims(body.id_token)["https://api.openai.com/auth"] as
+      | { chatgpt_account_id?: string }
+      | undefined;
     return JSON.stringify({
       auth_mode: "chatgpt",
       OPENAI_API_KEY: null,
@@ -128,5 +166,5 @@ export const chatgptAuth = (device: { id: string; code: string; at?: number }) =
         account_id: auth?.chatgpt_account_id ?? null,
       },
       last_refresh: new Date().toISOString(),
-    })
-  })
+    });
+  });

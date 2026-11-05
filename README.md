@@ -1,6 +1,6 @@
 <a href="https://autofork.com"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/AVGVSTVS96/autofork/main/brand/readme/header-dark.png">
-  <img alt="autofork: Customized forks that maintain themselves." src="https://raw.githubusercontent.com/AVGVSTVS96/autofork/main/brand/readme/header-light.png">
+<source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/AVGVSTVS96/autofork/main/brand/readme/header-dark.png">
+<img alt="autofork: Customized forks that maintain themselves." src="https://raw.githubusercontent.com/AVGVSTVS96/autofork/main/brand/readme/header-light.png">
 </picture></a>
 
 Personal forks of open-source apps that auto-track upstream. Each change you make is saved in plain words, in a `PATCH.md`. On every upstream release your changes go back on top, and when one no longer applies, an agent rebuilds it from what you wrote, in your fork's own GitHub Actions, on your Claude or ChatGPT plan.
@@ -127,17 +127,17 @@ It opens autofork.com, where you sign in with GitHub and add autofork's GitHub a
 }
 ```
 
-| key | |
-| --- | --- |
-| `upstream` | `owner/repo`, or any git URL |
-| `follow` | `releases` (the release GitHub marks as upstream's latest, or its newest version tag when it has no GitHub releases), a channel (a tag pattern like `v*-nightly.*`: the newest release whose tag matches) or a branch. Default: `releases`, or the default branch if upstream has no releases |
-| `setup` | the command that installs dependencies in the rebuild, like `pnpm install --no-frozen-lockfile`. It runs before `verify` and the agent |
-| `generated` | files `setup` writes, like lockfiles. They're left out of patches and rebuilt by `setup` once the patches are in, so they never conflict. They need your own `setup` |
-| `verify` | the command that checks a build. Without one, the next agent that builds or heals a patch picks it from upstream's CI, with `setup` too if there's none, and saves them in `picked` |
-| `picked` | the `setup` and `verify` an agent picked. They work like yours, except that when one fails on upstream alone, the sync drops them and goes on, and the next agent that builds or heals a patch picks again. Your own `setup` or `verify` replaces the pick of the same name, and once `verify` is yours, a picked `setup` counts as yours too |
-| `agent` | the command that rebuilds a patch, prompt on stdin. Default: Claude Code, with only its shell and file tools and no MCP servers, when `CLAUDE_CODE_OAUTH_TOKEN` is set, otherwise Codex when it's signed in (a `CODEX_AUTH` secret holding the `auth.json` of a Codex sign-in made for the fork, since each refresh retires the last one) |
-| `green` | when following a branch, `false` takes upstream's newest commit even when its checks failed |
-| `limits` | `rebuilds` a month, and dollars a `month` and a `rebuild`, at API prices. Default: 10, 200 and 20. See [Spend](#spend) |
+| key         |                                                                                                                                                                                                                                                                                                                                               |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `upstream`  | `owner/repo`, or any git URL                                                                                                                                                                                                                                                                                                                  |
+| `follow`    | `releases` (the release GitHub marks as upstream's latest, or its newest version tag when it has no GitHub releases), a channel (a tag pattern like `v*-nightly.*`: the newest release whose tag matches) or a branch. Default: `releases`, or the default branch if upstream has no releases                                                 |
+| `setup`     | the command that installs dependencies in the rebuild, like `pnpm install --no-frozen-lockfile`. It runs before `verify` and the agent                                                                                                                                                                                                        |
+| `generated` | files `setup` writes, like lockfiles. They're left out of patches and rebuilt by `setup` once the patches are in, so they never conflict. They need your own `setup`                                                                                                                                                                          |
+| `verify`    | the command that checks a build. Without one, the next agent that builds or heals a patch picks it from upstream's CI, with `setup` too if there's none, and saves them in `picked`                                                                                                                                                           |
+| `picked`    | the `setup` and `verify` an agent picked. They work like yours, except that when one fails on upstream alone, the sync drops them and goes on, and the next agent that builds or heals a patch picks again. Your own `setup` or `verify` replaces the pick of the same name, and once `verify` is yours, a picked `setup` counts as yours too |
+| `agent`     | the command that rebuilds a patch, prompt on stdin. Default: Claude Code, with only its shell and file tools and no MCP servers, when `CLAUDE_CODE_OAUTH_TOKEN` is set, otherwise Codex when it's signed in (a `CODEX_AUTH` secret holding the `auth.json` of a Codex sign-in made for the fork, since each refresh retires the last one)     |
+| `green`     | when following a branch, `false` takes upstream's newest commit even when its checks failed                                                                                                                                                                                                                                                   |
+| `limits`    | `rebuilds` a month, and dollars a `month` and a `rebuild`, at API prices. Default: 10, 200 and 20. See [Spend](#spend)                                                                                                                                                                                                                        |
 
 `.github/workflows/autofork.yml` is yours too: change how often it checks on its `cron` line, and set up the tools `setup` and `verify` need (Node, Bun, Rust) before the autofork step, with your package manager's cache on so `setup` is quick. The action takes `heal: false` to apply what still fits without calling the agent, if you want rebuilds on one schedule and heals on another. With Codex, its `codex-auth-url`, which `init` and `fork` write, saves a refreshed sign-in back to the secret once the fork is [linked](#on-time); like reporting spend, that needs the workflow's `id-token: write`.
 

@@ -1,21 +1,21 @@
-import * as Config from "effect/Config"
-import * as Context from "effect/Context"
-import * as Layer from "effect/Layer"
-import * as Redacted from "effect/Redacted"
+import * as Config from "effect/Config";
+import * as Context from "effect/Context";
+import * as Layer from "effect/Layer";
+import * as Redacted from "effect/Redacted";
 
 export class Env extends Context.Service<
   Env,
   {
-    readonly appId: string
-    readonly appSlug: string
-    readonly clientId: string
-    readonly clientSecret: Redacted.Redacted<string>
-    readonly privateKey: Redacted.Redacted<string>
-    readonly sessionKey: Redacted.Redacted<string>
-    readonly workosClientId: string
-    readonly workosApiKey: Redacted.Redacted<string>
-    readonly convexSite: string
-    readonly serverSecret: Redacted.Redacted<string>
+    readonly appId: string;
+    readonly appSlug: string;
+    readonly clientId: string;
+    readonly clientSecret: Redacted.Redacted<string>;
+    readonly privateKey: Redacted.Redacted<string>;
+    readonly sessionKey: Redacted.Redacted<string>;
+    readonly workosClientId: string;
+    readonly workosApiKey: Redacted.Redacted<string>;
+    readonly convexSite: string;
+    readonly serverSecret: Redacted.Redacted<string>;
   }
 >()("autofork/Env") {}
 
@@ -33,4 +33,4 @@ export const layer = Layer.effect(
     convexSite: Config.String("CONVEX_SITE_URL"),
     serverSecret: Config.Redacted("AUTOFORK_SERVER_SECRET"),
   }),
-)
+);

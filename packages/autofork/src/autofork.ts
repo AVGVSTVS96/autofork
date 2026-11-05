@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawn, spawnSync } from "node:child_process";
+import { createHash, randomUUID } from "node:crypto";
 import {
   closeSync,
   cpSync,
@@ -12,7 +13,6 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { createHash, randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 

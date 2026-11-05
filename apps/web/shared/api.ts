@@ -1,23 +1,35 @@
-import * as Schema from "effect/Schema"
-import * as HttpApi from "effect/http-api/HttpApi"
-import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint"
-import * as HttpApiGroup from "effect/http-api/HttpApiGroup"
+import * as HttpApi from "effect/http-api/HttpApi";
+import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
+import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
+import * as Schema from "effect/Schema";
 
-export class Problem extends Schema.TaggedError<Problem>()("Problem", { message: Schema.String }, { httpApiStatus: 400 }) {}
+export class Problem extends Schema.TaggedError<Problem>()(
+  "Problem",
+  { message: Schema.String },
+  { httpApiStatus: 400 },
+) {}
 
-export class SignedOut extends Schema.TaggedError<SignedOut>()("SignedOut", {}, { httpApiStatus: 401 }) {}
+export class SignedOut extends Schema.TaggedError<SignedOut>()(
+  "SignedOut",
+  {},
+  { httpApiStatus: 401 },
+) {}
 
 /* `from` is the repo to fork instead, when the one asked about is on GitHub but isn't an autofork */
-export class NotFound extends Schema.TaggedError<NotFound>()("NotFound", { from: Schema.NullOr(Schema.String) }, { httpApiStatus: 404 }) {}
+export class NotFound extends Schema.TaggedError<NotFound>()(
+  "NotFound",
+  { from: Schema.NullOr(Schema.String) },
+  { httpApiStatus: 404 },
+) {}
 
-const SPLIT = /^(.+?)(?:,\s*but\s+|\s+but\s+|\s*:\s+|\s+(?:—|–|-)\s+|\s+to\s+)(.+)$/i
+const SPLIT = /^(.+?)(?:,\s*but\s+|\s+but\s+|\s*:\s+|\s+(?:—|–|-)\s+|\s+to\s+)(.+)$/i;
 
-export const squash = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, "")
+export const squash = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 export const split = (ask: string) => {
-  const [, app = ask, change = ""] = ask.trim().match(SPLIT) ?? []
-  return { app: app.trim(), change: change.trim() }
-}
+  const [, app = ask, change = ""] = ask.trim().match(SPLIT) ?? [];
+  return { app: app.trim(), change: change.trim() };
+};
 
 export const Repo = Schema.Struct({
   owner: Schema.String,
@@ -25,16 +37,20 @@ export const Repo = Schema.Struct({
   description: Schema.NullOr(Schema.String),
   stars: Schema.Number,
   avatar: Schema.String,
-})
-export type Repo = typeof Repo.Type
+});
+export type Repo = typeof Repo.Type;
 
-export const Request = Schema.Struct({ repo: Repo, change: Schema.String, others: Schema.Array(Repo) })
+export const Request = Schema.Struct({
+  repo: Repo,
+  change: Schema.String,
+  others: Schema.Array(Repo),
+});
 
-export const Me = Schema.Struct({ login: Schema.String, avatar: Schema.String })
+export const Me = Schema.Struct({ login: Schema.String, avatar: Schema.String });
 
-export const Agent = Schema.Literals(["chatgpt", "claude"])
-export type Agent = typeof Agent.Type
-export const isAgent = Schema.is(Agent)
+export const Agent = Schema.Literals(["chatgpt", "claude"]);
+export type Agent = typeof Agent.Type;
+export const isAgent = Schema.is(Agent);
 
 export const ForkState = Schema.Struct({
   owner: Schema.String,
@@ -42,21 +58,35 @@ export const ForkState = Schema.Struct({
   status: Schema.Literals(["new", "ready", "install", "fork", "grant"]),
   link: Schema.NullOr(Schema.String),
   places: Schema.Array(Schema.String),
-})
-export type ForkState = typeof ForkState.Type
+});
+export type ForkState = typeof ForkState.Type;
 
-export const Started = Schema.Struct({ owner: Schema.String, name: Schema.String })
+export const Started = Schema.Struct({ owner: Schema.String, name: Schema.String });
 
-export const LIMITS = { rebuilds: 10, month: 200, rebuild: 20 } as const
+export const LIMITS = { rebuilds: 10, month: 200, rebuild: 20 } as const;
 
-export const Limits = Schema.Struct({ rebuilds: Schema.Number, month: Schema.Number, rebuild: Schema.Number })
-export type Limits = typeof Limits.Type
+export const Limits = Schema.Struct({
+  rebuilds: Schema.Number,
+  month: Schema.Number,
+  rebuild: Schema.Number,
+});
+export type Limits = typeof Limits.Type;
 
-export const EVERY = { "5m": "2-59/5 * * * *", "15m": "7-59/15 * * * *", "1h": "17 * * * *", "1d": "17 6 * * *" } as const
+export const EVERY = {
+  "5m": "2-59/5 * * * *",
+  "15m": "7-59/15 * * * *",
+  "1h": "17 * * * *",
+  "1d": "17 6 * * *",
+} as const;
 
 /* `head` is the commit the settings were read at, so a save on top of a newer commit is refused */
-export const Settings = Schema.Struct({ cron: Schema.NullOr(Schema.String), follow: Schema.String, limits: Limits, head: Schema.optional(Schema.String) })
-export type Settings = typeof Settings.Type
+export const Settings = Schema.Struct({
+  cron: Schema.NullOr(Schema.String),
+  follow: Schema.String,
+  limits: Limits,
+  head: Schema.optional(Schema.String),
+});
+export type Settings = typeof Settings.Type;
 
 export const MyFork = Schema.Struct({
   owner: Schema.String,
@@ -64,21 +94,21 @@ export const MyFork = Schema.Struct({
   upstream: Schema.NullOr(Schema.String),
   repoId: Schema.Number,
   settings: Settings,
-})
-export type MyFork = typeof MyFork.Type
+});
+export type MyFork = typeof MyFork.Type;
 
-export const DeviceCode = Schema.Struct({ code: Schema.String, url: Schema.String })
+export const DeviceCode = Schema.Struct({ code: Schema.String, url: Schema.String });
 
 export const DeviceWait = Schema.Union([
   Schema.Struct({ status: Schema.Literal("waiting") }),
   Schema.Struct({ status: Schema.Literal("started"), owner: Schema.String, name: Schema.String }),
-])
+]);
 
 export const Step = Schema.Struct({
   name: Schema.String,
   status: Schema.String,
   conclusion: Schema.NullOr(Schema.String),
-})
+});
 
 export const Run = Schema.Struct({
   url: Schema.String,
@@ -92,8 +122,8 @@ export const Run = Schema.Struct({
   change: Schema.NullOr(Schema.String),
   /* When the newest run started: later than startedAt when that run only skipped and this is the failure it skipped over */
   latestAt: Schema.String,
-})
-export type Run = typeof Run.Type
+});
+export type Run = typeof Run.Type;
 
 export const Change = Schema.Struct({
   id: Schema.String,
@@ -101,8 +131,8 @@ export const Change = Schema.Struct({
   state: Schema.Literals(["built", "building", "paused"]),
   upstream: Schema.NullOr(Schema.String),
   issue: Schema.NullOr(Schema.String),
-})
-export type Change = typeof Change.Type
+});
+export type Change = typeof Change.Type;
 
 export const Fork = Schema.Struct({
   owner: Schema.String,
@@ -112,47 +142,80 @@ export const Fork = Schema.Struct({
   changes: Schema.Array(Change),
   note: Schema.Boolean,
   run: Schema.NullOr(Run),
-})
-export type Fork = typeof Fork.Type
+});
+export type Fork = typeof Fork.Type;
 
-const fork = { owner: Schema.String, name: Schema.String }
+const fork = { owner: Schema.String, name: Schema.String };
 
-export const AppGroup = HttpApiGroup.make("app")
-  .add(
-    HttpApiEndpoint.get("resolve", "/api/resolve", { query: { q: Schema.String }, success: Request, error: Problem }),
-    HttpApiEndpoint.get("me", "/api/me", { success: Schema.NullOr(Me) }),
-    HttpApiEndpoint.post("signOut", "/api/signout"),
-    HttpApiEndpoint.get("mine", "/api/mine", { success: Schema.Array(MyFork), error: [Problem, SignedOut] }),
-    HttpApiEndpoint.post("prepare", "/api/forks", {
-      payload: Schema.Struct({ owner: Schema.String, name: Schema.String, into: Schema.optional(Schema.String), preview: Schema.optional(Schema.Boolean) }),
-      success: ForkState,
-      error: [Problem, SignedOut],
+export const AppGroup = HttpApiGroup.make("app").add(
+  HttpApiEndpoint.get("resolve", "/api/resolve", {
+    query: { q: Schema.String },
+    success: Request,
+    error: Problem,
+  }),
+  HttpApiEndpoint.get("me", "/api/me", { success: Schema.NullOr(Me) }),
+  HttpApiEndpoint.post("signOut", "/api/signout"),
+  HttpApiEndpoint.get("mine", "/api/mine", {
+    success: Schema.Array(MyFork),
+    error: [Problem, SignedOut],
+  }),
+  HttpApiEndpoint.post("prepare", "/api/forks", {
+    payload: Schema.Struct({
+      owner: Schema.String,
+      name: Schema.String,
+      into: Schema.optional(Schema.String),
+      preview: Schema.optional(Schema.Boolean),
     }),
-    HttpApiEndpoint.post("claudeStart", "/api/claude", { success: Schema.Struct({ url: Schema.String }) }),
-    HttpApiEndpoint.post("claudeFinish", "/api/forks/:owner/:name/claude", {
-      params: fork,
-      payload: Schema.Struct({ code: Schema.String, change: Schema.String }),
-      success: Started,
-      error: [Problem, SignedOut],
-    }),
-    HttpApiEndpoint.post("chatgptStart", "/api/chatgpt", { success: DeviceCode, error: Problem }),
-    HttpApiEndpoint.post("chatgptFinish", "/api/forks/:owner/:name/chatgpt", {
-      params: fork,
-      payload: Schema.Struct({ change: Schema.String }),
-      success: DeviceWait,
-      error: [Problem, SignedOut],
-    }),
-    HttpApiEndpoint.get("fork", "/api/forks/:owner/:name", { params: fork, success: Fork, error: [Problem, NotFound] }),
-    HttpApiEndpoint.get("yours", "/api/forks/:owner/:name/yours", { params: fork, success: Schema.Boolean }),
-    HttpApiEndpoint.get("settings", "/api/forks/:owner/:name/settings", { params: fork, success: Settings, error: [Problem, SignedOut] }),
-    HttpApiEndpoint.put("saveSettings", "/api/forks/:owner/:name/settings", { params: fork, payload: Settings, success: Settings, error: [Problem, SignedOut] }),
-    HttpApiEndpoint.get("convexToken", "/api/auth/token", { query: { fresh: Schema.optional(Schema.String) }, success: Schema.Struct({ token: Schema.String }), error: SignedOut }),
-    HttpApiEndpoint.post("addChange", "/api/forks/:owner/:name/changes", {
-      params: fork,
-      payload: Schema.Struct({ change: Schema.String }),
-      success: Started,
-      error: [Problem, SignedOut],
-    }),
-  )
+    success: ForkState,
+    error: [Problem, SignedOut],
+  }),
+  HttpApiEndpoint.post("claudeStart", "/api/claude", {
+    success: Schema.Struct({ url: Schema.String }),
+  }),
+  HttpApiEndpoint.post("claudeFinish", "/api/forks/:owner/:name/claude", {
+    params: fork,
+    payload: Schema.Struct({ code: Schema.String, change: Schema.String }),
+    success: Started,
+    error: [Problem, SignedOut],
+  }),
+  HttpApiEndpoint.post("chatgptStart", "/api/chatgpt", { success: DeviceCode, error: Problem }),
+  HttpApiEndpoint.post("chatgptFinish", "/api/forks/:owner/:name/chatgpt", {
+    params: fork,
+    payload: Schema.Struct({ change: Schema.String }),
+    success: DeviceWait,
+    error: [Problem, SignedOut],
+  }),
+  HttpApiEndpoint.get("fork", "/api/forks/:owner/:name", {
+    params: fork,
+    success: Fork,
+    error: [Problem, NotFound],
+  }),
+  HttpApiEndpoint.get("yours", "/api/forks/:owner/:name/yours", {
+    params: fork,
+    success: Schema.Boolean,
+  }),
+  HttpApiEndpoint.get("settings", "/api/forks/:owner/:name/settings", {
+    params: fork,
+    success: Settings,
+    error: [Problem, SignedOut],
+  }),
+  HttpApiEndpoint.put("saveSettings", "/api/forks/:owner/:name/settings", {
+    params: fork,
+    payload: Settings,
+    success: Settings,
+    error: [Problem, SignedOut],
+  }),
+  HttpApiEndpoint.get("convexToken", "/api/auth/token", {
+    query: { fresh: Schema.optional(Schema.String) },
+    success: Schema.Struct({ token: Schema.String }),
+    error: SignedOut,
+  }),
+  HttpApiEndpoint.post("addChange", "/api/forks/:owner/:name/changes", {
+    params: fork,
+    payload: Schema.Struct({ change: Schema.String }),
+    success: Started,
+    error: [Problem, SignedOut],
+  }),
+);
 
-export const Api = HttpApi.make("autofork").add(AppGroup)
+export const Api = HttpApi.make("autofork").add(AppGroup);
