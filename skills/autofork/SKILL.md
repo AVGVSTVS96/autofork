@@ -36,7 +36,7 @@ Start from a fork whose first sync has run: once it has the sign-in, wait for th
 3. Run `npx autofork save <id>`.
 4. Commit everything and push.
 
-Every source change must belong to a patch: once upstream moves, a sync refuses to rebuild while the fork has changes no patch holds, and `npx autofork status` lists them. To change an existing patch, edit the code, update its `PATCH.md` if the intent changed, and `save` the same id. `save` puts every change no patch holds yet into `<id>`, so save each change before starting the next. To drop a patch, delete its folder and undo its change in the same commit. When a change reaches code `verify` doesn't check, widen `verify` in `.autofork/config.json`.
+Every source change must belong to a patch: once upstream moves, a sync refuses to rebuild while the fork has changes no patch holds, and `npx autofork status` lists them. To change an existing patch, edit the code, update its `PATCH.md` if the intent changed, and `save` the same id. `save` puts every change no patch holds yet into `<id>`, so save each change before starting the next. A change to lines a later patch changes too can only go in that patch. To drop a patch, delete its folder and undo its change in the same commit. When a change reaches code `verify` doesn't check, widen `verify` in `.autofork/config.json`.
 
 A patch can also be just a `PATCH.md`. Push it and the next sync has an agent build it.
 
