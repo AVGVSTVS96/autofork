@@ -9,11 +9,12 @@
   "bin": {
     "autofork": "dist/autofork.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "engines": {
     "node": ">=20"
   },
-  "packageManager": "bun@1.4.2",
   "scripts": {
     "build": "bun build src/autofork.ts --target node --outfile dist/autofork.js",
     "test": "bun run build && bun test",
@@ -23,10 +24,10 @@
     "check": "bun run typecheck && bun run lint && bun run test"
   },
   "devDependencies": {
-    "@types/bun": "^1.4.3",
-    "@types/node": "^24.0.0",
+    "@types/bun": "1.4.3",
+    "@types/node": "catalog:",
     "oxfmt": "0.73.0",
-    "oxlint": "^1.88.0",
-    "typescript": "^7.0.2"
+    "oxlint": "1.88.0",
+    "typescript": "catalog:"
   }
 }

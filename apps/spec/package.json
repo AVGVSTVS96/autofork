@@ -1,26 +1,28 @@
 {
-  "name": "website",
-  "version": "0.0.0",
+  "name": "@autofork/spec",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vp dev",
-    "build": "tsc && vp build",
-    "preview": "vp preview"
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "readme": "bun scripts/gen-readme.mjs",
+    "check": "bun run typecheck"
   },
   "dependencies": {
     "react": "catalog:",
     "react-dom": "catalog:"
   },
   "devDependencies": {
-    "@mdx-js/rollup": "catalog:",
-    "@tailwindcss/vite": "catalog:",
+    "@mdx-js/rollup": "3.1.1",
+    "@tailwindcss/vite": "4.3.2",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
-    "tailwindcss": "catalog:",
-    "typescript": "~6.0.2",
+    "tailwindcss": "4.3.2",
+    "typescript": "catalog:",
     "vite": "catalog:",
-    "vite-plus": "catalog:"
+    "remark": "15.0.1",
+    "unist-util-visit": "5.2.0"
   }
 }
