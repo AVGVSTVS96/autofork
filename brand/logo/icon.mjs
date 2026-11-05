@@ -1,6 +1,7 @@
 import opentype from "opentype.js"
+import { readFileSync } from "node:fs"
 
-const font = opentype.loadSync(`${import.meta.dirname}/../fonts/src/Host-800.ttf`)
+const font = opentype.parse(readFileSync(`${import.meta.dirname}/../fonts/src/Host-800.ttf`))
 const f = (n) => +n.toFixed(2)
 
 const set = (str, size, x, y) => {

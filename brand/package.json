@@ -10,8 +10,8 @@
     "icons": "bun icons/gen.mjs"
   },
   "devDependencies": {
-    "opentype.js": "1.3.4",
-    "cuelume": "0.2.4",
-    "motion": "14.0.0"
+    "opentype.js": "2.0.0",
+    "cuelume": "0.2.8",
+    "motion": "14.9.1"
   }
 }

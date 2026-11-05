@@ -1,8 +1,9 @@
 import opentype from "opentype.js"
+import { readFileSync } from "node:fs"
 import { writeFileSync } from "node:fs"
 
 const here = import.meta.dirname
-const font = opentype.loadSync(`${here}/../fonts/src/Host-800.ttf`)
+const font = opentype.parse(readFileSync(`${here}/../fonts/src/Host-800.ttf`))
 const S = 100
 const u = (n) => (n / font.unitsPerEm) * S
 const f = (n) => +n.toFixed(2)
