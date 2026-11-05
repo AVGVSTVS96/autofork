@@ -7,10 +7,10 @@ import * as client from "../../lib/api/client.ts";
 import { repoIcon } from "../../lib/repos/known.ts";
 import { Live, money, rebuilding, useSpend } from "../../lib/spend/live.tsx";
 import type { Spend } from "../../lib/spend/live.tsx";
-import { Meter } from "../../ui/Meter.tsx";
-import { Nav } from "../../ui/Nav.tsx";
-import { Retry } from "../../ui/Retry.tsx";
-import { SignInAgain } from "../../ui/SignInAgain.tsx";
+import { Meter } from "../../ui/meter.tsx";
+import { Nav } from "../../ui/nav.tsx";
+import { Retry } from "../../ui/retry.tsx";
+import { SignInAgain } from "../../ui/sign-in-again.tsx";
 import { useTitle } from "../../ui/useTitle.ts";
 
 const route = getRouteApi("/forks");

@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 
-import { Nav } from "./Nav.tsx";
+import { Nav } from "./nav.tsx";
 import { useTitle } from "./useTitle.ts";
 
 export const NotFound = () => {

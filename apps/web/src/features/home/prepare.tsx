@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import type { Agent, ForkState, Repo } from "../../../shared/api.ts";
 import * as client from "../../lib/api/client.ts";
 import { GitHubIcon } from "../../ui/icons.tsx";
-import { Retry } from "../../ui/Retry.tsx";
-import { Connect } from "./Connect.tsx";
-import { Sk } from "./Sk.tsx";
+import { Retry } from "../../ui/retry.tsx";
+import { Connect } from "./connect.tsx";
+import { Sk } from "./skeleton.tsx";
 
 export const Prepare = ({
   repo,

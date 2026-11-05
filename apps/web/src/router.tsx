@@ -9,8 +9,8 @@ import type { ParsedLocation, RouterHistory } from "@tanstack/react-router";
 
 import { isAgent } from "../shared/api.ts";
 import type { Agent } from "../shared/api.ts";
-import { Home } from "./features/home/Home.tsx";
-import { NotFound } from "./ui/NotFound.tsx";
+import { Home } from "./features/home/home.tsx";
+import { NotFound } from "./ui/not-found.tsx";
 
 const root = createRootRoute({ component: Outlet });
 
@@ -38,7 +38,7 @@ const fork = createRoute({
     ...(typeof search.since === "string" ? { since: search.since } : {}),
     ...(typeof search.error === "string" ? { error: search.error } : {}),
   }),
-  component: lazyRouteComponent(async () => import("./features/fork/ForkPage.tsx"), "ForkRoute"),
+  component: lazyRouteComponent(async () => import("./features/fork/fork-page.tsx"), "ForkRoute"),
 });
 
 const forks = createRoute({
@@ -47,7 +47,7 @@ const forks = createRoute({
   validateSearch: (search: Record<string, unknown>): { error?: string } =>
     typeof search.error === "string" ? { error: search.error } : {},
   component: lazyRouteComponent(
-    async () => import("./features/dashboard/Dashboard.tsx"),
+    async () => import("./features/dashboard/dashboard.tsx"),
     "Dashboard",
   ),
 });
@@ -57,7 +57,7 @@ const link = createRoute({
   path: "/link/$owner/$name",
   validateSearch: (search: Record<string, unknown>): { error?: string } =>
     typeof search.error === "string" ? { error: search.error } : {},
-  component: lazyRouteComponent(async () => import("./features/link/LinkPage.tsx"), "LinkRoute"),
+  component: lazyRouteComponent(async () => import("./features/link/link-page.tsx"), "LinkRoute"),
 });
 
 const verify = createRoute({
@@ -72,7 +72,7 @@ const verify = createRoute({
       : {}),
     ...(typeof search.error === "string" ? { error: search.error } : {}),
   }),
-  component: lazyRouteComponent(async () => import("./features/verify/Verify.tsx"), "VerifyRoute"),
+  component: lazyRouteComponent(async () => import("./features/verify/verify.tsx"), "VerifyRoute"),
 });
 
 const asking = (location: ParsedLocation) => "q" in location.search;

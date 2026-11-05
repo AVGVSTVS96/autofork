@@ -6,8 +6,8 @@ import type { FormEvent, Ref } from "react";
 import { split, squash } from "../../../shared/api.ts";
 import * as client from "../../lib/api/client.ts";
 import { known } from "../../lib/repos/known.ts";
-import { sentence, Typer } from "./Typer.tsx";
-import type { Example } from "./Typer.tsx";
+import { sentence, Typer } from "./typer.tsx";
+import type { Example } from "./typer.tsx";
 
 const CUT = /^(.+?)(?:\s*,\s*(?:but\s+)?|\s+but\s+|\s*:\s+)(.*)$/i;
 const BUT = /^but\s+/i;

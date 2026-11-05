@@ -2,9 +2,9 @@ import { useState } from "react";
 
 import type { Fork, Settings } from "../../../shared/api.ts";
 import { Live, useSpend } from "../../lib/spend/live.tsx";
-import { SignInAgain } from "../../ui/SignInAgain.tsx";
-import { SettingsCard } from "./SettingsCard.tsx";
-import { SpendCard } from "./SpendCard.tsx";
+import { SignInAgain } from "../../ui/sign-in-again.tsx";
+import { SettingsCard } from "./settings-card.tsx";
+import { SpendCard } from "./spend-card.tsx";
 
 const Cards = ({ fork }: { fork: Fork }) => {
   const forks = useSpend();

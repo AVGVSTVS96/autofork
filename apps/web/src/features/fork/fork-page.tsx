@@ -9,11 +9,11 @@ import type { Fork, Run } from "../../../shared/api.ts";
 import * as client from "../../lib/api/client.ts";
 import { repoIcon } from "../../lib/repos/known.ts";
 import { ClaudeIcon, ForkIcon, GitHubIcon, OpenAIIcon } from "../../ui/icons.tsx";
-import { Item } from "../../ui/Item.tsx";
-import { Nav } from "../../ui/Nav.tsx";
-import { Retry } from "../../ui/Retry.tsx";
+import { Item } from "../../ui/item.tsx";
+import { Nav } from "../../ui/nav.tsx";
+import { Retry } from "../../ui/retry.tsx";
 import { useTitle } from "../../ui/useTitle.ts";
-import { Composer } from "./Composer.tsx";
+import { Composer } from "./composer.tsx";
 
 const route = getRouteApi("/$owner/$name");
 
@@ -28,7 +28,7 @@ class Contained extends Component<{ children: ReactNode }, { failed: boolean }> 
 }
 
 const Yours = lazy(async () =>
-  import("./Yours.tsx").then(
+  import("./yours.tsx").then(
     (module) => ({ default: module.Yours }),
     () => ({ default: (_: { fork: Fork }) => UNAVAILABLE }),
   ),

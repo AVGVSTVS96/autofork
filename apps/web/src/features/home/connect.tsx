@@ -6,7 +6,7 @@ import type { FormEvent } from "react";
 import type { Agent } from "../../../shared/api.ts";
 import * as client from "../../lib/api/client.ts";
 import { ClaudeIcon, OpenAIIcon } from "../../ui/icons.tsx";
-import { Retry } from "../../ui/Retry.tsx";
+import { Retry } from "../../ui/retry.tsx";
 
 export interface Fork {
   owner: string;

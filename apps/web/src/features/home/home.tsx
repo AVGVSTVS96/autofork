@@ -6,17 +6,17 @@ import type { Agent } from "../../../shared/api.ts";
 import facts from "../../lib/facts.json";
 import examples from "../../lib/repos/examples.json";
 import { known, repoIcon } from "../../lib/repos/known.ts";
-import { Footer } from "../../ui/Footer.tsx";
+import { Footer } from "../../ui/footer.tsx";
 import { ClaudeIcon, OpenAIIcon } from "../../ui/icons.tsx";
-import { Nav } from "../../ui/Nav.tsx";
+import { Nav } from "../../ui/nav.tsx";
 import { useTitle } from "../../ui/useTitle.ts";
-import { Ask } from "./Ask.tsx";
-import type { AskHandle } from "./Ask.tsx";
+import { Ask } from "./ask.tsx";
+import type { AskHandle } from "./ask.tsx";
 import { start } from "./landing.ts";
-import { Flow } from "./Plan.tsx";
-import { History, Meant, MineToday, Yours } from "./Sections.tsx";
-import type { Mine } from "./Sections.tsx";
-import type { Example } from "./Typer.tsx";
+import { Flow } from "./plan.tsx";
+import { History, Meant, MineToday, Yours } from "./sections.tsx";
+import type { Mine } from "./sections.tsx";
+import type { Example } from "./typer.tsx";
 
 const EXAMPLES: readonly Example[] = examples.examples.map(({ app, change }) => ({
   app,

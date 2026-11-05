@@ -9,9 +9,9 @@ import * as client from "../../lib/api/client.ts";
 import { known } from "../../lib/repos/known.ts";
 import type { Found } from "../../lib/repos/known.ts";
 import { GitHubIcon } from "../../ui/icons.tsx";
-import { Retry } from "../../ui/Retry.tsx";
-import { Prepare } from "./Prepare.tsx";
-import { Sk } from "./Sk.tsx";
+import { Retry } from "../../ui/retry.tsx";
+import { Prepare } from "./prepare.tsx";
+import { Sk } from "./skeleton.tsx";
 
 const stars = (count: number) =>
   count >= 1000 ? `${(count / 1000).toFixed(count >= 10_000 ? 0 : 1)}k` : String(count);

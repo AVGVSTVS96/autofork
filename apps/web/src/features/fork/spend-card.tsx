@@ -1,8 +1,8 @@
 import type { Fork, Settings } from "../../../shared/api.ts";
 import { money, rebuilding } from "../../lib/spend/live.tsx";
 import type { Spend } from "../../lib/spend/live.tsx";
-import { Item } from "../../ui/Item.tsx";
-import { Meter } from "../../ui/Meter.tsx";
+import { Item } from "../../ui/item.tsx";
+import { Meter } from "../../ui/meter.tsx";
 
 const day = (at: number) =>
   new Date(at).toLocaleDateString(undefined, { month: "short", day: "numeric" });

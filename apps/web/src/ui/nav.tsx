@@ -5,7 +5,7 @@ import { useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 
 import * as client from "../lib/api/client.ts";
-import { Account } from "./Account.tsx";
+import { Account } from "./account.tsx";
 import { Logo } from "./icons.tsx";
 
 export const Nav = ({ children }: { children?: ReactNode }) => (
