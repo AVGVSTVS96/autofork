@@ -15,7 +15,7 @@
     "build": "bun build src/index.ts --target node --outdir dist"
   },
   "devDependencies": {
-    "@types/bun": "1.4.3",
+    "@types/bun": "catalog:",
     "typescript": "catalog:"
   }
 }
