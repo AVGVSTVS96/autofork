@@ -90,7 +90,7 @@ type Build = {
 
 type Failed = { check: "setup" | "verify"; lines: string };
 
-type Left = { conflicted: string[]; rejected: string[]; missed: string[] };
+type Left = { conflicted: string[]; rejected: string[]; missed: string[]; gone: string[] };
 
 class Failure extends Error {}
 class Drifted extends Failure {}
@@ -156,9 +156,14 @@ async function readConfig(root: string): Promise<Fork> {
   if (!existsSync(configFile(root))) {
     throw new Failure("no .autofork/config.json here. Start with: autofork init <owner/repo>");
   }
-  const config: Partial<Config> & { upstream: string } = JSON.parse(
-    readFileSync(configFile(root), "utf8"),
-  );
+  let config: Partial<Config> & { upstream: string };
+  try {
+    config = JSON.parse(readFileSync(configFile(root), "utf8"));
+  } catch (error) {
+    throw new Failure(`${DIR}/config.json isn't valid JSON: ${(error as Error).message}`);
+  }
+  if (!config || typeof config.upstream !== "string" || !config.upstream)
+    throw new Failure(`${DIR}/config.json needs "upstream", like "owner/repo"`);
   if (config.generated?.length && !config.setup)
     throw new Failure(
       `"generated" files are rebuilt by "setup", so set your own in ${DIR}/config.json`,
@@ -338,17 +343,19 @@ function newer(root: string, config: Config, base: string, candidate: string) {
 async function newestGreen(root: string, config: Config, base: string, tip: string) {
   const repo = githubRepo(config.upstream);
   if (config.green === false || !("branch" in parseFollow(config.follow)) || !repo) return tip;
-  for (const sha of git(root, "rev-list", "--first-parent", "--max-count=30", `${base}..${tip}`)
+  const commits = git(root, "rev-list", "--first-parent", "--max-count=30", `${base}..${tip}`)
     .split("\n")
-    .filter(Boolean)) {
+    .filter(Boolean);
+  // Nothing newer: the branch is at or behind base, and newer() decides whether a new fork moves back
+  if (!commits.length) return tip;
+  for (const sha of commits) {
     const passed = await green(repo, sha);
     if (passed === undefined) return tip;
     if (!passed) continue;
     if (sha !== tip) say(`upstream's tip isn't green yet, using ${short(sha)}`);
     return sha;
   }
-  if (base !== tip)
-    say(`no newer upstream commit has passed its checks yet, staying on ${short(base)}`);
+  say(`no newer upstream commit has passed its checks yet, staying on ${short(base)}`);
   return base;
 }
 
@@ -398,8 +405,8 @@ function touched(dir: string, file: string, config: Config) {
     .map((line) => line.split("\t")[2]);
 }
 
-function unfinished({ conflicted, rejected, missed }: Left, to: string, from?: string) {
-  const files = [...conflicted, ...rejected, ...missed];
+function unfinished({ conflicted, rejected, missed, gone }: Left, to: string, from?: string) {
+  const files = [...conflicted, ...rejected, ...missed, ...gone];
   if (!files.length) return "";
   const left = [
     conflicted.length ? `the conflict markers in ${conflicted.join(", ")}` : "",
@@ -407,6 +414,7 @@ function unfinished({ conflicted, rejected, missed }: Left, to: string, from?: s
       ? `the hunks that didn't fit, in ${rejected.map((path) => `${path}.rej`).join(", ")}`
       : "",
     missed.length ? `the changes to ${missed.join(", ")}, which didn't apply at all` : "",
+    gone.length ? `the deletion of ${gone.join(", ")}, which upstream deleted too` : "",
   ].filter(Boolean);
   const changes =
     from && from !== to
@@ -874,7 +882,15 @@ async function heal(
       throw new Failure(
         `the agent left conflict markers in ${marked.join(", ")} while ${doing} ${id}`,
       );
-    if (workingTree(build.dir, rejects) === before)
+    /* When git applied all but deletions upstream made too, the agent finding nothing left to do is
+       an answer */
+    const settled =
+      !!left &&
+      !left.conflicted.length &&
+      !left.rejected.length &&
+      !left.missed.length &&
+      !run("git", ["diff", "--quiet", step, before, "--", ...sourcePaths(config)], build.dir).ok;
+    if (workingTree(build.dir, rejects) === before && !settled)
       throw new Failure(`the agent changed nothing while ${doing} ${id}`);
     if (why.startsWith(wish)) writeFileSync(doc, why);
     keepChecks(config, written);
@@ -922,13 +938,19 @@ function apply(dir: string, file: string, config: Config) {
 }
 
 function merge(dir: string, file: string, config: Config): Left {
-  const left: Left = { conflicted: [], rejected: [], missed: [] };
+  const left: Left = { conflicted: [], rejected: [], missed: [], gone: [] };
   for (const path of touched(dir, file, config)) {
     const only = [`--include=${path.replace(/[*?[\\]/g, "\\$&")}`, "--whitespace=nowarn", file];
     if (run("git", ["apply", "--3way", ...only], dir).ok) continue;
     if (git(dir, "ls-files", "--unmerged", "--", `:(literal)${path}`)) left.conflicted.push(path);
     else if (run("git", ["apply", "--reject", ...only], dir).ok) continue;
     else if (existsSync(join(dir, `${path}.rej`))) left.rejected.push(path);
+    // The patch deletes it and it's already gone: the reverse, creating it, fits
+    else if (
+      !existsSync(join(dir, path)) &&
+      run("git", ["apply", "--reverse", "--check", ...only], dir).ok
+    )
+      left.gone.push(path);
     else left.missed.push(path);
   }
   git(dir, "reset", "--quiet");
@@ -1521,6 +1543,9 @@ async function setup(
   if (existsSync(configFile(root))) throw new Failure(`${DIR}/config.json already exists`);
   const follow = chosen.follow ?? (await defaultFollow(root, upstream));
   const config: Config = { ...chosen, upstream, follow, limits: LIMITS };
+  // Reach upstream before writing anything, so an init that fails can be run again
+  await fetchUpstream(root, config);
+  const base = baseline(root);
   writeConfig(root, config);
   const path = join(root, ".github/workflows/autofork.yml");
   mkdirSync(join(root, ".github/workflows"), { recursive: true });
@@ -1547,8 +1572,7 @@ async function setup(
     say(
       `Kept your ${path.slice(root.length + 1)} as it is: its cron line is the schedule, and spend reporting needs \`id-token: write\` in its permissions.`,
     );
-  await fetchUpstream(root, config);
-  const { base, drift } = await check(root, { ...config, patches: [] }, workingTree(root));
+  const { drift } = await check(root, { ...config, patches: [] }, workingTree(root), base);
   const readme = addNote(root, upstream, base, drift);
   const upstreamHas = new Set(
     git(root, "ls-tree", "-r", "--name-only", base, "--", WORKFLOWS).split("\n"),

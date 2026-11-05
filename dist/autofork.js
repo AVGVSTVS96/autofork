@@ -121,7 +121,14 @@ async function readConfig(root) {
   if (!existsSync(configFile(root))) {
     throw new Failure("no .autofork/config.json here. Start with: autofork init <owner/repo>");
   }
-  const config = JSON.parse(readFileSync(configFile(root), "utf8"));
+  let config;
+  try {
+    config = JSON.parse(readFileSync(configFile(root), "utf8"));
+  } catch (error) {
+    throw new Failure(`${DIR}/config.json isn't valid JSON: ${error.message}`);
+  }
+  if (!config || typeof config.upstream !== "string" || !config.upstream)
+    throw new Failure(`${DIR}/config.json needs "upstream", like "owner/repo"`);
   if (config.generated?.length && !config.setup)
     throw new Failure(`"generated" files are rebuilt by "setup", so set your own in ${DIR}/config.json`);
   limitsOf(config);
@@ -241,8 +248,11 @@ async function newestGreen(root, config, base, tip) {
   const repo = githubRepo(config.upstream);
   if (config.green === false || !("branch" in parseFollow(config.follow)) || !repo)
     return tip;
-  for (const sha of git(root, "rev-list", "--first-parent", "--max-count=30", `${base}..${tip}`).split(`
-`).filter(Boolean)) {
+  const commits = git(root, "rev-list", "--first-parent", "--max-count=30", `${base}..${tip}`).split(`
+`).filter(Boolean);
+  if (!commits.length)
+    return tip;
+  for (const sha of commits) {
     const passed = await green(repo, sha);
     if (passed === undefined)
       return tip;
@@ -252,8 +262,7 @@ async function newestGreen(root, config, base, tip) {
       say(`upstream's tip isn't green yet, using ${short(sha)}`);
     return sha;
   }
-  if (base !== tip)
-    say(`no newer upstream commit has passed its checks yet, staying on ${short(base)}`);
+  say(`no newer upstream commit has passed its checks yet, staying on ${short(base)}`);
   return base;
 }
 async function green(repo, sha) {
@@ -285,14 +294,15 @@ var skipGenerated = (config) => (config.generated ?? []).map((path) => `--exclud
 function touched(dir, file, config) {
   return run("git", ["apply", "--numstat", "-z", ...skipGenerated(config), file], dir).out.toString().split("\x00").filter(Boolean).map((line) => line.split("\t")[2]);
 }
-function unfinished({ conflicted, rejected, missed }, to, from) {
-  const files = [...conflicted, ...rejected, ...missed];
+function unfinished({ conflicted, rejected, missed, gone }, to, from) {
+  const files = [...conflicted, ...rejected, ...missed, ...gone];
   if (!files.length)
     return "";
   const left = [
     conflicted.length ? `the conflict markers in ${conflicted.join(", ")}` : "",
     rejected.length ? `the hunks that didn't fit, in ${rejected.map((path) => `${path}.rej`).join(", ")}` : "",
-    missed.length ? `the changes to ${missed.join(", ")}, which didn't apply at all` : ""
+    missed.length ? `the changes to ${missed.join(", ")}, which didn't apply at all` : "",
+    gone.length ? `the deletion of ${gone.join(", ")}, which upstream deleted too` : ""
   ].filter(Boolean);
   const changes = from && from !== to ? ` To see what upstream changed under them: git diff ${from} ${to} -- ${files.join(" ")}` : "";
   return ` Git applied the rest of it. What's left: ${left.join("; ")}.${changes}`;
@@ -650,7 +660,8 @@ async function heal(config, build, id, broken, patch) {
     });
     if (marked.length)
       throw new Failure(`the agent left conflict markers in ${marked.join(", ")} while ${doing} ${id}`);
-    if (workingTree(build.dir, rejects) === before)
+    const settled = !!left && !left.conflicted.length && !left.rejected.length && !left.missed.length && !run("git", ["diff", "--quiet", step, before, "--", ...sourcePaths(config)], build.dir).ok;
+    if (workingTree(build.dir, rejects) === before && !settled)
       throw new Failure(`the agent changed nothing while ${doing} ${id}`);
     if (why.startsWith(wish))
       writeFileSync(doc, why);
@@ -683,7 +694,7 @@ function apply(dir, file, config) {
   return false;
 }
 function merge(dir, file, config) {
-  const left = { conflicted: [], rejected: [], missed: [] };
+  const left = { conflicted: [], rejected: [], missed: [], gone: [] };
   for (const path of touched(dir, file, config)) {
     const only = [`--include=${path.replace(/[*?[\\]/g, "\\$&")}`, "--whitespace=nowarn", file];
     if (run("git", ["apply", "--3way", ...only], dir).ok)
@@ -694,6 +705,8 @@ function merge(dir, file, config) {
       continue;
     else if (existsSync(join(dir, `${path}.rej`)))
       left.rejected.push(path);
+    else if (!existsSync(join(dir, path)) && run("git", ["apply", "--reverse", "--check", ...only], dir).ok)
+      left.gone.push(path);
     else
       left.missed.push(path);
   }
@@ -1159,6 +1172,8 @@ async function setup(root, upstream, { every, ...chosen }) {
     throw new Failure(`${DIR}/config.json already exists`);
   const follow = chosen.follow ?? await defaultFollow(root, upstream);
   const config = { ...chosen, upstream, follow, limits: LIMITS };
+  await fetchUpstream(root, config);
+  const base = baseline(root);
   writeConfig(root, config);
   const path = join(root, ".github/workflows/autofork.yml");
   mkdirSync(join(root, ".github/workflows"), { recursive: true });
@@ -1172,8 +1187,7 @@ async function setup(root, upstream, { every, ...chosen }) {
     writeFileSync(path, workflow(git(root, "branch", "--show-current") || defaultBranch(root, upstream), EVERY[every ?? (hourly ? "1h" : "15m")]));
   } else if (every || !/^\s*(id-token:\s*['"]?write|permissions:\s*['"]?write-all)/m.test(readFileSync(path, "utf8")))
     say(`Kept your ${path.slice(root.length + 1)} as it is: its cron line is the schedule, and spend reporting needs \`id-token: write\` in its permissions.`);
-  await fetchUpstream(root, config);
-  const { base, drift } = await check(root, { ...config, patches: [] }, workingTree(root));
+  const { drift } = await check(root, { ...config, patches: [] }, workingTree(root), base);
   const readme = addNote(root, upstream, base, drift);
   const upstreamHas = new Set(git(root, "ls-tree", "-r", "--name-only", base, "--", WORKFLOWS).split(`
 `));

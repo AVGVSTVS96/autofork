@@ -2408,3 +2408,73 @@ echo '{"type":"result","result":"built","total_cost_usd":25,"modelUsage":{}}'`,
   expect(log).toContain("nine waits: a rebuild may cost $20 and $15 of this month's $60 is left");
   expect(JSON.parse(file(home, "reserved-ledger.json")).rebuilds).toHaveLength(2);
 });
+
+test("an init that can't reach the branch it follows writes nothing, so it can run again, and a config that isn't JSON says so", () => {
+  const origin = join(home, "retry");
+  mkdirSync(origin);
+  sh(origin, "git init -q && echo one > notes.txt && git add -A && git commit -qm one");
+  sh(home, `git clone -q ${origin} retry-fork`);
+  const mine = join(home, "retry-fork");
+  const failed = autofork(mine, "init", origin, "--follow", "nope");
+  expect(failed.ok).toBe(false);
+  expect(sh(mine, "git status --porcelain")).toBe("");
+  expect(autofork(mine, "init", origin).ok).toBe(true);
+  write(mine, ".autofork/config.json", '{\n  "upstream": "x",\n}\n');
+  sh(mine, "git add -A && git commit -qm 'track upstream'");
+  const { ok, log, output } = autofork(mine, "sync");
+  expect(ok).toBe(false);
+  expect(log).toContain("autofork: .autofork/config.json isn't valid JSON: ");
+  expect(output.error).toContain(".autofork/config.json isn't valid JSON");
+});
+
+test("a new fork of a branch behind where it was forked starts there, even when upstream's checks count", () => {
+  const app = join(github, "acme/behind.git");
+  mkdirSync(app, { recursive: true });
+  sh(
+    app,
+    "git init -q && echo one > notes.txt && git add -A && git commit -qm one && git branch stable && echo two > notes.txt && git commit -qam two",
+  );
+  sh(home, `git clone -q ${app} behind`);
+  const mine = join(home, "behind");
+  expect(autofork(mine, "init", "acme/behind", "--follow", "stable").ok).toBe(true);
+  sh(mine, "git add -A && git commit -qm 'track stable'");
+  const { ok, log, output } = autoforkWith({ CHECK_RUNS: "{}" }, mine, "sync");
+  expect(ok).toBe(true);
+  expect(log).not.toContain("no newer upstream commit");
+  expect(output.result).toBe("synced");
+  expect(file(mine, "notes.txt")).toBe("one\n");
+});
+
+test("a patch whose deletion upstream made too is healed when the agent finds nothing left, and git applies it after", () => {
+  const origin = join(home, "deleted");
+  mkdirSync(origin);
+  sh(
+    origin,
+    "git init -q && echo one > notes.txt && echo old > old.txt && git add -A && git commit -qm one",
+  );
+  sh(home, `git clone -q ${origin} deleted-fork`);
+  const mine = join(home, "deleted-fork");
+  expect(autofork(mine, "init", origin).ok).toBe(true);
+  sh(mine, "git add -A && git commit -qm track");
+  sh(mine, "git rm -q old.txt && echo mine >> notes.txt && mkdir -p .autofork/tidy");
+  write(mine, ".autofork/tidy/PATCH.md", "Drop old.txt and add a line to notes.txt.\n");
+  expect(autofork(mine, "save", "tidy").ok).toBe(true);
+  const prompt = join(home, "deleted-prompt.txt");
+  const config = JSON.parse(file(mine, ".autofork/config.json"));
+  write(mine, ".autofork/config.json", JSON.stringify({ ...config, agent: `cat > ${prompt}` }));
+  sh(mine, "git add -A && git commit -qm tidy");
+  sh(origin, "git rm -q old.txt && git commit -qm 'drop old.txt'");
+  const { ok, log, output } = autofork(mine, "sync");
+  expect(ok).toBe(true);
+  expect(output.result).toBe("synced");
+  expect(file(home, "deleted-prompt.txt")).toContain(
+    "the deletion of old.txt, which upstream deleted too",
+  );
+  expect(log).toContain("healed tidy");
+  expect(file(mine, "notes.txt")).toBe("one\nmine\n");
+  expect(file(mine, ".autofork/tidy/tidy.patch")).not.toContain("old.txt");
+  rmSync(prompt);
+  sh(origin, "echo two > two.txt && git add -A && git commit -qm two");
+  expect(autofork(mine, "sync").output.result).toBe("synced");
+  expect(existsSync(prompt)).toBe(false);
+});
