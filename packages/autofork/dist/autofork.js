@@ -211,7 +211,7 @@ to <id>.patch, the diff. https://github.com/AVGVSTVS96/autofork
 import { existsSync as existsSync9, mkdirSync as mkdirSync3, readFileSync as readFileSync6, writeFileSync as writeFileSync7 } from "node:fs";
 import path12 from "node:path";
 
-// ../contract/src/schedule.ts
+// ../contract/dist/index.js
 var EVERY = {
   "5m": "2-59/5 * * * *",
   "15m": "7-59/15 * * * *",
@@ -220,7 +220,6 @@ var EVERY = {
 };
 var isEvery = (value) => Object.hasOwn(EVERY, value);
 var LIMITS = { rebuilds: 10, month: 200, rebuild: 20 };
-// ../contract/src/workflow.ts
 var workflow = ({ branch, cron, site, workflowTokens }) => `name: autofork
 
 on:
@@ -257,8 +256,8 @@ ${workflowTokens ? `          workflow-token-url: ${site}/api/github/token
           CLAUDE_CODE_OAUTH_TOKEN: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           CODEX_AUTH: \${{ secrets.CODEX_AUTH }}
 `;
-// ../contract/src/ledger.ts
 var OIDC_AUDIENCE = "autofork";
+
 // src/platform/json.ts
 var isObject = (value) => typeof value === "object" && value !== null;
 var isText = (value) => typeof value === "string";
