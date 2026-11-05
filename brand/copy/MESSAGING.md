@@ -49,7 +49,7 @@ Bassim, Oct 13: "too many sections on the page... a lot of reading... We could c
 
 1. **Your change is kept in plain words.**
    Line: Each new release, your changes go back on top. When one no longer fits their new code, an agent rebuilds it from your words.
-   Visual: "always show context usage" and its PATCH.md intent, then three T3 Code releases that play in turn: it goes back on as is; they redo the composer and the agent rebuilds yours into it; they add a usage meter and yours builds on it. This is the intent line Bassim wants weighed most: whatever T3 Code ships, the patch knows what you meant and takes the good from theirs.
+   Visual: "always show context usage" and its PATCH.md intent, then three T3 Code releases that play in turn: it goes back on as is; they redo the composer and the agent rebuilds yours into it; they add a usage meter in a menu, yours no longer fits, and the agent rebuilds it on their meter. The agent only rebuilds a patch a release broke; re-checking ones that still apply is on the engine's roadmap. This is the intent line Bassim wants weighed most: whatever T3 Code ships, the patch knows what you meant and takes the good from theirs.
    Footnote: An example on T3 Code. If they ship exactly what you asked for, yours pauses and you decide.
 
 2. **My forks, today.**

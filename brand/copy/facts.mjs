@@ -77,7 +77,6 @@ const tool = (dir) => {
     runtimeDependencies: Object.keys(pkg.dependencies ?? {}).length,
     node: pkg.engines?.node,
     license: pkg.license,
-    defaultCron: code.join("\n").match(/cron: "([^"]+)"/)?.[1],
     commands: [...code.join("\n").matchAll(/^  auto(?:patch|fork) (\w+)/gm)].map((match) => match[1]),
   }
 }
@@ -126,7 +125,7 @@ const facts = {
     upstreamCommitsAbsorbed: "gh api compare on the upstream repo, from the first synced source commit to the latest one.",
     heals: "Distinct upstream sources where a sync commit or patched release says a patch was healed (rebuilt by the agent) after git apply failed.",
     greenDays: "First sync run to the last successful one.",
-    tool: "Read from the engine checkout (AUTOFORK_DIR, default ~/Developer/autofork): lines in src/*.ts, dependencies in package.json, the cron in the workflow init writes, commands from the usage text.",
+    tool: "Read from the engine checkout (AUTOFORK_DIR, default ~/Developer/autofork): lines in src/*.ts, dependencies in package.json, commands from the usage text.",
     t3code: "gh api repos/pingdotgg/t3code at countedAt. Round down when quoting.",
     proof: "The proof line's window: the T3 Code fork's first two days, from its first synced source (Oct 10) to its sync on Oct 12, via gh api compare. Fixed, so the quoted number stays true while the fork's totals grow.",
   },
