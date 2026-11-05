@@ -810,9 +810,6 @@ async function build(root, config, base, options) {
       if (!isEmpty(file) && !changed(dir))
         build.upstreamHas.set(id, "the same change, line for line");
     }
-    if (options.fold?.id === id && !apply(dir, options.fold.patch, config)) {
-      throw new Failure(`your changes don't apply on top of ${id}`);
-    }
     build.steps.push(commit(dir, id));
   }
   return build;
@@ -1003,12 +1000,12 @@ function workingTree(root, skip = []) {
   rmSync(index, { force: true });
   return tree;
 }
+var differing = (root, config, from, to) => git(root, "diff-tree", "-r", "--name-only", from, to, "--", ...sourcePaths(config)).split(`
+`).filter(Boolean);
 async function check(root, config, against, base = baseline(root)) {
   const rebuilt = await build(root, config, base, {});
   try {
-    const drift = git(root, "diff-tree", "-r", "--name-only", rebuilt.steps.at(-1), against, "--", ...sourcePaths(config));
-    return { base, rebuilt: rebuilt.steps.at(-1), drift: drift.split(`
-`).filter(Boolean) };
+    return { base, drift: differing(root, config, rebuilt.steps.at(-1), against) };
   } finally {
     cleanup(root, rebuilt.dir);
   }
@@ -1102,19 +1099,41 @@ async function save(root, args) {
   const config = await readConfig(root);
   await fetchUpstream(root, config);
   const files = workingTree(root);
-  const { base, rebuilt, drift } = await check(root, config, files);
-  if (!drift.length)
-    return say(`nothing to save: your code matches what the patches build. Push ${DIR}/${id}/PATCH.md as it is and the next sync has an agent build it.`);
-  const fold = join(git(root, "rev-parse", "--path-format=absolute", "--git-dir"), "autofork-fold.patch");
-  writeFileSync(fold, gitBytes(root, "diff-tree", "-p", "--binary", "--full-index", rebuilt, files, "--", ...sourcePaths(config)));
-  const result = await build(root, config, base, { fold: { id, patch: fold } });
+  const result = await build(root, config, baseline(root), {});
   try {
+    const drift = differing(root, config, result.steps.at(-1), files);
+    if (!drift.length)
+      return say(`nothing to save: your code matches what the patches build. Push ${DIR}/${id}/PATCH.md as it is and the next sync has an agent build it.`);
+    putUnder(config, result, id, files);
     refresh(root, config, result);
     say(`saved ${drift.length} file${drift.length === 1 ? "" : "s"} to ${DIR}/${id}. Commit and push.`);
   } finally {
-    rmSync(fold, { force: true });
     cleanup(root, result.dir);
   }
+}
+function putUnder(config, build, id, changed) {
+  const { dir, steps } = build;
+  const file = join(git(dir, "rev-parse", "--path-format=absolute", "--git-dir"), "autofork-save.patch");
+  const applied = (tree, from, to, ...flags) => {
+    const diff = gitBytes(dir, "diff-tree", "-p", "--binary", "--full-index", from, to, "--", ...sourcePaths(config));
+    if (!diff.length)
+      return tree;
+    writeFileSync(file, diff);
+    git(dir, "read-tree", tree);
+    const args = ["apply", "--cached", "-C0", "--whitespace=nowarn", ...flags, file];
+    return run("git", args, dir).ok ? git(dir, "write-tree") : undefined;
+  };
+  let mine = changed;
+  for (let index = config.patches.length - 1;config.patches[index] !== id; index--) {
+    const later = config.patches[index];
+    const off = applied(mine, steps[index], steps[index + 1], "--reverse");
+    const on = applied(steps[index], steps[index + 1], mine);
+    if (!off || !on || differing(dir, config, off, on).length)
+      throw new Failure(`your changes touch what ${later} changes, and ${later} goes on top of ${id}: save them to ${later}`);
+    steps[index + 1] = mine;
+    mine = off;
+  }
+  steps[config.patches.indexOf(id) + 1] = mine;
 }
 var workflow = (branch, cron) => `name: autofork
 

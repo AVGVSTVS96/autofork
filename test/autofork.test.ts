@@ -2478,3 +2478,114 @@ test("a patch whose deletion upstream made too is healed when the agent finds no
   expect(autofork(mine, "sync").output.result).toBe("synced");
   expect(existsSync(prompt)).toBe(false);
 });
+
+const list = (lines: Record<number, string> = {}) =>
+  Array.from({ length: 12 }, (_, index) => `${lines[index + 1] ?? index + 1}\n`).join("");
+
+function saves(mine: string, id: string, change: () => void) {
+  mkdirSync(join(mine, `.autofork/${id}`), { recursive: true });
+  if (!existsSync(join(mine, `.autofork/${id}/PATCH.md`)))
+    write(mine, `.autofork/${id}/PATCH.md`, `Patch ${id}.\n`);
+  change();
+  return autofork(mine, "save", id);
+}
+
+/* A fork whose patch a changes line 5 of list.txt, and whose patch b, on top of it, makes `b` */
+function stacked(name: string, b: Record<string, string>) {
+  const origin = join(home, name);
+  mkdirSync(origin);
+  write(origin, "list.txt", list());
+  write(origin, "other.txt", "other\n");
+  sh(origin, "git init -q && git add -A && git commit -qm one");
+  sh(home, `git clone -q ${origin} ${name}-fork`);
+  const mine = join(home, `${name}-fork`);
+  expect(autofork(mine, "init", origin).ok).toBe(true);
+  sh(mine, "git add -A && git commit -qm track");
+  expect(saves(mine, "a", () => write(mine, "list.txt", list({ 5: "a" }))).ok).toBe(true);
+  sh(mine, "git add -A && git commit -qm a");
+  const made = saves(mine, "b", () => {
+    for (const [path, text] of Object.entries(b)) write(mine, path, text);
+  });
+  expect(made.ok).toBe(true);
+  sh(mine, "git add -A && git commit -qm b");
+  return mine;
+}
+
+/* The patches build the code as it is, so saving again finds nothing to save */
+function holds(mine: string) {
+  sh(mine, "git add -A && git commit -qm saved");
+  expect(autofork(mine, "save", "a").log).toContain("nothing to save");
+}
+
+for (const [where, line] of [
+  ["the line after", 6],
+  ["two lines after", 7],
+] as const)
+  test(`re-saving a patch keeps a later patch that changes ${where} its own`, () => {
+    const mine = stacked(`resave-${line}`, { "list.txt": list({ 5: "a", [line]: "b" }) });
+    write(mine, "list.txt", list({ 5: "A", [line]: "b" }));
+    const { ok, log } = autofork(mine, "save", "a");
+    expect(log).toContain("saved 1 file to .autofork/a");
+    expect(ok).toBe(true);
+    expect(file(mine, ".autofork/a/a.patch")).toContain("-5\n+A\n");
+    expect(file(mine, ".autofork/b/b.patch")).toContain(`-${line}\n+b\n`);
+    expect(file(mine, "list.txt")).toBe(list({ 5: "A", [line]: "b" }));
+    holds(mine);
+  });
+
+test("re-saving a patch under a later one that changes other files leaves that one as it was", () => {
+  const mine = stacked("resave-other", { "other.txt": "b\n" });
+  const before = file(mine, ".autofork/b/b.patch");
+  write(mine, "list.txt", list({ 5: "A" }));
+  expect(autofork(mine, "save", "a").ok).toBe(true);
+  expect(file(mine, ".autofork/a/a.patch")).toContain("-5\n+A\n");
+  expect(file(mine, ".autofork/b/b.patch")).toBe(before);
+  holds(mine);
+});
+
+test("a change to lines a later patch changes can't be saved under it, and says where it goes", () => {
+  const mine = stacked("resave-same", { "list.txt": list({ 5: "b" }) });
+  write(mine, "list.txt", list({ 5: "B" }));
+  const { ok, log } = autofork(mine, "save", "a");
+  expect(ok).toBe(false);
+  expect(log).toContain(
+    "your changes touch what b changes, and b goes on top of a: save them to b",
+  );
+  expect(sh(mine, "git status --porcelain")).toBe("M list.txt");
+  expect(autofork(mine, "save", "b").ok).toBe(true);
+  expect(file(mine, ".autofork/b/b.patch")).toContain("-a\n+B\n");
+  holds(mine);
+});
+
+test("re-saving the last patch puts the change in it", () => {
+  const mine = stacked("resave-last", { "list.txt": list({ 5: "a", 6: "b" }) });
+  write(mine, "list.txt", list({ 5: "a", 6: "B" }));
+  expect(autofork(mine, "save", "b").ok).toBe(true);
+  expect(file(mine, ".autofork/b/b.patch")).toContain("-6\n+B\n");
+  expect(file(mine, ".autofork/a/a.patch")).not.toContain("B");
+  holds(mine);
+});
+
+test("a new patch that goes under an existing one is saved under it", () => {
+  const mine = stacked("resave-new", { "list.txt": list({ 5: "a", 6: "b" }) });
+  const { ok } = saves(mine, "ab", () =>
+    write(mine, "list.txt", list({ 5: "a", 6: "b", 7: "ab" })),
+  );
+  expect(ok).toBe(true);
+  expect(file(mine, ".autofork/ab/ab.patch")).toContain("-7\n+ab\n");
+  expect(file(mine, ".autofork/b/b.patch")).toContain("-6\n+b\n");
+  holds(mine);
+});
+
+test("a patch re-saved with a file renamed under a later patch keeps the rename", () => {
+  const mine = stacked("resave-rename", { "list.txt": list({ 5: "a", 6: "b" }) });
+  expect(saves(mine, "a", () => write(mine, "extra.txt", "extra\n")).ok).toBe(true);
+  sh(mine, "git add -A && git commit -qm extra && git mv extra.txt moved.txt");
+  write(mine, "list.txt", list({ 5: "A", 6: "b" }));
+  expect(autofork(mine, "save", "a").ok).toBe(true);
+  const a = file(mine, ".autofork/a/a.patch");
+  expect(a).toContain("+++ b/moved.txt");
+  expect(a).not.toContain("extra.txt");
+  expect(file(mine, ".autofork/b/b.patch")).not.toContain("moved.txt");
+  holds(mine);
+});
