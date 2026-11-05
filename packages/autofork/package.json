@@ -17,7 +17,7 @@
   ],
   "type": "module",
   "scripts": {
-    "build": "bun build src/autofork.ts --target node --outfile dist/autofork.js",
+    "build": "bun build src/autofork.ts --target node --conditions source --outfile dist/autofork.js",
     "test": "bun run build && bun test --timeout 30000",
     "typecheck": "tsc --noEmit"
   },
