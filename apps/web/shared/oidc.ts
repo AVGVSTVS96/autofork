@@ -1,3 +1,5 @@
+import { OIDC_AUDIENCE, WORKFLOW_FILE } from "@autofork/contract";
+
 const ISSUER = "https://token.actions.githubusercontent.com";
 
 type Jwk = JsonWebKey & { kid: string };
@@ -100,7 +102,7 @@ export const verifyOidc = async (authorization: string | null | undefined): Prom
   }
   const text = (name: string) => (typeof claims[name] === "string" ? claims[name] : "");
 
-  if (claims.iss !== ISSUER || claims.aud !== "autofork" || typeof claims.exp !== "number") {
+  if (claims.iss !== ISSUER || claims.aud !== OIDC_AUDIENCE || typeof claims.exp !== "number") {
     throw new Refused("bad claims");
   }
   if (
@@ -114,7 +116,7 @@ export const verifyOidc = async (authorization: string | null | undefined): Prom
   }
   if (
     !text("repository") ||
-    !text("workflow_ref").startsWith(`${text("repository")}/.github/workflows/autofork.yml@`)
+    !text("workflow_ref").startsWith(`${text("repository")}/${WORKFLOW_FILE}@`)
   ) {
     throw new Refused("only the autofork workflow can ask");
   }

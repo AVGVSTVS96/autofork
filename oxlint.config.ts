@@ -39,7 +39,7 @@ export default defineConfig({
   },
   overrides: [
     {
-      files: ["apps/web/**"],
+      files: ["apps/web/**", "packages/contract/**"],
       rules: {
         "eslint/max-classes-per-file": "off",
         "eslint/no-redeclare": "off",

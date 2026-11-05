@@ -1,8 +1,8 @@
+import { EVERY } from "@autofork/contract";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import { useEffect, useMemo, useState } from "react";
 
-import { EVERY } from "../shared/api.ts";
 import type { Fork, Settings } from "../shared/api.ts";
 import * as client from "./client.ts";
 import { money, rebuilding } from "./live.tsx";

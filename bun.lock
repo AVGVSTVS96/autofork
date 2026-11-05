@@ -36,6 +36,7 @@
     "apps/web": {
       "name": "@autofork/web",
       "dependencies": {
+        "@autofork/contract": "workspace:*",
         "@effect/atom-react": "4.0.3",
         "@effect/platform-browser": "4.0.3",
         "@noble/hashes": "2.4.0",
@@ -74,8 +75,16 @@
         "autofork": "dist/autofork.js",
       },
       "devDependencies": {
+        "@autofork/contract": "workspace:*",
         "@types/bun": "1.4.3",
         "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/contract": {
+      "name": "@autofork/contract",
+      "devDependencies": {
+        "@types/bun": "1.4.3",
         "typescript": "catalog:",
       },
     },
@@ -92,6 +101,8 @@
   },
   "packages": {
     "@autofork/brand": ["@autofork/brand@workspace:brand"],
+
+    "@autofork/contract": ["@autofork/contract@workspace:packages/contract"],
 
     "@autofork/spec": ["@autofork/spec@workspace:apps/spec"],
 

@@ -1,0 +1,16 @@
+{
+  "name": "@autofork/contract",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.3",
+    "typescript": "catalog:"
+  }
+}

@@ -1,7 +1,8 @@
+import { EVERY, LIMITS, WORKFLOW_FILE, workflow } from "@autofork/contract";
 import * as Effect from "effect/Effect";
 import * as Schedule from "effect/Schedule";
 
-import { EVERY, LIMITS, NotFound, Problem, split, squash } from "../shared/api.ts";
+import { NotFound, Problem, split, squash } from "../shared/api.ts";
 import type { Agent, Change, ForkState, MyFork, Repo, Run, Settings } from "../shared/api.ts";
 import {
   cronLines,
@@ -131,46 +132,7 @@ export const resolve = (q: string, token: GitHub.Token) =>
     return { repo, change, others: exact ? [] : repos.slice(1, 4) };
   });
 
-const API = "https://autofork.com/api";
-export const CODEX_AUTH_URL = `${API}/chatgpt/auth`;
-
-const workflow = (branch: string) =>
-  [
-    "name: autofork",
-    "",
-    "on:",
-    "  schedule:",
-    `    - cron: "${EVERY["15m"]}"`,
-    "  workflow_dispatch:",
-    "  push:",
-    `    branches: [${branch}]`,
-    '    paths: [".autofork/**"]',
-    "",
-    "permissions:",
-    "  contents: write",
-    "  issues: write",
-    "  id-token: write",
-    "",
-    "concurrency: autofork",
-    "",
-    "jobs:",
-    "  sync:",
-    "    runs-on: ubuntu-latest",
-    "    timeout-minutes: 60",
-    "    steps:",
-    "      - uses: actions/checkout@v7",
-    "        with:",
-    "          fetch-depth: 0",
-    "          persist-credentials: false",
-    "      - uses: AVGVSTVS96/autofork@v1",
-    "        with:",
-    `          workflow-token-url: ${API}/github/token`,
-    `          codex-auth-url: ${CODEX_AUTH_URL}`,
-    "        env:",
-    "          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}",
-    "          CODEX_AUTH: ${{ secrets.CODEX_AUTH }}",
-    "",
-  ].join("\n");
+const SITE = "https://autofork.com";
 
 const slug = (change: string) =>
   change
@@ -503,7 +465,10 @@ export const start = (
     const files: GitHub.File[] = [{ path: `.autofork/${id}/PATCH.md`, content: patchDoc(change) }];
 
     if (!managed || !flow) {
-      files.push({ path: ".github/workflows/autofork.yml", content: workflow(branch) });
+      files.push({
+        path: WORKFLOW_FILE,
+        content: workflow({ branch, cron: EVERY["15m"], site: SITE, workflowTokens: true }),
+      });
 
       if (!managed) {
         const upstream = repo.parent?.full_name ?? `${owner}/${name}`;

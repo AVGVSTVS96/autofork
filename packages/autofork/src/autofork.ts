@@ -16,6 +16,9 @@ import {
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 
+import { EVERY, isEvery, LIMITS, OIDC_AUDIENCE, workflow } from "@autofork/contract";
+import type { Agent, LedgerClose, LedgerOpen } from "@autofork/contract";
+
 const oidc = {
   url: process.env.ACTIONS_ID_TOKEN_REQUEST_URL,
   token: process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN,
@@ -30,14 +33,6 @@ const LEDGER = process.env.AUTOFORK_LEDGER;
 delete process.env.AUTOFORK_LEDGER;
 
 const SITE = process.env.AUTOFORK_URL ?? "https://autofork.com";
-const LIMITS = { rebuilds: 10, month: 200, rebuild: 20 };
-
-const EVERY: Record<string, string> = {
-  "5m": "2-59/5 * * * *",
-  "15m": "7-59/15 * * * *",
-  "1h": "17 * * * *",
-  "1d": "17 6 * * *",
-};
 
 const DIR = ".autofork";
 const WORKFLOWS = ".github/workflows";
@@ -533,7 +528,7 @@ function agentCommand(config: Config, cap: number, dir: string) {
 
 interface Row {
   patch: string;
-  agent: "claude" | "codex" | "custom";
+  agent: Agent;
   cap: number;
   cost: number;
   status: "running" | "done" | "stopped";
@@ -553,7 +548,7 @@ async function site(path: string, body?: object) {
   }
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const minted = await fetch(`${oidc.url}&audience=autofork`, {
+      const minted = await fetch(`${oidc.url}&audience=${OIDC_AUDIENCE}`, {
         headers: { authorization: `Bearer ${oidc.token}` },
         signal: AbortSignal.timeout(10_000),
       });
@@ -715,7 +710,7 @@ async function agent(
   ledger.rebuilds.push(row);
   saveLedger();
   output({ ledger: "changed" });
-  const opened = await site("ledger", { patch: what, agent, cap: row.cap });
+  const opened = await site("ledger", { patch: what, agent, cap: row.cap } satisfies LedgerOpen);
   const id = opened?.status === 201 ? (await opened.json().catch(() => {}))?.id : undefined;
   const printed = `${dir}-agent.out`;
   const out = openSync(printed, "w");
@@ -742,7 +737,8 @@ async function agent(
   saveLedger();
 
   const closed =
-    id !== undefined && (await site("ledger/close", { id, status: row.status, ...spend }))?.ok;
+    id !== undefined &&
+    (await site("ledger/close", { id, status: row.status, ...spend } satisfies LedgerClose))?.ok;
 
   if (oidc.url && !closed) {
     say("couldn't report this rebuild's cost to autofork.com");
@@ -1837,42 +1833,6 @@ async function save(root: string, args: string[]) {
   }
 }
 
-const workflow = (branch: string, cron: string) => `name: autofork
-
-on:
-  schedule:
-    - cron: "${cron}"
-  workflow_dispatch:
-  push:
-    branches: [${branch}]
-    paths: [".autofork/**"]
-
-permissions:
-  contents: write
-  issues: write
-  id-token: write
-
-concurrency: autofork
-
-jobs:
-  sync:
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      # Set up the tools your setup and verify commands need here (node, bun, rust, ...).
-      - id: autofork
-        uses: AVGVSTVS96/autofork@v1
-        with:
-          codex-auth-url: ${SITE}/api/chatgpt/auth
-        env:
-          CLAUDE_CODE_OAUTH_TOKEN: \${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          CODEX_AUTH: \${{ secrets.CODEX_AUTH }}
-`;
-
 function options(args: string[]) {
   const setup = flag(args, "--setup");
   const generated = flag(args, "--generated")?.split(",");
@@ -1880,10 +1840,11 @@ function options(args: string[]) {
   if (generated && !setup) {
     throw new Failure("--generated files are rebuilt by --setup, so set it too");
   }
-  const every = flag(args, "--every");
+  const asked = flag(args, "--every");
+  const every = asked !== undefined && isEvery(asked) ? asked : undefined;
 
-  if (args.includes("--every") && !Object.hasOwn(EVERY, every ?? "")) {
-    throw new Failure(`--every takes ${Object.keys(EVERY).join(", ")}, not ${every ?? "nothing"}`);
+  if (args.includes("--every") && every === undefined) {
+    throw new Failure(`--every takes ${Object.keys(EVERY).join(", ")}, not ${asked ?? "nothing"}`);
   }
   return {
     follow: flag(args, "--follow"),
@@ -1924,10 +1885,12 @@ async function setup(
     }
     writeFileSync(
       path,
-      workflow(
-        git(root, "branch", "--show-current") || defaultBranch(root, upstream),
-        EVERY[every ?? (hourly ? "1h" : "15m")],
-      ),
+      workflow({
+        branch: git(root, "branch", "--show-current") || defaultBranch(root, upstream),
+        cron: EVERY[every ?? (hourly ? "1h" : "15m")],
+        site: SITE,
+        workflowTokens: false,
+      }),
     );
   } else if (
     every ||

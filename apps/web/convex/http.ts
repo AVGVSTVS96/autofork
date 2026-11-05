@@ -1,5 +1,6 @@
 import { httpRouter } from "convex/server";
 
+import { readLedgerClose, readLedgerOpen, readLinkAsk } from "../shared/ledger";
 import { Refused, verifyOidc } from "../shared/oidc";
 import { internal } from "./_generated/api";
 import type { ActionCtx } from "./_generated/server";
@@ -36,8 +37,6 @@ const guarded = (handle: (ctx: ActionCtx, request: Request) => Promise<Response>
     }
   });
 
-const REPO_PART = /^(?!\.\.?$)[\w.-]+$/;
-
 const same = async (a: string, b: string) => {
   const digest = async (text: string) =>
     crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
@@ -45,11 +44,6 @@ const same = async (a: string, b: string) => {
 
   return new Uint8Array(x).every((byte, index) => byte === new Uint8Array(y)[index]);
 };
-
-const usd = (value: unknown) => typeof value === "number" && Number.isFinite(value) && value >= 0;
-
-const count = (value: unknown) =>
-  value === undefined || (Number.isInteger(value) && (value as number) >= 0);
 
 const http = httpRouter();
 
@@ -71,16 +65,15 @@ http.route({
   method: "POST",
   handler: guarded(async (ctx, request) => {
     const who = await fork(request);
-    const { patch, agent, cap } = (await request.json()) ?? {};
+    const asked = await readLedgerOpen(request);
 
-    if (typeof patch !== "string" || !["claude", "codex", "custom"].includes(agent) || !usd(cap)) {
+    if (!asked) {
       return json({ error: "need patch, agent and cap" }, 400);
     }
     const opened = await ctx.runMutation(internal.ledger.open, {
       ...who,
-      patch: patch.slice(0, 200),
-      agent,
-      cap,
+      ...asked,
+      patch: asked.patch.slice(0, 200),
     });
 
     return "id" in opened ? json({ id: opened.id }, 201) : json({ error: opened.full }, 429);
@@ -92,25 +85,15 @@ http.route({
   method: "POST",
   handler: guarded(async (ctx, request) => {
     const { repoId } = await fork(request);
-    const { id, status, cost, model, inputTokens, outputTokens } = (await request.json()) ?? {};
+    const asked = await readLedgerClose(request);
 
-    if (
-      typeof id !== "string" ||
-      !["done", "stopped"].includes(status) ||
-      (cost !== undefined && !usd(cost)) ||
-      !count(inputTokens) ||
-      !count(outputTokens)
-    ) {
+    if (!asked) {
       return json({ error: "need id and status" }, 400);
     }
     const closed = await ctx.runMutation(internal.ledger.close, {
       repoId,
-      id,
-      status,
-      cost,
-      model: typeof model === "string" ? model.slice(0, 100) : undefined,
-      inputTokens,
-      outputTokens,
+      ...asked,
+      ...(asked.model === undefined ? {} : { model: asked.model.slice(0, 100) }),
     });
 
     return closed
@@ -123,17 +106,12 @@ http.route({
   path: "/link",
   method: "POST",
   handler: guarded(async (ctx, request) => {
-    const { owner, name } = (await request.json()) ?? {};
+    const asked = await readLinkAsk(request);
 
-    if (
-      typeof owner !== "string" ||
-      typeof name !== "string" ||
-      !REPO_PART.test(owner) ||
-      !REPO_PART.test(name)
-    ) {
+    if (!asked) {
       return json({ error: "need owner and name" }, 400);
     }
-    const repo = `${owner}/${name}`.toLowerCase();
+    const repo = `${asked.owner}/${asked.name}`.toLowerCase();
     /* Anyone can ask, so a private repo's answer is only yes or no */
     const row = await ctx.runQuery(internal.forks.byName, { name: repo });
 

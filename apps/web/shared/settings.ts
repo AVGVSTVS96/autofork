@@ -1,4 +1,5 @@
-import { LIMITS } from "./api.ts";
+import { LIMITS } from "@autofork/contract";
+
 import type { Limits, Settings } from "./api.ts";
 
 const CRON =

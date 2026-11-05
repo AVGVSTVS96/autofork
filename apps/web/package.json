@@ -9,6 +9,7 @@
     "deploy": "if [ -n \"$CONVEX_DEPLOY_KEY\" ]; then convex deploy --cmd 'vite build'; else vite build; fi"
   },
   "dependencies": {
+    "@autofork/contract": "workspace:*",
     "@effect/atom-react": "4.0.3",
     "@effect/platform-browser": "4.0.3",
     "@noble/hashes": "2.4.0",
