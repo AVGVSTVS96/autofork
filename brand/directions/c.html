@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>autofork · direction C · the highlight</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+  :root {
+    --bg: #FFFFFF; --panel: #FFFFFF; --ink: #111111; --ink-2: #555555; --ink-3: #6F6F6F; --hair: rgb(17 17 17 / .14);
+    --hl: #FFE14A; --on-hl: #111111;
+    --sans: "Hubot Sans", system-ui, sans-serif;
+    --gutter: clamp(20px, 4vw, 56px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #121211; --panel: #1A1A19; --ink: #F3F2EE; --ink-2: #B4B3AD; --ink-3: #96958F; --hair: rgb(243 242 238 / .14); }
+  }
+  body { font: 18px/1.5 var(--sans); }
+  .logo .ink { fill: var(--ink); } .logo .hl { fill: var(--hl); } .logo .hl + path, .logo .on-hl { fill: var(--on-hl); }
+
+  nav { display: flex; align-items: center; justify-content: space-between; padding: 22px var(--gutter); }
+  nav .brand { height: 24px; width: 170px; }
+  nav .links { display: flex; gap: 28px; font-size: 15px; color: var(--ink-2); font-stretch: 100%; }
+
+  main { text-align: center; padding: clamp(48px, 9vh, 104px) var(--gutter) 0; }
+  h1 { margin: 0; font-size: clamp(40px, 6.4vw, 96px); line-height: 1.1; letter-spacing: -0.035em; font-weight: 820; font-stretch: 125%; }
+  h1 span { display: block; }
+  mark { background: linear-gradient(transparent 22%, var(--hl) 22%, var(--hl) 94%, transparent 94%); color: var(--on-hl); padding: 0 .08em; margin: 0 -.02em; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+  h1 mark { padding: 0 .08em; }
+  .sub { margin: 28px auto 36px; font-size: 21px; line-height: 1.45; color: var(--ink-2); max-width: 40ch; font-stretch: 100%; text-wrap: balance; }
+
+  .ask { display: flex; align-items: center; max-width: 760px; margin: 0 auto; height: 72px; padding: 0 9px 0 26px; background: var(--panel); border: 1px solid var(--hair); border-radius: 20px; text-align: left; box-shadow: 0 1px 0 var(--hair); }
+  .ask .field { flex: 1; font-size: 20px; color: var(--ink); white-space: nowrap; overflow: hidden; letter-spacing: -0.01em; font-stretch: 100%; }
+  .ask .field mark { padding: 0 3px; background: var(--hl); }
+  .ask .field i { display: inline-block; width: 2px; height: 24px; background: var(--ink); vertical-align: -5px; margin-left: 3px; }
+  .ask button { height: 54px; padding: 0 24px; border: 0; border-radius: 13px; background: var(--ink); color: var(--bg); font-size: 17px; font-weight: 700; font-stretch: 112%; }
+
+  .signin { display: flex; gap: 10px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }
+  .btn { display: inline-flex; align-items: center; gap: 10px; height: 46px; padding: 0 18px; border: 1px solid var(--hair); border-radius: 13px; background: var(--panel); font-size: 16px; font-weight: 560; font-stretch: 100%; }
+  .btn .logo { width: 18px; height: 18px; }
+  .btn .soon { color: var(--ink-3); font-weight: 400; }
+  .btn .inv { margin-left: 6px; font-weight: 700; text-decoration: underline; text-decoration-color: var(--hl); text-decoration-thickness: 3px; text-underline-offset: 4px; }
+  .note { margin: 16px 0 0; font-size: 15px; color: var(--ink-3); font-stretch: 100%; }
+</style>
+</head>
+<body>
+  <nav>
+    <a class="brand" data-logo="lockup-c" aria-label="autofork"></a>
+    <div class="links"><a>How it works</a><a>GitHub</a><a>Sign in</a></div>
+  </nav>
+  <main>
+    <h1><span>Fork anything.</span><span>Keep <mark>your changes.</mark></span></h1>
+    <p class="sub">Name an open source app and what you'd change. Your fork keeps up with every release.</p>
+    <form class="ask" onsubmit="return false">
+      <span class="field">T3 Code, but <mark>always show context usage</mark><i></i></span>
+      <button>Fork it</button>
+    </form>
+    <div class="signin">
+      <a class="btn"><span data-logo="openai"></span>Sign in with ChatGPT</a>
+      <a class="btn"><span data-logo="claude"></span>Claude <span class="soon">· coming soon</span><span class="inv">Get an invite</span></a>
+    </div>
+    <p class="note">Runs on the ChatGPT or Claude plan you already pay for.</p>
+  </main>
+  <script type="module" src="logos.js"></script>
+</body>
+</html>

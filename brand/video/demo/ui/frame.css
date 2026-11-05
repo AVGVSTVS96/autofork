@@ -1,0 +1,5 @@
+*, *::before, *::after { animation: none !important; transition: none !important; }
+html, body { overflow: hidden; }
+textarea, input { caret-color: transparent; }
+.solo { min-height: 100vh; display: grid; place-items: center; padding: 0 40px; }
+.solo .t3 { width: 1180px; margin: 0; }

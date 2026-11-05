@@ -1,0 +1,15 @@
+import { serve, chrome, watch, reportMisses } from "/home/bassim/.agents/skills/brand-it/scripts/lib.mjs"
+const here = import.meta.dirname
+const [page, out, scale = "1"] = process.argv.slice(2)
+const { url, close } = await serve(here)
+const browser = await chrome()
+const tab = watch(await browser.newPage())
+await tab.setViewport({ width: 1972, height: 900, deviceScaleFactor: +scale })
+await tab.goto(`${url}${page}`, { waitUntil: "networkidle0" })
+await tab.waitForSelector("html[data-ready]")
+await tab.evaluate(() => document.fonts.ready)
+await tab.screenshot({ path: `${here}/shots/${out}`, fullPage: true })
+console.log(`shots/${out}`)
+await browser.close()
+reportMisses()
+close()

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>autofork · B · logo proposals, round 3</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="shared.css">
+<style>@font-face { font-family: "Host Grotesk"; src: url("../fonts/host-grotesk.woff2") format("woff2"); font-weight: 300 800; }</style>
+<style>
+  .t { --bg: #FBFBFC; --ink: #0E0E12; --ink-2: #4D4D57; --hair: rgb(14 14 18 / .1); --you: #3B2BFF; --trunk: #C4C4CC; --rail-app: #9C93FF; --on-you: #FFFFFF; }
+  .t.dark { --bg: #0C0C0F; --ink: #EEEEF2; --ink-2: #A6A6B2; --hair: rgb(238 238 242 / .1); --you: #8F84FF; --trunk: #4A4A55; --rail-app: #4B42B8; --on-you: #0C0C0F; }
+  body { background: #E6E6E3; font: 15px/1.4 "Host Grotesk", system-ui; color: #111; padding: 36px; margin: 0; width: 1900px; }
+  h1 { font-size: 26px; margin: 0 0 4px; font-weight: 800; letter-spacing: -0.02em; }
+  .lede { margin: 0 0 24px; color: #555; }
+  .row { display: grid; grid-template-columns: 210px 1fr 1fr; gap: 16px; margin-bottom: 16px; align-items: stretch; }
+  .label b { display: block; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; }
+  .label span { color: #555; }
+  .label .pick { color: #3B2BFF; font-weight: 800; }
+  .t { background: var(--bg); color: var(--ink); border-radius: 4px; padding: 0 24px; }
+  .nav { display: flex; align-items: center; justify-content: space-between; height: 76px; border-bottom: 1px solid var(--hair); }
+  .nav .lk { height: 30px; } .nav .lk svg { height: 100%; width: auto; }
+  .nav .links { display: flex; gap: 22px; color: var(--ink-2); font-size: 14px; }
+  .sizes { display: flex; align-items: center; gap: 26px; height: 92px; }
+  .sizes .m svg { display: block; width: 100%; height: 100%; }
+  .m64 { width: 64px; height: 64px; } .m32 { width: 32px; height: 32px; } .m16 { width: 16px; height: 16px; }
+  .tab { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; border: 1px solid var(--hair); border-radius: 8px 8px 0 0; font-size: 13px; color: var(--ink-2); }
+  .tab .m16 { flex: none; }
+  svg .ink { fill: var(--ink); }
+  svg path.you { stroke: var(--you); } svg .node { fill: var(--you); } svg .app { stroke: var(--ink); }
+  svg .trunk { stroke: var(--trunk); } svg .trunk-ink { stroke: var(--ink); }
+  svg .tile { fill: var(--you); } svg .rail-app { stroke: var(--rail-app); } svg .rail-you { stroke: var(--on-you); }
+  svg .ring { fill: var(--you); stroke: var(--on-you); }
+</style>
+</head>
+<body>
+  <h1>autofork · B · logos, round 3</h1>
+  <p class="lede">Host Grotesk 800 outlines, drawn by logos-r3.mjs. From your notes on 1, 2 and 3. Each: the nav at real size, then the mark at 64, 32 and 16, and in a browser tab. Light left, dark right.</p>
+  <div id="rows"></div>
+  <script type="module">
+    const rows = [
+      [1, "The branch", "Both lines start together at the left, so no black stub. Yours peels off and runs beside the app's line to a node."],
+      [2, "The rails", "Round 2's tile as you liked it, ring and all, redrawn to Host Grotesk's weight."],
+      [3, "The forked underline", "The app's line under the word; yours peels off under the f and ends in a node centred on its own line, flush with the k. Icon: the rails tile."],
+    ]
+    const pick = 3
+    const get = async (p) => (await fetch(p)).text()
+    for (const [id, name, why] of rows) {
+      const lock = await get(`logos/r3-${id}-lockup.svg`), mark = await get(`logos/r3-${id}-mark.svg`)
+      const cell = (dark) => `<div class="t${dark ? " dark" : ""}">
+        <div class="nav"><span class="lk">${lock}</span><span class="links"><span>How it works</span><span>GitHub</span><span>Sign in</span></span></div>
+        <div class="sizes"><span class="m m64">${mark}</span><span class="m m32">${mark}</span><span class="m m16">${mark}</span>
+          <span class="tab"><span class="m m16">${mark}</span>autofork: fork anything</span></div></div>`
+      document.querySelector("#rows").insertAdjacentHTML("beforeend", `<div class="row"><div class="label"><b>${id} · ${name}${id === pick ? ' <span class="pick">pick</span>' : ""}</b><span>${why}</span></div>${cell(false)}${cell(true)}</div>`)
+    }
+    document.documentElement.dataset.ready = ""
+  </script>
+</body>
+</html>

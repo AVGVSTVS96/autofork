@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>autofork · brand round 1 · three heroes</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="shared.css">
+<style>
+  :root { --bg: #F4F4F2; --ink: #111; --ink-2: #555; --hair: rgb(0 0 0 / .14); }
+  @media (prefers-color-scheme: dark) { :root { --bg: #111; --ink: #EEE; --ink-2: #A5A5A5; --hair: rgb(255 255 255 / .14); } }
+  body { font: 16px/1.5 "Instrument Sans", system-ui, sans-serif; padding: 40px clamp(20px, 3vw, 48px) 80px; }
+  h1 { font-size: 28px; letter-spacing: -0.02em; margin: 0 0 6px; font-weight: 600; }
+  .lede { color: var(--ink-2); margin: 0 0 36px; max-width: 70ch; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+  figure { margin: 0; }
+  figure img { display: block; width: 100%; border: 1px solid var(--hair); }
+  figure img + img { margin-top: 10px; }
+  figcaption { margin-top: 14px; color: var(--ink-2); font-size: 15px; }
+  figcaption b { color: var(--ink); font-weight: 600; }
+  figcaption .pick { color: var(--ink); font-weight: 600; }
+  .marks { display: flex; align-items: center; gap: 22px; margin-top: 14px; padding: 18px; background: #fff; border: 1px solid var(--hair); }
+  .marks.dark { background: #0C0C0F; }
+  .marks .l { height: 30px; } .marks .m { width: 16px; height: 16px; } .marks .m32 { width: 32px; height: 32px; }
+  .marks img { display: block; height: 100%; width: auto; border: 0; margin: 0 !important; }
+</style>
+</head>
+<body>
+  <h1>autofork · three heroes</h1>
+  <p class="lede">Same words in all three, from copy/MESSAGING.md. Each has its own layout, type and motif. Light on top, dark under it. Full size: shots/compare-light.png and shots/compare-dark.png.</p>
+  <div class="grid">
+    <figure>
+      <img src="shots/a-1440-light.png" alt=""><img src="shots/a-1440-dark.png" alt="">
+      <div class="marks"><span class="l"><img src="logos/lockup-a.svg" alt=""></span><span class="m32"><img src="logos/mark-a.svg" alt=""></span><span class="m"><img src="logos/mark-a.svg" alt=""></span></div>
+      <figcaption><b>A · The added line.</b> What you have now, finished. Commit Mono in diff rows, green means yours, the input is a <code>+</code> row. Safe: it reads as a dev tool first.</figcaption>
+    </figure>
+    <figure>
+      <img src="shots/b-1440-light.png" alt=""><img src="shots/b-1440-dark.png" alt="">
+      <div class="marks"><span class="l"><img src="logos/lockup-b.svg" alt=""></span><span class="m32"><img src="logos/mark-b.svg" alt=""></span><span class="m"><img src="logos/mark-b.svg" alt=""></span></div>
+      <figcaption><b>B · The branch.</b> <span class="pick">My pick.</span> The app's line runs down the page with its real release tags; yours leaves it at "Fork anything." and every release joins back in. Bricolage Grotesque, one ultramarine for yours.</figcaption>
+    </figure>
+    <figure>
+      <img src="shots/c-1440-light.png" alt=""><img src="shots/c-1440-dark.png" alt="">
+      <div class="marks"><span class="l"><img src="logos/lockup-c.svg" alt=""></span><span class="m32"><img src="logos/mark-c.svg" alt=""></span><span class="m"><img src="logos/mark-c.svg" alt=""></span></div>
+      <figcaption><b>C · The highlight.</b> The changed words marked the way a diff marks a changed word, in a highlighter yellow. Hubot Sans at its widest, centered like an app builder. Loudest, least tied to git.</figcaption>
+    </figure>
+  </div>
+  <script>document.documentElement.dataset.ready = ""</script>
+</body>
+</html>

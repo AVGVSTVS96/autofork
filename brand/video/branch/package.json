@@ -1,0 +1,9 @@
+{
+  "name": "autofork-video-branch",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "cuelume": "0.2.4",
+    "motion": "14.0.0"
+  }
+}
