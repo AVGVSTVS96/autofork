@@ -5,7 +5,11 @@
   "type": "module",
   "license": "MIT",
   "homepage": "https://autofork.com",
-  "repository": "github:AVGVSTVS96/autofork",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AVGVSTVS96/autofork.git",
+    "directory": "packages/autofork"
+  },
   "bin": {
     "autofork": "dist/autofork.js"
   },
@@ -21,7 +25,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "oxlint src test && oxfmt --check src test",
     "fmt": "oxfmt src test",
-    "check": "bun run typecheck && bun run lint && bun run test"
+    "check": "bun run typecheck && bun run lint && bun run test",
+    "prepack": "cp ../../README.md ../../LICENSE ."
   },
   "devDependencies": {
     "@types/bun": "1.4.3",

@@ -87,7 +87,7 @@ Commit straight to your fork and the workflow leaves it alone until upstream mov
 
 To follow a channel like nightlies, put its tag pattern in `follow`, like `"v*-nightly.*"`. The fork then moves to the newest release whose tag matches. To follow a branch instead, set `"follow": "main"`. The fork then moves to the newest commit on it whose checks passed, or the newest commit with `"green": false`.
 
-An app that updates itself, like a desktop app, updates from upstream's releases until the fork publishes its own. The skill's [release steps](skills/autofork/releases.md) set that up once: a release workflow that runs after each sync, the updater pointed at the fork, and builds signed so they can update without upstream's keys or certificates. [My T3 Code fork](https://github.com/AVGVSTVS96/t3code/releases) works this way.
+An app that updates itself, like a desktop app, updates from upstream's releases until the fork publishes its own. The skill's [release steps](https://github.com/AVGVSTVS96/autofork/blob/main/skills/autofork/releases.md) set that up once: a release workflow that runs after each sync, the updater pointed at the fork, and builds signed so they can update without upstream's keys or certificates. [My T3 Code fork](https://github.com/AVGVSTVS96/t3code/releases) works this way.
 
 ## Spend
 
@@ -164,7 +164,7 @@ autofork keeps forks current today. The agent behind it is meant to grow into au
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](https://github.com/AVGVSTVS96/autofork/blob/main/CONTRIBUTING.md).
 
 ## License
 
