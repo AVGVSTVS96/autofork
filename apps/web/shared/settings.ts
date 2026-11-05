@@ -1,72 +1,100 @@
-import { LIMITS, type Limits, type Settings } from "./api.ts"
+import { LIMITS } from "@autofork/contract";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 
-const CRON = /^([ \t]*-[ \t]*cron:[ \t]*)(["']?)((?![|>])[^"'\s#](?:[^"'\n#]*[^"'\s#])?)\2([ \t]*(?:#.*)?)$/m
+import type { Limits, Settings } from "./api.ts";
 
-/* Counts every line that looks like a schedule, even ones CRON can't read, so a file with any second schedule is left alone */
-export const cronLines = (workflow: string) => workflow.match(/^[ \t]*-?[ \t]*\{?[ \t]*["']?cron["']?[ \t]*:/gm)?.length ?? 0
+const CRON =
+  /^(?<head>[ \t]*-[ \t]*cron:[ \t]*)(?<quote>["']?)(?<value>(?![|>])[^"'\s#](?:[^"'\n#]*[^"'\s#])?)\k<quote>(?<tail>[ \t]*(?:#.*)?)$/mu;
 
-export const cronLine = (workflow: string | null) => workflow?.match(CRON)?.[3]?.trim() ?? null
+const LOOKS_LIKE_CRON = /^[ \t]*-?[ \t]*\{?[ \t]*["']?cron["']?[ \t]*:/gmu;
 
-export const withCron = (workflow: string, cron: string) => workflow.replace(CRON, (_, head: string, _quote, _old, tail: string) => `${head}"${cron}"${tail}`)
+export const cronLines = (workflow: string) => workflow.match(LOOKS_LIKE_CRON)?.length ?? 0;
 
-const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value)
+export const cronLine = (workflow: string | null) =>
+  CRON.exec(workflow ?? "")?.groups?.value?.trim() ?? null;
 
-const parse = (config: string | null): Record<string, unknown> => {
-  try {
-    const parsed = config ? JSON.parse(config) : {}
-    return object(parsed) ? parsed : {}
-  } catch {
-    return {}
+export const withCron = (workflow: string, cron: string) => {
+  const line = CRON.exec(workflow);
+
+  if (line?.groups === undefined) {
+    return workflow;
   }
-}
 
-export const parses = (config: string) => {
-  try {
-    return object(JSON.parse(config))
-  } catch {
-    return false
-  }
-}
+  const { head = "", tail = "" } = line.groups;
+  const after = line.index + line[0].length;
+
+  return `${workflow.slice(0, line.index)}${head}"${cron}"${tail}${workflow.slice(after)}`;
+};
+
+export const Usd = Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0));
+
+export const Count = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+
+const JsonObject = Schema.Record(Schema.String, Schema.Unknown);
+
+const decodeConfig = Schema.decodeUnknownOption(Schema.fromJsonString(JsonObject));
+const asObject = Schema.decodeUnknownOption(JsonObject);
+const asText = Schema.decodeUnknownOption(Schema.String);
+const asUsd = Schema.decodeUnknownOption(Usd);
+const asCount = Schema.decodeUnknownOption(Count);
+
+const ConfigLimits = Schema.Struct({
+  rebuilds: Schema.optionalKey(Count),
+  month: Schema.optionalKey(Usd),
+  rebuild: Schema.optionalKey(Usd),
+});
+
+const NO_FIELDS: typeof JsonObject.Type = {};
+
+const fieldsOf = (config: string | null) =>
+  Option.getOrElse(decodeConfig(config ?? ""), () => NO_FIELDS);
+
+export const parses = (config: string) => Option.isSome(decodeConfig(config));
 
 export const githubRepo = (upstream: string) =>
-  upstream.trim().match(/^(?:(?:(?:https?|ssh|git):\/\/)?(?:[^@/\s]+@)?(?:www\.)?github\.com[/:])?([\w-]+\/[\w.-]+?)(?:\.git)?(?:\/.*)?$/i)?.[1] ?? null
+  /^(?:(?:(?:https?|ssh|git):\/\/)?(?:[^@/\s]+@)?(?:www\.)?github\.com[/:])?(?<repo>[\w-]+\/[\w.-]+?)(?:\.git)?(?:\/.*)?$/iu.exec(
+    upstream.trim(),
+  )?.groups?.repo ?? null;
 
-export const upstreamOf = (config: string | null) => {
-  const { upstream } = parse(config)
-  return typeof upstream === "string" ? githubRepo(upstream) : null
-}
+export const upstreamOf = (config: string | null) =>
+  Option.getOrNull(Option.flatMapNullishOr(asText(fieldsOf(config).upstream), githubRepo));
 
-const usd = (value: unknown, fallback: number) => (typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : fallback)
-const whole = (value: unknown, fallback: number) => (Number.isInteger(value) && (value as number) >= 0 ? (value as number) : fallback)
+const ENGINE_DEFAULT_FOLLOW = "";
 
-/* A missing follow is the engine's default: upstream's releases, or its default branch when it has none */
 export const readSettings = (config: string | null, workflow: string | null): Settings => {
-  const { follow, limits } = parse(config)
-  const set = (object(limits) ? limits : {}) as Partial<Record<keyof Limits, unknown>>
+  const { follow, limits } = fieldsOf(config);
+  const set = Option.getOrElse(asObject(limits), () => NO_FIELDS);
+
   return {
     cron: cronLine(workflow),
-    follow: typeof follow === "string" ? follow : "",
-    limits: { rebuilds: whole(set.rebuilds, LIMITS.rebuilds), month: usd(set.month, LIMITS.month), rebuild: usd(set.rebuild, LIMITS.rebuild) },
-  }
-}
+    follow: Option.getOrElse(asText(follow), () => ENGINE_DEFAULT_FOLLOW),
+    limits: {
+      rebuilds: Option.getOrElse(asCount(set.rebuilds), () => LIMITS.rebuilds),
+      month: Option.getOrElse(asUsd(set.month), () => LIMITS.month),
+      rebuild: Option.getOrElse(asUsd(set.rebuild), () => LIMITS.rebuild),
+    },
+  };
+};
 
-/* Limits the repo sets to something unreadable show as defaults, so saving over them would replace what the owner wrote */
 export const readableLimits = (config: string | null) => {
-  const { limits } = parse(config)
-  if (limits === undefined) return true
-  if (!object(limits)) return false
-  const read: Record<string, number> = readSettings(config, null).limits
-  return Object.keys(LIMITS).every((key) => !(key in limits) || limits[key] === read[key])
-}
+  const { limits } = fieldsOf(config);
 
-/* A follow that isn't a string shows as empty, so saving would drop what the owner wrote */
+  return limits === undefined || Schema.is(ConfigLimits)(limits);
+};
+
 export const readableFollow = (config: string | null) => {
-  const { follow } = parse(config)
-  return follow === undefined || typeof follow === "string"
-}
+  const { follow } = fieldsOf(config);
 
-export const withSettings = (config: string | null, { follow, limits }: { follow: string; limits?: Limits }) => {
-  const { follow: _, limits: before, ...rest } = parse(config)
-  const merged = limits ? { ...(object(before) ? before : {}), ...limits } : before
-  return `${JSON.stringify({ ...rest, ...(follow.trim() ? { follow: follow.trim() } : {}), ...(merged === undefined ? {} : { limits: merged }) }, null, 2)}\n`
-}
+  return follow === undefined || Schema.is(Schema.String)(follow);
+};
+
+export const withSettings = (config: string | null, follow: string, limits?: Limits) => {
+  const { follow: _, limits: before, ...rest } = fieldsOf(config);
+
+  const merged = limits
+    ? { ...Option.getOrElse(asObject(before), () => NO_FIELDS), ...limits }
+    : before;
+
+  return `${JSON.stringify({ ...rest, follow: follow.trim() || undefined, limits: merged }, null, 2)}\n`;
+};

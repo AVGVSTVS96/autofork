@@ -45,7 +45,7 @@ jobs:
           MESSAGE: ${{ steps.check.outputs.message }}
         run: |
           git reset --quiet
-          git add src/examples.json src/known.json public/repos
+          git add src/lib/repos/examples.json src/lib/repos/known.json public/repos
           git diff --cached --quiet && exit 0
           tree="$(git write-tree)"
           remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"

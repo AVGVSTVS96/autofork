@@ -1,10 +1,11 @@
 import opentype from "opentype.js"
+import { readFileSync } from "node:fs"
 import { mkdirSync, writeFileSync } from "node:fs"
 
 const here = import.meta.dirname
 const out = `${here}/logos`
 mkdirSync(out, { recursive: true })
-const load = (p) => opentype.loadSync(`${here}/../${p}`)
+const load = (p) => opentype.parse(readFileSync(`${here}/../${p}`))
 const fonts = {
   commit: load("logo/ttf/CommitMono-700-Regular.ttf"),
   bricolage: load("fonts/src/Bricolage-720-96.ttf"),

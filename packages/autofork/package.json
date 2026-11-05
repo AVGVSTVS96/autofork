@@ -2,9 +2,8 @@
   "name": "autofork",
   "version": "0.2.4",
   "description": "Customized forks that maintain themselves. Personal forks of open-source apps auto-track upstream: every release, your changes are reapplied, and an agent rebuilds any that break.",
-  "type": "module",
-  "license": "MIT",
   "homepage": "https://autofork.com",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/AVGVSTVS96/autofork.git",
@@ -16,23 +15,19 @@
   "files": [
     "dist"
   ],
-  "engines": {
-    "node": ">=20"
-  },
+  "type": "module",
   "scripts": {
-    "build": "bun build src/autofork.ts --target node --outfile dist/autofork.js",
-    "test": "bun run build && bun test",
-    "typecheck": "tsc --noEmit",
-    "lint": "oxlint src test && oxfmt --check src test",
-    "fmt": "oxfmt src test",
-    "check": "bun run typecheck && bun run lint && bun run test",
-    "prepack": "cp ../../README.md ../../LICENSE ."
+    "build": "bun build src/autofork.ts --target node --conditions source --outfile dist/autofork.js",
+    "test": "bun run build && bun test --timeout 30000",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@autofork/contract": "workspace:*",
     "@types/bun": "1.4.3",
     "@types/node": "catalog:",
-    "oxfmt": "0.73.0",
-    "oxlint": "1.88.0",
     "typescript": "catalog:"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

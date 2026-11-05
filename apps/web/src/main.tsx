@@ -1,16 +1,23 @@
-import { RouterProvider } from "@tanstack/react-router"
-import { StrictMode } from "react"
-import { createRoot, hydrateRoot } from "react-dom/client"
-import { makeRouter } from "./router.tsx"
-import "./style.css"
+import { createBrowserHistory, RouterProvider } from "@tanstack/react-router";
+import { StrictMode } from "react";
+import { createRoot, hydrateRoot } from "react-dom/client";
 
-const router = makeRouter()
+import { appRouter } from "./router.tsx";
+
+import "./style.css";
+
+const router = appRouter(createBrowserHistory());
+
 const app = (
   <StrictMode>
     <RouterProvider router={router} />
   </StrictMode>
-)
-const root = document.getElementById("root")!
+);
 
-if (root.hasChildNodes()) void router.load().then(() => hydrateRoot(root, app))
-else createRoot(root).render(app)
+const root = document.querySelector("#root");
+
+if (root?.hasChildNodes() === true) {
+  void router.load().then(() => hydrateRoot(root, app));
+} else if (root) {
+  createRoot(root).render(app);
+}

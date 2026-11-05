@@ -1,11 +1,5 @@
 {
-  "compilerOptions": {
-    "target": "es2023",
-    "module": "nodenext",
-    "strict": true,
-    "noEmit": true,
-    "types": ["node", "bun"],
-    "skipLibCheck": true
-  },
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "rootDir": ".", "types": ["bun"] },
   "include": ["src", "test"]
 }

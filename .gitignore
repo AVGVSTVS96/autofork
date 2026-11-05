@@ -1,6 +1,7 @@
 node_modules
 dist
 !packages/autofork/dist
+!packages/contract/dist
 .vercel
 .env*
 .scratch

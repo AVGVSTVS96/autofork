@@ -1,97 +1,190 @@
-import * as Effect from "effect/Effect"
-import * as Redacted from "effect/Redacted"
-import * as HttpEffect from "effect/http/HttpEffect"
-import * as HttpServerRequest from "effect/http/HttpServerRequest"
-import * as HttpServerResponse from "effect/http/HttpServerResponse"
-import { SignedOut } from "../shared/api.ts"
-import { Env } from "./env.ts"
+import * as Effect from "effect/Effect";
+import * as HttpEffect from "effect/http/HttpEffect";
+import * as HttpServerRequest from "effect/http/HttpServerRequest";
+import * as HttpServerResponse from "effect/http/HttpServerResponse";
+import * as Redacted from "effect/Redacted";
+import * as Schema from "effect/Schema";
+import * as Struct from "effect/Struct";
 
-export type User = {
-  readonly login: string
-  readonly id: number
-  readonly avatar: string
-  readonly token: string
-  readonly refresh: string
-  readonly expires: number
-}
+import { SignedOut } from "../shared/api.ts";
+import { Env } from "./env.ts";
 
-export type Account = { readonly id: string; readonly access: string; readonly refresh: string }
+export const User = Schema.Struct({
+  login: Schema.String,
+  id: Schema.Number,
+  avatar: Schema.String,
+  token: Schema.String,
+  refresh: Schema.String,
+  expires: Schema.Number,
+});
 
-export type Session = {
-  readonly user?: User
-  readonly account?: Account
-  readonly signIn?: { readonly state: string; readonly back: string; readonly verify?: string }
-  readonly claude?: { readonly verifier: string; readonly state: string }
-  readonly chatgpt?: { readonly id: string; readonly code: string; readonly at?: number }
-}
+export type User = typeof User.Type;
 
-const COOKIE = "autofork"
-const ACCOUNT = "autofork-account"
-const text = new TextEncoder()
+export const Account = Schema.Struct({
+  id: Schema.String,
+  access: Schema.String,
+  refresh: Schema.String,
+});
 
-const aes = Effect.gen(function* () {
-  const { sessionKey } = yield* Env
-  return yield* Effect.promise(async () =>
-    crypto.subtle.importKey(
-      "raw",
-      await crypto.subtle.digest("SHA-256", text.encode(Redacted.value(sessionKey))),
-      "AES-GCM",
-      false,
-      ["encrypt", "decrypt"],
-    ),
-  )
-})
+export type Account = typeof Account.Type;
 
-const encrypt = (session: Session | Saved) =>
-  Effect.gen(function* () {
-    const key = yield* aes
-    const iv = crypto.getRandomValues(new Uint8Array(12))
-    const sealed = yield* Effect.promise(() => crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, text.encode(JSON.stringify(session))))
-    return Buffer.concat([iv, new Uint8Array(sealed)]).toString("base64url")
-  })
+const SignIn = Schema.Struct({
+  state: Schema.String,
+  back: Schema.String,
+  verify: Schema.optionalKey(Schema.String),
+});
 
-const decrypt = <A = Session>(cookie: string) =>
-  Effect.gen(function* () {
-    const key = yield* aes
-    const bytes = Buffer.from(cookie, "base64url")
-    const plain = yield* Effect.tryPromise(() => crypto.subtle.decrypt({ name: "AES-GCM", iv: bytes.subarray(0, 12) }, key, bytes.subarray(12)))
-    return JSON.parse(new TextDecoder().decode(plain)) as A
-  }).pipe(Effect.orElseSucceed(() => ({}) as A))
+export type SignIn = typeof SignIn.Type;
 
-const COOKIE_OPTIONS = { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: "30 days" } as const
+const Session = Schema.Struct({
+  user: Schema.optionalKey(User),
+  account: Schema.optionalKey(Account),
+  signIn: Schema.optionalKey(SignIn),
+  claude: Schema.optionalKey(Schema.Struct({ verifier: Schema.String, state: Schema.String })),
+  chatgpt: Schema.optionalKey(
+    Schema.Struct({
+      id: Schema.String,
+      code: Schema.String,
+      at: Schema.optionalKey(Schema.Number),
+    }),
+  ),
+});
 
-type Saved = { account?: Account; user?: number }
+export type Session = typeof Session.Type;
 
-const fromCookies = Effect.gen(function* () {
-  const { cookies } = yield* HttpServerRequest.HttpServerRequest
-  const main: Session = cookies[COOKIE] ? yield* decrypt(cookies[COOKIE]) : {}
-  const saved: Saved = cookies[ACCOUNT] ? yield* decrypt<Saved>(cookies[ACCOUNT]) : {}
-  return { main, saved }
-})
+const Saved = Schema.Struct({
+  account: Schema.optionalKey(Account),
+  user: Schema.optionalKey(Schema.Number),
+});
 
-export const read = Effect.map(fromCookies, ({ main, saved }): Session => ({
-  ...main,
-  account: main.user && saved.user === main.user.id ? saved.account : undefined,
-}))
+type Saved = typeof Saved.Type;
 
-/* The WorkOS tokens live in their own cookie, tied to the GitHub user they came with, and each cookie is only sent back when it changed,
-   so renewing them and changing the main cookie don't overwrite each other */
-export const write = (session: Session) =>
-  Effect.gen(function* () {
-    const { account, ...rest } = session
-    const { main, saved } = yield* fromCookies
-    const { account: _, ...restBefore } = main
-    const next: Saved = account ? { account, user: rest.user?.id ?? saved.user } : {}
-    const changes: [string, string][] = []
-    if (JSON.stringify(rest) !== JSON.stringify(restBefore)) changes.push([COOKIE, yield* encrypt(rest)])
-    if (JSON.stringify(next) !== JSON.stringify(saved)) changes.push([ACCOUNT, yield* encrypt(next)])
-    yield* HttpEffect.appendPreResponseHandler((_request, response) =>
-      Effect.succeed(changes.reduce((answer, [name, value]) => HttpServerResponse.setCookieUnsafe(answer, name, value, COOKIE_OPTIONS), response)),
-    )
-  })
+const sameSession = Schema.toEquivalence(Session);
+const sameSaved = Schema.toEquivalence(Saved);
 
-export const update = (change: (session: Session) => Session) => read.pipe(Effect.flatMap((session) => write(change(session))))
+const COOKIE = "autofork";
+const ACCOUNT = "autofork-account";
+const text = new TextEncoder();
+
+const aes = Effect.gen(function* aes() {
+  const { sessionKey } = yield* Env;
+
+  return yield* Effect.promise(
+    async () =>
+      await crypto.subtle.importKey(
+        "raw",
+        await crypto.subtle.digest("SHA-256", text.encode(Redacted.value(sessionKey))),
+        "AES-GCM",
+        false,
+        ["encrypt", "decrypt"],
+      ),
+  );
+});
+
+const encrypt = Effect.fn(function* encrypt(contents: Session | Saved) {
+  const key = yield* aes;
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+
+  const sealed = yield* Effect.promise(
+    async () =>
+      await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv },
+        key,
+        text.encode(JSON.stringify(contents)),
+      ),
+  );
+
+  return Buffer.concat([iv, new Uint8Array(sealed)]).toString("base64url");
+});
+
+const opened = Effect.fn(function* opened<A, I>(schema: Schema.Codec<A, I>, cookie: string) {
+  const key = yield* aes;
+  const bytes = Buffer.from(cookie, "base64url");
+
+  const plain = yield* Effect.tryPromise(
+    async () =>
+      await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: bytes.subarray(0, 12) },
+        key,
+        bytes.subarray(12),
+      ),
+  );
+
+  return yield* Schema.decodeEffect(Schema.fromJsonString(schema))(new TextDecoder().decode(plain));
+});
+
+const decrypt = <A, I>(schema: Schema.Codec<A, I>, cookie: string | undefined, empty: A) =>
+  cookie === undefined
+    ? Effect.succeed(empty)
+    : opened(schema, cookie).pipe(Effect.orElseSucceed(() => empty));
+
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: true,
+  sameSite: "lax",
+  path: "/",
+  maxAge: "30 days",
+} as const;
+
+const fromCookies = Effect.gen(function* fromCookies() {
+  const { cookies } = yield* HttpServerRequest.HttpServerRequest;
+  const main = yield* decrypt(Session, cookies[COOKIE], {});
+  const saved = yield* decrypt(Saved, cookies[ACCOUNT], {});
+
+  return { main, saved };
+});
+
+export const read = fromCookies.pipe(
+  Effect.map(({ main, saved }): Session => {
+    const rest = Struct.omit(main, ["account"]);
+
+    return main.user && saved.user === main.user.id && saved.account
+      ? { ...rest, account: saved.account }
+      : rest;
+  }),
+);
+
+const savedFor = (session: Session, saved: Saved): Saved => {
+  if (!session.account) {
+    return {};
+  }
+
+  const user = session.user?.id ?? saved.user;
+
+  return user === undefined ? { account: session.account } : { account: session.account, user };
+};
+
+export const write = Effect.fn(function* write(session: Session) {
+  const { main, saved } = yield* fromCookies;
+  const next = Struct.omit(session, ["account"]);
+  const changes: [string, string][] = [];
+
+  if (!sameSession(next, Struct.omit(main, ["account"]))) {
+    changes.push([COOKIE, yield* encrypt(next)]);
+  }
+
+  const nextSaved = savedFor(session, saved);
+
+  if (!sameSaved(nextSaved, saved)) {
+    changes.push([ACCOUNT, yield* encrypt(nextSaved)]);
+  }
+
+  yield* HttpEffect.appendPreResponseHandler((_request, response) => {
+    let answer = response;
+
+    for (const [name, value] of changes) {
+      answer = HttpServerResponse.setCookieUnsafe(answer, name, value, COOKIE_OPTIONS);
+    }
+
+    return Effect.succeed(answer);
+  });
+});
+
+export const update = (change: (session: Session) => Session) =>
+  read.pipe(Effect.flatMap((session) => write(change(session))));
 
 export const user = read.pipe(
-  Effect.flatMap((session) => (session.user ? Effect.succeed(session.user) : Effect.fail(new SignedOut()))),
-)
+  Effect.flatMap((session) =>
+    session.user ? Effect.succeed(session.user) : Effect.fail(new SignedOut()),
+  ),
+);

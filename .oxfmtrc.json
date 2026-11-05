@@ -1,0 +1,13 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "sortImports": true,
+  "sortTailwindcss": { "stylesheet": "./apps/spec/src/style.css" },
+  "ignorePatterns": [
+    "brand/**",
+    ".github/actions/**",
+    "apps/web/convex/_generated/**",
+    "packages/autofork/dist/**",
+    "packages/contract/dist/**",
+    "apps/spec/README.md"
+  ]
+}

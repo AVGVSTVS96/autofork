@@ -15,7 +15,7 @@ That pair is enough to maintain a [self-healing fork](#example-a-self-healing-fo
 
 <!-- spec:start -->
 
-<!-- Generated from apps/spec/src/spec.mdx. Edit that file instead, then run: bun run readme -->
+<!-- Generated from apps/spec/src/spec/spec.mdx. Edit that file instead, then run: bun run readme -->
 
 ## The spec
 
