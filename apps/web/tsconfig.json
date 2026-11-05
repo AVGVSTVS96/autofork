@@ -1,19 +1,11 @@
 {
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "target": "es2024",
-    "module": "preserve",
-    "moduleResolution": "bundler",
+    "rootDir": ".",
     "lib": ["es2024", "dom", "dom.iterable"],
     "types": ["node"],
     "jsx": "react-jsx",
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": false,
-    "allowImportingTsExtensions": true,
-    "rewriteRelativeImportExtensions": true,
-    "verbatimModuleSyntax": true,
-    "noEmit": true,
-    "skipLibCheck": true
+    "rewriteRelativeImportExtensions": true
   },
-  "include": ["api", "convex", "server", "shared", "src", "vite.config.ts", "examples"]
+  "include": ["api", "convex", "server", "shared", "src", "examples", "vite.config.ts"]
 }

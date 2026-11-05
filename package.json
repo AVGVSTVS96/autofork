@@ -4,7 +4,11 @@
   "type": "module",
   "packageManager": "bun@1.4.3",
   "workspaces": {
-    "packages": ["apps/*", "packages/*", "brand"],
+    "packages": [
+      "apps/*",
+      "packages/*",
+      "brand"
+    ],
     "catalog": {
       "@types/node": "24.19.2",
       "@types/react": "19.3.0",
@@ -17,6 +21,17 @@
     }
   },
   "scripts": {
-    "check": "bun --filter '*' check"
+    "check": "oxlint && oxfmt --check && bun --filter '*' typecheck && bun --filter '*' test",
+    "fix": "oxlint --fix; oxfmt",
+    "prepare": "lefthook install"
+  },
+  "devDependencies": {
+    "@oxlint/plugins": "1.91.0",
+    "lefthook": "2.2.2",
+    "oxfmt": "0.76.0",
+    "oxlint": "1.91.0",
+    "oxlint-tsgolint": "7.0.2006",
+    "typescript": "catalog:",
+    "ultracite": "8.1.1"
   }
 }

@@ -7,7 +7,7 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "readme": "bun scripts/gen-readme.mjs",
-    "check": "bun run typecheck"
+    "test": "bun scripts/gen-readme.mjs && git diff --exit-code README.md"
   },
   "dependencies": {
     "react": "catalog:",
