@@ -1,0 +1,35 @@
+{
+  "name": "@autofork/web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "deploy": "if [ -n \"$CONVEX_DEPLOY_KEY\" ]; then convex deploy --cmd 'vite build'; else vite build; fi",
+    "check": "bun run typecheck"
+  },
+  "dependencies": {
+    "@effect/atom-react": "4.0.3",
+    "@effect/platform-browser": "4.0.3",
+    "@noble/hashes": "2.4.0",
+    "@tanstack/react-router": "1.170.42",
+    "convex": "1.49.0",
+    "effect": "4.0.3",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "tweetnacl": "1.0.3"
+  },
+  "devDependencies": {
+    "@babel/core": "8.0.7",
+    "@rolldown/plugin-babel": "0.2.4",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "babel-plugin-react-compiler": "1.0.0",
+    "sharp": "0.35.5",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  }
+}

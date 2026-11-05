@@ -1,0 +1,63 @@
+name: examples
+
+on:
+  schedule:
+    - cron: "37 14 * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+
+concurrency: examples
+
+defaults:
+  run:
+    working-directory: apps/web
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      - id: due
+        run: bun examples/refresh.ts due
+      - if: steps.due.outputs.due == 'true'
+        run: npx -y @anthropic-ai/claude-code -p --dangerously-skip-permissions "Do what examples/PATCH.md asks."
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          CLAUDE_CODE_ENTRYPOINT: autofork
+      - if: steps.due.outputs.due == 'true'
+        id: check
+        run: bun examples/refresh.ts check
+      - if: steps.due.outputs.due == 'true'
+        env:
+          MESSAGE: ${{ steps.check.outputs.message }}
+        run: |
+          git reset --quiet
+          git add src/examples.json src/known.json public/repos
+          git diff --cached --quiet && exit 0
+          tree="$(git write-tree)"
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          branch="examples/${GITHUB_RUN_ID}"
+          git -c user.name=autofork -c user.email=autofork@users.noreply.github.com commit --quiet -m "$MESSAGE"
+          git push --quiet "$remote" "HEAD:refs/heads/$branch"
+          signed="$(gh api "repos/$GITHUB_REPOSITORY/git/commits" -f message="$MESSAGE" -f tree="$tree" -f "parents[]=$GITHUB_SHA" --jq .sha)"
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/heads/$branch" -f sha="$signed" -F force=true > /dev/null
+          gh pr create --head "$branch" --title "$MESSAGE" --body "The daily examples refresh."
+          gh workflow run check.yml --ref "$branch"
+          gh pr merge "$branch" --squash --auto --delete-branch
+
+      - name: Capture Claude accounting
+        if: always()
+        uses: ./.github/actions/usage

@@ -11,8 +11,8 @@ bun install
 bun run check
 ```
 
-`check` typechecks, lints and runs the tests. The tests rebuild `dist/autofork.js`, the file the action runs, so commit it with your change. CI runs the same check on every pull request.
+`check` typechecks, lints and runs the tests of every package. The engine's tests rebuild `packages/autofork/dist/autofork.js`, the file the action runs, so commit it with your change. CI runs the same check on every pull request.
 
 Every pull request is also reviewed by microscope: a maintainer runs `microscope review <number>` after it opens and after each push, and you fix or reply to what it finds. Merging needs its `microscope/correctness` status.
 
-Forks run the action at the `v1` tag, which we move up to `main` when a change should reach them. Each time we move it, we publish that version to npm as `autofork`, which `npx autofork` runs.
+Forks run the action at the `v1` tag, which we move up to `main` when a change should reach them. Each time we move it, we publish that version to npm as `autofork` from `packages/autofork` (`npm publish` there), which `npx autofork` runs.
