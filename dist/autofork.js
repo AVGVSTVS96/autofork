@@ -344,7 +344,7 @@ function agentCommand(config, cap, dir) {
     throw new Failure("Claude Code isn't signed in, so no agent can run: give the autofork step CLAUDE_CODE_OAUTH_TOKEN (claude setup-token prints one), or CODEX_AUTH for ChatGPT, from the fork's secrets");
   return {
     agent: "claude",
-    command: `${claude} -p --dangerously-skip-permissions --output-format json --max-budget-usd ${cap}`
+    command: `${claude} -p --dangerously-skip-permissions --output-format json --max-budget-usd ${cap} --tools Bash,Read,Edit,Write,Glob,Grep --strict-mcp-config`
   };
 }
 async function site(path, body) {
