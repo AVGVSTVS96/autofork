@@ -1,0 +1,18 @@
+{
+  "owner": "AVGVSTVS96",
+  "repo": "https://github.com/AVGVSTVS96/autofork",
+  "lineage": {
+    "piPatcher": {
+      "repo": "https://github.com/AVGVSTVS96/pi-patcher"
+    },
+    "patchMd": {
+      "site": "https://patchmd.vercel.app"
+    }
+  },
+  "forks": [
+    {
+      "repo": "AVGVSTVS96/t3code",
+      "upstreamCommitsAbsorbed": 156
+    }
+  ]
+}
