@@ -9,10 +9,8 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
-  type FormEvent,
-  type ReactNode,
-  type Ref,
 } from "react";
+import type { FormEvent, ReactNode, Ref } from "react";
 
 import { split, squash } from "../shared/api.ts";
 import { Account } from "./Account.tsx";
@@ -65,6 +63,7 @@ const Me = () => {
   const location = useRouterState({ select: (state) => state.location.href });
   const here = useHydrated() ? location : "/";
   const user = AsyncResult.isSuccess(me) ? me.value : null;
+
   return user ? (
     <Account login={user.login} avatar={user.avatar} />
   ) : (
@@ -74,6 +73,7 @@ const Me = () => {
 
 export const NotFound = () => {
   useTitle("Not found · autofork");
+
   return (
     <div className="page bare">
       <Nav />
@@ -103,7 +103,11 @@ export const Footer = () => (
   </footer>
 );
 
-export type Example = { app: string; avatar: string; change: string };
+export interface Example {
+  app: string;
+  avatar: string;
+  change: string;
+}
 
 const sentence = (example: Example) => `${example.app}, but ${example.change}`;
 
@@ -126,30 +130,40 @@ export const Composer = ({
   label: string;
   action: string;
   disabled?: boolean;
-  examples?: ReadonlyArray<Example>;
+  examples?: readonly Example[];
 }) => {
   const [current, setCurrent] = useState(0);
   const [idle, setIdle] = useState(true);
   const resume = useRef<ReturnType<typeof setTimeout>>(undefined);
   const live = !!examples && idle && !value;
   const fallback = examples ? sentence(examples[current]!) : "";
+
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const text = value.trim() || fallback;
+
     const via =
       ((event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null)?.value ||
       undefined;
-    if (text && !disabled) onSubmit(text, via);
+
+    if (text && !disabled) {
+      onSubmit(text, via);
+    }
   };
+
   return (
     <form className="ask" id={id} onSubmit={submit}>
       <label className="field" data-value={value}>
         <textarea
           rows={1}
           value={value}
-          onChange={(event) => onChange(event.target.value.replace(/\n/g, " "))}
+          onChange={(event) => {
+            onChange(event.target.value.replaceAll("\n", " "));
+          }}
           onKeyDown={(event) => {
-            if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+            if (event.key !== "Enter" || event.nativeEvent.isComposing) {
+              return;
+            }
             event.preventDefault();
             event.currentTarget.form?.requestSubmit();
           }}
@@ -158,7 +172,9 @@ export const Composer = ({
             setIdle(false);
           }}
           onBlur={() => {
-            resume.current = setTimeout(() => setIdle(true), 1400);
+            resume.current = setTimeout(() => {
+              setIdle(true);
+            }, 1400);
           }}
           placeholder={live ? "" : (placeholder ?? fallback)}
           aria-label={label}
@@ -177,12 +193,19 @@ export const Composer = ({
 const CUT = /^(.+?)(?:\s*,\s*(?:but\s+)?|\s+but\s+|\s*:\s+)(.*)$/i;
 const BUT = /^but\s+/i;
 
-type Guess = { app: string; name: string; avatar: string | undefined };
+interface Guess {
+  app: string;
+  name: string;
+  avatar: string | undefined;
+}
 
-export type Face = { name: string; avatar: string };
-export type AskHandle = {
+export interface Face {
+  name: string;
+  avatar: string;
+}
+export interface AskHandle {
   fill: (ask: { app: string; change: string; face?: Face; keyboard: boolean }) => void;
-};
+}
 
 const words = (text: string) => text.trim().split(/\s+/).length;
 
@@ -201,7 +224,7 @@ export const Ask = ({
   onSubmit: (ask: string, via?: string) => void;
   label: string;
   action: string;
-  examples: ReadonlyArray<Example>;
+  examples: readonly Example[];
 }) => {
   const start = split(initial);
   const [app, setApp] = useState(start.app);
@@ -217,10 +240,12 @@ export const Ask = ({
   const live = idle && !app && !text;
   const fallback = sentence(examples[current]!);
   const typed = app ? "" : text.trim();
+
   const example =
     typed.length >= 2
       ? examples.find((one) => squash(one.app).startsWith(squash(typed)))
       : undefined;
+
   const guess: Guess | undefined = example
     ? { app: example.app, name: example.app, avatar: example.avatar }
     : found?.app === typed
@@ -228,45 +253,71 @@ export const Ask = ({
       : undefined;
 
   useEffect(() => {
-    if (!typed || example || words(typed) > 3) return setAsking("");
-    const later = setTimeout(() => setAsking(typed), 320);
-    return () => clearTimeout(later);
+    if (!typed || example || words(typed) > 3) {
+      setAsking("");
+      return;
+    }
+    const later = setTimeout(() => {
+      setAsking(typed);
+    }, 320);
+
+    return () => {
+      clearTimeout(later);
+    };
   }, [typed, example]);
 
   const chip = (name: string, rest = "") => {
     setApp(name);
     setText(rest);
   };
+
   const type = (next: string) => {
-    const cut = app ? null : next.match(CUT);
-    if (cut && cut[1]!.trim()) chip(cut[1]!.trim(), cut[2]!);
-    else setText(app && !text ? next.trimStart() : next);
+    const cut = app ? null : CUT.exec(next);
+
+    if (cut && cut[1]!.trim()) {
+      chip(cut[1]!.trim(), cut[2]);
+    } else {
+      setText(app && !text ? next.trimStart() : next);
+    }
   };
+
   /* An ask picked elsewhere on the page: the composer comes into view, and the ask lands in it once the scroll settles, so you see it arrive */
   useImperativeHandle(ref, () => ({
     fill: ({ app: name, change, face: picked, keyboard }) => {
       const field = input.current!;
       const form = field.form!;
+
       const land = () => {
         setFace(picked && { app: name, ...picked });
         chip(name, change);
-        if (!keyboard && !matchMedia("(pointer: fine)").matches) return;
+
+        if (!keyboard && !matchMedia("(pointer: fine)").matches) {
+          return;
+        }
         requestAnimationFrame(() => {
           field.focus({ preventScroll: true });
           field.setSelectionRange(field.value.length, field.value.length);
         });
       };
+
       const { top, bottom } = form.getBoundingClientRect();
-      if (arrival.current) document.removeEventListener("scrollend", arrival.current);
+
+      if (arrival.current) {
+        document.removeEventListener("scrollend", arrival.current);
+      }
       arrival.current = undefined;
-      if ((top >= 0 && bottom <= innerHeight) || !("onscrollend" in document)) land();
-      else {
+
+      if ((top >= 0 && bottom <= innerHeight) || !("onscrollend" in document)) {
+        land();
+      } else {
         arrival.current = land;
         document.addEventListener("scrollend", land, { once: true });
       }
+
       form.scrollIntoView({ block: "center" });
     },
   }));
+
   const unchip = () => {
     const rest = text.trim().replace(BUT, "");
     const back = rest ? `${app}, but ${rest}` : app;
@@ -277,38 +328,59 @@ export const Ask = ({
       input.current?.setSelectionRange(app.length, app.length);
     });
   };
+
   const registry = useContext(RegistryContext);
   const entry = useId();
+
   const lead = (change: string) =>
     [found?.app, ...examples.map((one) => one.app)].find(
       (name) => name && change.toLowerCase().startsWith(`${name.toLowerCase()} `),
     );
+
   const asked = () => {
     const change = text.trim().replace(BUT, "");
-    if (app) return change ? `${app}, but ${change}` : app;
-    if (!change) return fallback;
+
+    if (app) {
+      return change ? `${app}, but ${change}` : app;
+    }
+    if (!change) {
+      return fallback;
+    }
     const name = lead(change);
+
     return name ? `${name}, but ${change.slice(name.length).trim().replace(BUT, "")}` : change;
   };
+
   const hint = live ? "" : app ? "but what you'd change" : fallback;
   useEffect(() => {
     const field = input.current!;
-    if (!initial || !matchMedia("(pointer: fine)").matches) return;
+
+    if (!initial || !matchMedia("(pointer: fine)").matches) {
+      return;
+    }
     field.focus();
     field.setSelectionRange(field.value.length, field.value.length);
   }, []);
+
   const prefetch = () => {
     const name = split(asked()).app;
-    if (!known(name)) registry.mount(client.resolve(name))();
+
+    if (!known(name)) {
+      registry.mount(client.resolve(name))();
+    }
   };
+
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const ask = asked();
+
     const via =
       ((event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null)?.value ||
       undefined;
+
     onSubmit(ask, via);
   };
+
   return (
     <form className="ask" id={id} onSubmit={submit}>
       <label className="field slots" htmlFor={entry}>
@@ -321,9 +393,12 @@ export const Ask = ({
             ref={input}
             rows={1}
             value={text}
-            onChange={(event) => type(event.target.value.replace(/\n/g, " "))}
+            onChange={(event) => {
+              type(event.target.value.replaceAll("\n", " "));
+            }}
             onKeyDown={(event) => {
               const field = event.currentTarget;
+
               if (
                 event.key === "Backspace" &&
                 app &&
@@ -331,16 +406,31 @@ export const Ask = ({
                 field.selectionEnd === 0
               ) {
                 event.preventDefault();
-                return unchip();
+
+                unchip();
+                return;
               }
+
               if (event.key === "Tab" && !event.shiftKey && guess) {
                 event.preventDefault();
-                return chip(guess.app);
+
+                chip(guess.app);
+                return;
               }
-              if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+
+              if (event.key !== "Enter" || event.nativeEvent.isComposing) {
+                return;
+              }
               event.preventDefault();
-              if (guess) return chip(guess.app);
-              if (typed && !lead(typed) && words(typed) <= 3) return chip(typed);
+
+              if (guess) {
+                chip(guess.app);
+                return;
+              }
+              if (typed && !lead(typed) && words(typed) <= 3) {
+                chip(typed);
+                return;
+              }
               field.form?.requestSubmit();
             }}
             onFocus={() => {
@@ -348,7 +438,9 @@ export const Ask = ({
               setIdle(false);
             }}
             onBlur={() => {
-              resume.current = setTimeout(() => setIdle(true), 1400);
+              resume.current = setTimeout(() => {
+                setIdle(true);
+              }, 1400);
             }}
             placeholder={hint}
             aria-label={app ? `What you'd change in ${app}` : label}
@@ -357,7 +449,14 @@ export const Ask = ({
           />
           <span className="mirror" aria-hidden="true">
             {text || hint}
-            {guess ? <Pick guess={guess} onPick={() => chip(guess.app)} /> : null}{" "}
+            {guess ? (
+              <Pick
+                guess={guess}
+                onPick={() => {
+                  chip(guess.app);
+                }}
+              />
+            ) : null}{" "}
           </span>
         </span>
         {asking && !known(asking) ? <Recognize app={asking} onFound={setFound} /> : null}
@@ -374,25 +473,36 @@ const Recognize = ({ app, onFound }: { app: string; onFound: (guess: Guess) => v
   const result = useAtomValue(client.resolve(app));
   const repo = AsyncResult.isSuccess(result) ? result.value.repo : undefined;
   const name = repo ? squash(repo.name) : "";
+
   const close =
     repo &&
     ((name.includes(squash(app)) && squash(app).length >= name.length * 0.6) ||
       squash(app).includes(name));
+
   useEffect(() => {
-    if (!repo || !close) return;
+    if (!repo || !close) {
+      return;
+    }
     let on = true;
+
     const shown = () => {
-      if (on) onFound({ app, name: repo.name, avatar: repo.avatar });
+      if (on) {
+        onFound({ app, name: repo.name, avatar: repo.avatar });
+      }
     };
+
     if (repo.avatar) {
       const icon = new Image();
       icon.src = repo.avatar;
       void icon.decode().then(shown, shown);
-    } else shown();
+    } else {
+      shown();
+    }
     return () => {
       on = false;
     };
   }, [repo, close, app]);
+
   return null;
 };
 
@@ -401,7 +511,9 @@ const Pick = ({ guess, onPick }: { guess: Guess; onPick: () => void }) => (
     type="button"
     className="pick"
     tabIndex={-1}
-    onPointerDown={(event) => event.preventDefault()}
+    onPointerDown={(event) => {
+      event.preventDefault();
+    }}
     onClick={onPick}
     title={`Fork ${guess.name}`}
   >
@@ -421,6 +533,7 @@ const Chip = ({
   onEdit: () => void;
 }) => {
   const ready = known(app);
+
   return ready ? (
     <Badge name={app} avatar={ready.repo.avatar} onEdit={onEdit} />
   ) : (
@@ -439,6 +552,7 @@ const Lookup = ({
 }) => {
   const found = useAtomValue(client.resolve(app));
   const repo = AsyncResult.isSuccess(found) ? found.value.repo : undefined;
+
   return (
     <Badge
       name={repo?.name ?? face?.name ?? app}
@@ -463,19 +577,23 @@ const Badge = ({
   </button>
 );
 
-export const useTitle = (title: string | undefined) =>
+export const useTitle = (title: string | undefined) => {
   useEffect(() => {
-    if (!title) return;
+    if (!title) {
+      return;
+    }
     const before = document.title;
     document.title = title;
+
     return () => {
       document.title = before;
     };
   }, [title]);
+};
 
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const wait = async (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const escape = (text: string) => text.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+const escape = (text: string) => text.replaceAll(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
 /* The reel's items are HTML the typer swaps in itself; React only puts the first one there, so the prerendered page shows it */
 const reelItem = (example: Example) =>
@@ -486,7 +604,7 @@ const Typer = ({
   live,
   onLand,
 }: {
-  examples: ReadonlyArray<Example>;
+  examples: readonly Example[];
   live: boolean;
   onLand: (index: number) => void;
 }) => {
@@ -506,11 +624,14 @@ const Typer = ({
     const item = (example: Example) => {
       const span = document.createElement("span");
       span.innerHTML = reelItem(example);
+
       return span.firstElementChild!;
     };
+
     const fit = () => {
       chip.style.width = `${(strip.lastElementChild as HTMLElement).offsetWidth + 17}px`;
     };
+
     const land = (index: number) => {
       strip.style.transition = "none";
       strip.style.transform = "none";
@@ -519,12 +640,14 @@ const Typer = ({
       onLand(index);
       fit();
     };
+
     const roll = async (to: number) => {
       const pass = examples
         .map((_, i) => i)
         .filter((i) => i !== current.current && i !== to)
         .sort(() => Math.random() - 0.5)
         .slice(0, 4);
+
       const items = [current.current, ...pass, to];
       strip.replaceChildren(...items.map((i) => item(examples[i]!)));
       strip.getBoundingClientRect();
@@ -532,36 +655,55 @@ const Typer = ({
       strip.style.transform = `translateY(${-(items.length - 1) * 32}px)`;
       fit();
       await wait(920);
-      if (on) land(to);
+
+      if (on) {
+        land(to);
+      }
     };
+
     const type = async (line: string) => {
       box.classList.add("typing");
+
       for (let i = 1; i <= line.length && on; i++) {
         text.textContent = line.slice(0, i);
         await wait(line[i - 1] === " " ? 70 : 28 + Math.random() * 38);
       }
+
       box.classList.remove("typing");
     };
+
     const erase = async () => {
       box.classList.add("typing");
+
       while (text.textContent && on) {
         text.textContent = text.textContent.slice(0, -2);
         await wait(14);
       }
+
       box.classList.remove("typing");
     };
+
     const play = async () => {
       const change = () => `but ${examples[current.current]!.change}`;
-      if (matchMedia("(prefers-reduced-motion: reduce)").matches)
+
+      if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
         return void (text.textContent = change());
+      }
       text.textContent = "";
       await wait(700);
+
       while (on) {
         await type(change());
         await wait(2600);
-        if (!on) return;
+
+        if (!on) {
+          return;
+        }
         await erase();
-        if (!on) return;
+
+        if (!on) {
+          return;
+        }
         await roll((current.current + 1) % examples.length);
         await wait(160);
       }
@@ -569,7 +711,10 @@ const Typer = ({
 
     fit();
     void document.fonts.ready.then(fit);
-    if (on) void play();
+
+    if (on) {
+      void play();
+    }
     return () => {
       on = false;
       box.classList.remove("typing");
@@ -631,7 +776,7 @@ export const Retry = ({
 );
 
 export const stars = (count: number) =>
-  count >= 1000 ? `${(count / 1000).toFixed(count >= 10000 ? 0 : 1)}k` : String(count);
+  count >= 1000 ? `${(count / 1000).toFixed(count >= 10_000 ? 0 : 1)}k` : String(count);
 
 export const GitHubIcon = () => (
   <svg viewBox="0 0 16 16" aria-hidden="true" className="icon">

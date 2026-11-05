@@ -13,6 +13,7 @@ const readmePath = new URL("../README.md", import.meta.url);
 
 const START = "<!-- spec:start -->";
 const END = "<!-- spec:end -->";
+
 const BANNER =
   "<!-- Generated from apps/spec/src/spec.mdx. Edit that file instead, then run: bun run readme -->";
 
@@ -27,19 +28,24 @@ const demoteHeadings = () => (tree) => {
 const markAlerts = () => (tree) => {
   visit(tree, "blockquote", (node) => {
     const paragraph = node.children[0];
-    if (paragraph?.type !== "paragraph") return;
+
+    if (paragraph?.type !== "paragraph") {
+      return;
+    }
     paragraph.children.unshift({ type: "html", value: "[!NOTE]\n" });
   });
 };
 
-const spec = readFileSync(specPath, "utf8");
+const spec = readFileSync(specPath, "utf-8");
+
 const generated = String(
   remark().data("settings", { bullet: "-" }).use(demoteHeadings).use(markAlerts).processSync(spec),
 ).trimEnd();
 
-const readme = readFileSync(readmePath, "utf8");
+const readme = readFileSync(readmePath, "utf-8");
 const start = readme.indexOf(START);
 const end = readme.indexOf(END);
+
 if (start === -1 || end === -1 || end < start) {
   console.error(`README.md is missing the ${START} / ${END} markers.`);
   process.exit(1);
@@ -49,9 +55,9 @@ const before = readme.slice(0, start + START.length);
 const after = readme.slice(end);
 const next = `${before}\n\n${BANNER}\n\n${generated}\n\n${after}`;
 
-if (next !== readme) {
+if (next === readme) {
+  console.log("README.md spec section already up to date.");
+} else {
   writeFileSync(readmePath, next);
   console.log(`README.md spec section regenerated from ${specPath.pathname.slice(root.length)}`);
-} else {
-  console.log("README.md spec section already up to date.");
 }

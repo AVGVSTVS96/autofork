@@ -7,6 +7,7 @@ const route = getRouteApi("/verify");
 export const VerifyRoute = () => {
   const { email, error, back } = route.useSearch();
   useTitle("Check your email · autofork");
+
   return (
     <div className="page bare">
       <Nav />

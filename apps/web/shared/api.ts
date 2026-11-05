@@ -24,10 +24,11 @@ export class NotFound extends Schema.TaggedError<NotFound>()(
 
 const SPLIT = /^(.+?)(?:,\s*but\s+|\s+but\s+|\s*:\s+|\s+(?:—|–|-)\s+|\s+to\s+)(.+)$/i;
 
-export const squash = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, "");
+export const squash = (name: string) => name.toLowerCase().replaceAll(/[^a-z0-9]/g, "");
 
 export const split = (ask: string) => {
-  const [, app = ask, change = ""] = ask.trim().match(SPLIT) ?? [];
+  const [, app = ask, change = ""] = SPLIT.exec(ask.trim()) ?? [];
+
   return { app: app.trim(), change: change.trim() };
 };
 
@@ -38,6 +39,7 @@ export const Repo = Schema.Struct({
   stars: Schema.Number,
   avatar: Schema.String,
 });
+
 export type Repo = typeof Repo.Type;
 
 export const Request = Schema.Struct({
@@ -49,7 +51,9 @@ export const Request = Schema.Struct({
 export const Me = Schema.Struct({ login: Schema.String, avatar: Schema.String });
 
 export const Agent = Schema.Literals(["chatgpt", "claude"]);
+
 export type Agent = typeof Agent.Type;
+
 export const isAgent = Schema.is(Agent);
 
 export const ForkState = Schema.Struct({
@@ -59,6 +63,7 @@ export const ForkState = Schema.Struct({
   link: Schema.NullOr(Schema.String),
   places: Schema.Array(Schema.String),
 });
+
 export type ForkState = typeof ForkState.Type;
 
 export const Started = Schema.Struct({ owner: Schema.String, name: Schema.String });
@@ -70,6 +75,7 @@ export const Limits = Schema.Struct({
   month: Schema.Number,
   rebuild: Schema.Number,
 });
+
 export type Limits = typeof Limits.Type;
 
 export const EVERY = {
@@ -86,6 +92,7 @@ export const Settings = Schema.Struct({
   limits: Limits,
   head: Schema.optional(Schema.String),
 });
+
 export type Settings = typeof Settings.Type;
 
 export const MyFork = Schema.Struct({
@@ -95,6 +102,7 @@ export const MyFork = Schema.Struct({
   repoId: Schema.Number,
   settings: Settings,
 });
+
 export type MyFork = typeof MyFork.Type;
 
 export const DeviceCode = Schema.Struct({ code: Schema.String, url: Schema.String });
@@ -123,6 +131,7 @@ export const Run = Schema.Struct({
   /* When the newest run started: later than startedAt when that run only skipped and this is the failure it skipped over */
   latestAt: Schema.String,
 });
+
 export type Run = typeof Run.Type;
 
 export const Change = Schema.Struct({
@@ -132,6 +141,7 @@ export const Change = Schema.Struct({
   upstream: Schema.NullOr(Schema.String),
   issue: Schema.NullOr(Schema.String),
 });
+
 export type Change = typeof Change.Type;
 
 export const Fork = Schema.Struct({
@@ -143,6 +153,7 @@ export const Fork = Schema.Struct({
   note: Schema.Boolean,
   run: Schema.NullOr(Run),
 });
+
 export type Fork = typeof Fork.Type;
 
 const fork = { owner: Schema.String, name: Schema.String };

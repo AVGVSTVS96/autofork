@@ -17,9 +17,16 @@ import {
 export const watchFor = (upstream: string, given: string | undefined, green = true) => {
   const repo = githubRepo(upstream)?.toLowerCase();
   const follow = given?.trim();
-  if (!repo) return null;
-  if (follow?.includes("*")) return `${repo} channel`;
-  if (follow && follow !== "releases") return `${repo} branch ${follow}${green ? "" : " any"}`;
+
+  if (!repo) {
+    return null;
+  }
+  if (follow?.includes("*")) {
+    return `${repo} channel`;
+  }
+  if (follow && follow !== "releases") {
+    return `${repo} branch ${follow}${green ? "" : " any"}`;
+  }
   return `${repo} releases`;
 };
 
@@ -39,33 +46,50 @@ export const refresh = internalAction({
     const readAt = Date.now();
     const [owner = "", repo = ""] = name.split("/");
     const installationId = await repoInstallation(owner, repo);
+
     if (!installationId) {
       await ctx.runMutation(internal.forks.unlink, { name, readAt });
+
       return { linked: false, cron: null, open: false, why: "not installed" };
     }
+
     let token = await installationToken(installationId);
-    type Repo = { id: number; full_name: string; default_branch: string; private: boolean };
+
+    interface Repo {
+      id: number;
+      full_name: string;
+      default_branch: string;
+      private: boolean;
+    }
     /* A token minted before a repo was added or permissions changed can't see it yet, so a refusal gets one fresh token */
     const { body: found } = await request<Repo>(token, "GET", `repos/${name}`).catch(
       async (error) => {
-        if (!(error instanceof GitHubError && (error.status === 403 || error.status === 404)))
+        if (!(error instanceof GitHubError && (error.status === 403 || error.status === 404))) {
           throw error;
+        }
         dropToken(installationId);
         token = await installationToken(installationId);
-        return request<Repo>(token, "GET", `repos/${name}`);
+
+        return await request<Repo>(token, "GET", `repos/${name}`);
       },
     );
+
     const open = !found.private;
+
     const [config, workflow] = await Promise.all([
       file(token, found.full_name, ".autofork/config.json", found.default_branch),
       file(token, found.full_name, ".github/workflows/autofork.yml", found.default_branch),
     ]);
+
     let settings: { upstream?: unknown; follow?: unknown; green?: unknown } | undefined;
+
     try {
       settings = config ? JSON.parse(config) : undefined;
     } catch {}
+
     if (typeof settings?.upstream !== "string" || workflow === null) {
       await ctx.runMutation(internal.forks.unlink, { name, readAt });
+
       return {
         linked: false,
         cron: null,
@@ -73,12 +97,16 @@ export const refresh = internalAction({
         why: typeof settings?.upstream === "string" ? "no workflow" : "no config",
       };
     }
+
     const follow = typeof settings.follow === "string" ? settings.follow : undefined;
     const watch = watchFor(settings.upstream, follow, settings.green !== false);
+
     if (!watch) {
       await ctx.runMutation(internal.forks.unlink, { name, readAt });
+
       return { linked: false, cron: null, open, why: "not on GitHub" };
     }
+
     const cron = cronLine(workflow);
     await ctx.runMutation(internal.forks.save, {
       repoId: found.id,
@@ -92,6 +120,7 @@ export const refresh = internalAction({
       readAt,
       open,
     });
+
     return { linked: true, cron, open };
   },
 });
@@ -102,10 +131,13 @@ export const refreshAll = internalAction({
   handler: async (ctx, { names, installationId }) => {
     const wanted =
       installationId === undefined ? names : await withConfig(ctx, installationId, names);
-    for (const [index, name] of wanted.slice(0, 100).entries())
+
+    for (const [index, name] of wanted.slice(0, 100).entries()) {
       await ctx.scheduler.runAfter(index * 250, internal.forks.refresh, { name });
-    if (wanted.length > 100)
+    }
+    if (wanted.length > 100) {
       await ctx.scheduler.runAfter(25_000, internal.forks.refreshAll, { names: wanted.slice(100) });
+    }
   },
 });
 
@@ -114,20 +146,25 @@ const withConfig = async (ctx: ActionCtx, installationId: number, names: string[
   const linked = new Set(await ctx.runQuery(internal.forks.linkedOf, { names }));
   const token = await installationToken(installationId);
   const kept: string[] = [];
+
   for (let at = 0; at < names.length; at += 50) {
     const chunk = names.slice(at, at + 50);
+
     const query = `{ ${chunk
       .map((name, index) => {
         const [owner, repo] = name.split("/");
+
         return `r${index}: repository(owner: ${JSON.stringify(owner)}, name: ${JSON.stringify(repo)}) { object(expression: "HEAD:.autofork/config.json") { __typename } }`;
       })
       .join("\n")} }`;
+
     const found = await request<{ data?: Record<string, { object: unknown } | null> | null }>(
       token,
       "POST",
       "graphql",
       { query },
-    ).catch(() => undefined);
+    ).catch(() => {});
+
     /* A repo the token can't see may have joined after the token was minted, so only one seen without a config is left out */
     kept.push(
       ...chunk.filter(
@@ -138,6 +175,7 @@ const withConfig = async (ctx: ActionCtx, installationId: number, names: string[
       ),
     );
   }
+
   return kept;
 };
 
@@ -145,13 +183,14 @@ export const linkedOf = internalQuery({
   args: { names: v.array(v.string()) },
   handler: async (ctx, { names }) => {
     const rows = await Promise.all(
-      names.map((name) =>
+      names.map(async (name) =>
         ctx.db
           .query("forks")
           .withIndex("name", (q) => q.eq("name", name.toLowerCase()))
           .first(),
       ),
     );
+
     return rows.flatMap((row) => (row ? [row.name] : []));
   },
 });
@@ -175,32 +214,42 @@ export const save = internalMutation({
       .query("forks")
       .withIndex("repoId", (q) => q.eq("repoId", fork.repoId))
       .unique();
-    if (row && (row.readAt ?? 0) > fork.readAt) return;
+
+    if (row && (row.readAt ?? 0) > fork.readAt) {
+      return;
+    }
     const gone = await ctx.db
       .query("gone")
       .withIndex("name", (q) => q.eq("name", fork.name))
       .unique();
+
     if (
       gone &&
       gone.at > fork.readAt &&
       (gone.installationId === undefined || gone.installationId === fork.installationId)
-    )
+    ) {
       return;
-    if (gone) await ctx.db.delete(gone._id);
+    }
+    if (gone) {
+      await ctx.db.delete(gone._id);
+    }
     for (const stale of await ctx.db
       .query("forks")
       .withIndex("name", (q) => q.eq("name", fork.name))
-      .collect())
+      .collect()) {
       if (stale.repoId !== fork.repoId) {
         if ((stale.readAt ?? 0) > fork.readAt) return;
         await ctx.db.delete(stale._id);
       }
-    if (row)
+    }
+    if (row) {
       await ctx.db.replace(row._id, {
         ...fork,
         ...(row.watch === fork.watch && row.seen !== undefined ? { seen: row.seen } : {}),
       });
-    else await ctx.db.insert("forks", fork);
+    } else {
+      await ctx.db.insert("forks", fork);
+    }
   },
 });
 
@@ -210,8 +259,12 @@ const forget = async (ctx: MutationCtx, name: string, at: number, installationId
     .query("gone")
     .withIndex("name", (q) => q.eq("name", name))
     .unique();
-  if (!gone) await ctx.db.insert("gone", { name, at, installationId });
-  else if (gone.at < at) await ctx.db.replace(gone._id, { name, at, installationId });
+
+  if (!gone) {
+    await ctx.db.insert("gone", { name, at, installationId });
+  } else if (gone.at < at) {
+    await ctx.db.replace(gone._id, { name, at, installationId });
+  }
 };
 
 export const unlink = internalMutation({
@@ -220,8 +273,9 @@ export const unlink = internalMutation({
     for (const row of await ctx.db
       .query("forks")
       .withIndex("name", (q) => q.eq("name", name))
-      .collect())
+      .collect()) {
       if ((row.readAt ?? 0) <= readAt) await ctx.db.delete(row._id);
+    }
     await forget(ctx, name, readAt);
   },
 });
@@ -252,7 +306,7 @@ export const namesOn = internalQuery({
 
 export const byName = internalQuery({
   args: { name: v.string() },
-  handler: (ctx, { name }) =>
+  handler: async (ctx, { name }) =>
     ctx.db
       .query("forks")
       .withIndex("name", (q) => q.eq("name", name))
@@ -264,20 +318,26 @@ export const mayCheck = internalMutation({
   args: { name: v.string() },
   handler: async (ctx, { name }) => {
     const now = Date.now();
+
     for (const old of await ctx.db
       .query("checks")
       .withIndex("at", (q) => q.lt("at", now - 60_000))
-      .take(50))
+      .take(50)) {
       await ctx.db.delete(old._id);
+    }
     if (
       (await ctx.db
         .query("checks")
         .withIndex("name", (q) => q.eq("name", name))
         .first()) !== null
-    )
+    ) {
       return false;
-    if ((await ctx.db.query("checks").withIndex("at").take(30)).length >= 30) return false;
+    }
+    if ((await ctx.db.query("checks").withIndex("at").take(30)).length >= 30) {
+      return false;
+    }
     await ctx.db.insert("checks", { name, at: now });
+
     return true;
   },
 });

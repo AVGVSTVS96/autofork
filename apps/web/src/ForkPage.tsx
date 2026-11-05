@@ -2,7 +2,8 @@ import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { getRouteApi, Link } from "@tanstack/react-router";
 import * as Option from "effect/Option";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
-import { Component, lazy, type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
+import { Component, lazy, Suspense, useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 
 import type { Fork, Run } from "../shared/api.ts";
 import * as client from "./client.ts";
@@ -31,7 +32,7 @@ class Contained extends Component<{ children: ReactNode }, { failed: boolean }> 
   render = () => (this.state.failed ? UNAVAILABLE : this.props.children);
 }
 
-const Yours = lazy(() =>
+const Yours = lazy(async () =>
   import("./Yours.tsx").then(
     (module) => ({ default: module.Yours }),
     () => ({ default: (_: { fork: Fork }) => UNAVAILABLE }),
@@ -41,6 +42,7 @@ const Yours = lazy(() =>
 export const ForkRoute = () => {
   const { owner, name } = route.useParams();
   const { since, error } = route.useSearch();
+
   return <ForkPage owner={owner} name={name} since={since} error={error} />;
 };
 
@@ -68,17 +70,26 @@ const ForkPage = ({
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
+
     const wait = () => {
       clearTimeout(timer);
-      if (document.visibilityState === "visible") timer = setTimeout(tick, live ? 5000 : 60000);
+
+      if (document.visibilityState === "visible") {
+        timer = setTimeout(tick, live ? 5000 : 60000);
+      }
     };
+
     const tick = () => {
       refresh();
       wait();
     };
-    const seen = () => (document.visibilityState === "visible" ? tick() : clearTimeout(timer));
+
+    const seen = () => {
+      document.visibilityState === "visible" ? tick() : clearTimeout(timer);
+    };
     wait();
     document.addEventListener("visibilitychange", seen);
+
     return () => {
       clearTimeout(timer);
       document.removeEventListener("visibilitychange", seen);
@@ -180,6 +191,7 @@ const Body = ({
 }) => {
   const app = fork.upstream?.split("/")[1] ?? fork.name;
   const plan = fork.agent === "claude" ? "Claude" : "ChatGPT";
+
   return (
     <>
       <header className="fork-head">
@@ -280,7 +292,7 @@ const Body = ({
 const label = (step: string, fork: Fork, run: Run, yours: boolean) =>
   /^Set up job$/.test(step)
     ? "Starting a computer"
-    : /checkout/.test(step)
+    : step.includes("checkout")
       ? "Getting the code"
       : /setup|action-setup/.test(step)
         ? "Installing tools"
@@ -299,6 +311,7 @@ const label = (step: string, fork: Fork, run: Run, yours: boolean) =>
 
 const elapsed = (from: string, to: number) => {
   const seconds = Math.max(0, Math.round((to - Date.parse(from)) / 1000));
+
   return seconds < 60
     ? `${seconds}s`
     : `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s`;
@@ -307,10 +320,18 @@ const elapsed = (from: string, to: number) => {
 const useNow = (on: boolean) => {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
-    if (!on) return;
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
+    if (!on) {
+      return;
+    }
+    const timer = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+
+    return () => {
+      clearInterval(timer);
+    };
   }, [on]);
+
   return now;
 };
 
@@ -327,6 +348,7 @@ const Progress = ({
 }) => {
   const live = waiting || (run !== null && run.status !== "completed");
   const now = useNow(live);
+
   if (waiting) {
     return (
       <section className="card run">
@@ -336,17 +358,24 @@ const Progress = ({
       </section>
     );
   }
-  if (!run) return null;
+
+  if (!run) {
+    return null;
+  }
   const steps = run.steps.flatMap((step) => {
     const text = label(step.name, fork, run, yours);
+
     return text && !step.name.startsWith("Post ") ? [{ ...step, text }] : [];
   });
+
   const unique = steps.filter(
     (step, index) =>
       steps.findIndex((other) => other.text === step.text) === index || step.status !== "completed",
   );
+
   const done = run.status === "completed";
   const good = run.conclusion === "success";
+
   return (
     <section className="card run">
       <div className="run-head">
@@ -414,22 +443,26 @@ const SyncIcon = () => (
 const More = ({ owner, name }: { owner: string; name: string }) => {
   const add = useAtomSet(client.addChange, { mode: "promiseExit" });
   const [change, setChange] = useState("");
+
   const [state, setState] = useState<{ busy: boolean; error: string | null }>({
     busy: false,
     error: null,
   });
+
   const submit = async (text: string) => {
     setState({ busy: true, error: null });
     const exit = await add({ params: { owner, name }, payload: { change: text } });
+
     try {
       client.unwrap(exit);
       setChange("");
       setState({ busy: false, error: null });
       location.search = `?since=${encodeURIComponent(new Date(Date.now() - 5000).toISOString())}`;
-    } catch (failure) {
-      setState({ busy: false, error: (failure as Error).message });
+    } catch (error) {
+      setState({ busy: false, error: (error as Error).message });
     }
   };
+
   return (
     <div className="more">
       <Composer

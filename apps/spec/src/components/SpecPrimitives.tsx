@@ -1,12 +1,21 @@
-import { isValidElement, type ComponentProps, type ReactNode } from "react";
+import { isValidElement } from "react";
+import type { ComponentProps, ReactNode } from "react";
 
-const classNames = (...values: Array<string | undefined>) => values.filter(Boolean).join(" ");
+const classNames = (...values: (string | undefined)[]) => values.filter(Boolean).join(" ");
 
 const stringify = (children: ReactNode): string => {
-  if (typeof children === "string") return children;
-  if (typeof children === "number") return String(children);
-  if (Array.isArray(children)) return children.map(stringify).join("");
-  if (isValidElement<{ children?: ReactNode }>(children)) return stringify(children.props.children);
+  if (typeof children === "string") {
+    return children;
+  }
+  if (typeof children === "number") {
+    return String(children);
+  }
+  if (Array.isArray(children)) {
+    return children.map(stringify).join("");
+  }
+  if (isValidElement<{ children?: ReactNode }>(children)) {
+    return stringify(children.props.children);
+  }
   return "";
 };
 
@@ -14,8 +23,8 @@ const slugify = (children: ReactNode) =>
   stringify(children)
     .toLowerCase()
     .trim()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-");
+    .replaceAll(/[^a-z0-9\s-]/g, "")
+    .replaceAll(/\s+/g, "-");
 
 export function Callout({ children, className, ...props }: ComponentProps<"blockquote">) {
   return (

@@ -27,7 +27,10 @@ const remembered = new Map<string, { etag: string; body: string }>();
 const remember = (key: string, entry: { etag: string; body: string }) => {
   remembered.delete(key);
   remembered.set(key, entry);
-  if (remembered.size > 1000) remembered.delete(remembered.keys().next().value!);
+
+  if (remembered.size > 1000) {
+    remembered.delete(remembered.keys().next().value!);
+  }
 };
 
 const limited = (response: Response, message: string) =>
@@ -48,9 +51,11 @@ const call = (
 ) => {
   const url = path.startsWith("https://") ? path : `${API}${path}`;
   const key = `${token?.slice(-12) ?? "anon"} ${url}`;
+
   return Effect.tryPromise({
     try: async () => {
       const cached = conditional ? remembered.get(key) : undefined;
+
       const response = await fetch(url, {
         method,
         headers: {
@@ -63,11 +68,15 @@ const call = (
         },
         body: body === undefined ? undefined : JSON.stringify(body),
       });
+
       if (response.status === 304 && cached) {
         remember(key, cached);
+
         return cached.body;
       }
+
       const text = await response.text();
+
       if (!response.ok) {
         const message = (() => {
           try {
@@ -76,14 +85,19 @@ const call = (
             return text;
           }
         })();
+
         throw new GitHubError({
           status: limited(response, message) ? 429 : response.status,
           path,
           message,
         });
       }
+
       const etag = response.headers.get("etag");
-      if (conditional && etag) remember(key, { etag, body: text });
+
+      if (conditional && etag) {
+        remember(key, { etag, body: text });
+      }
       return text;
     },
     catch: (error) =>
@@ -110,11 +124,12 @@ export const busy = (error: GitHubError) => error.status === 429;
 
 export const missing = (error: GitHubError) => error.status === 404;
 
-const appJwt = Effect.gen(function* () {
+const appJwt = Effect.gen(function* appJwt() {
   const { clientId, privateKey } = yield* Env;
   const now = Math.floor(Date.now() / 1000);
   const part = (value: object) => Buffer.from(JSON.stringify(value)).toString("base64url");
   const body = `${part({ alg: "RS256", typ: "JWT" })}.${part({ iat: now - 60, exp: now + 540, iss: clientId })}`;
+
   return `${body}.${createSign("RSA-SHA256").update(body).sign(Redacted.value(privateKey), "base64url")}`;
 });
 
@@ -124,29 +139,36 @@ const minted = (
   key: string,
   mint: Effect.Effect<{ token: string; expires_at: string }, GitHubError, Env>,
 ) =>
-  Effect.gen(function* () {
+  Effect.gen(function* minted() {
     const hit = tokens.get(key);
-    if (hit && hit.expires > Date.now()) return hit.token;
+
+    if (hit && hit.expires > Date.now()) {
+      return hit.token;
+    }
     const { token, expires_at } = yield* mint;
     tokens.set(key, { token, expires: Date.parse(expires_at) - 300_000 });
+
     return token;
   });
 
 export const appToken = minted(
   "app",
-  Effect.gen(function* () {
+  Effect.gen(function* appToken() {
     const jwt = yield* appJwt;
+
     const [installation] = yield* request<{ id: number }[]>(
       jwt,
       "GET",
       "/app/installations?per_page=1",
     );
-    if (!installation)
+
+    if (!installation) {
       return yield* new GitHubError({
         status: 404,
         path: "/app/installations",
         message: "autofork isn't installed anywhere",
       });
+    }
     return yield* request<{ token: string; expires_at: string }>(
       jwt,
       "POST",
@@ -159,13 +181,15 @@ export const appToken = minted(
 );
 
 const installationToken = (owner: string, name: string, permissions?: Record<string, string>) =>
-  Effect.gen(function* () {
+  Effect.gen(function* installationToken() {
     const jwt = yield* appJwt;
+
     const installation = yield* request<{ id: number }>(
       jwt,
       "GET",
       `/repos/${owner}/${name}/installation`,
     );
+
     return yield* request<{ token: string; expires_at: string }>(
       jwt,
       "POST",
@@ -184,17 +208,18 @@ export const repoToken = (owner: string, name: string) =>
 export const workflowToken = (owner: string, name: string) =>
   installationToken(owner, name, { contents: "write", workflows: "write" });
 
-type OAuthTokens = {
+interface OAuthTokens {
   access_token?: string;
   refresh_token?: string;
   expires_in?: number;
   error?: string;
   error_description?: string;
-};
+}
 
 const oauth = (params: Record<string, string>) =>
-  Effect.gen(function* () {
+  Effect.gen(function* oauth() {
     const { clientId, clientSecret } = yield* Env;
+
     const tokens = yield* Effect.tryPromise({
       try: async () => {
         const response = await fetch("https://github.com/login/oauth/access_token", {
@@ -206,10 +231,12 @@ const oauth = (params: Record<string, string>) =>
             ...params,
           }),
         });
+
         return (await response.json()) as OAuthTokens;
       },
       catch: (error) => new GitHubError({ status: 0, path: "oauth", message: String(error) }),
     });
+
     if (!tokens.access_token) {
       return yield* new GitHubError({
         status: 401,
@@ -217,6 +244,7 @@ const oauth = (params: Record<string, string>) =>
         message: tokens.error_description ?? tokens.error ?? "GitHub sign-in failed",
       });
     }
+
     return {
       token: tokens.access_token,
       refresh: tokens.refresh_token ?? "",
@@ -227,20 +255,23 @@ const oauth = (params: Record<string, string>) =>
 export const exchange = (code: string) => Effect.flatMap(oauth({ code }), identify);
 
 export const identify = (tokens: { token: string; refresh: string; expires: number }) =>
-  Effect.gen(function* () {
+  Effect.gen(function* identify() {
     const user = yield* request<{ login: string; id: number; avatar_url: string }>(
       tokens.token,
       "GET",
       "/user",
     );
+
     const installations = yield* request<{ installations: { account: { id: number } }[] }>(
       tokens.token,
       "GET",
       "/user/installations",
     );
+
     const installed = installations.installations.some(
       (installation) => installation.account.id === user.id,
     );
+
     return {
       user: {
         login: user.login,
@@ -265,7 +296,9 @@ export const fromWorkOS = (github: {
       : github.expires_at && github.expires_at < 1e12
         ? github.expires_at * 1000
         : github.expires_at;
+
   const refresh = github.refresh_token ?? "";
+
   return {
     token: github.access_token,
     refresh,
@@ -286,9 +319,12 @@ const renewals = new Map<
 >();
 
 const renew = (refresh: string) =>
-  Effect.gen(function* () {
+  Effect.gen(function* renew() {
     const env = yield* Env;
-    for (const [key, { at }] of renewals) if (at < Date.now() - 600_000) renewals.delete(key);
+
+    for (const [key, { at }] of renewals) {
+      if (at < Date.now() - 600_000) renewals.delete(key);
+    }
     const renewal = renewals.get(refresh) ?? {
       at: Date.now(),
       renewed: Effect.runPromiseExit(
@@ -297,15 +333,22 @@ const renew = (refresh: string) =>
         ),
       ),
     };
+
     renewals.set(refresh, renewal);
-    const renewed = yield* Effect.promise(() => renewal.renewed);
-    if (Exit.isFailure(renewed)) renewals.delete(refresh);
+    const renewed = yield* Effect.promise(async () => renewal.renewed);
+
+    if (Exit.isFailure(renewed)) {
+      renewals.delete(refresh);
+    }
     return yield* renewed;
   });
 
-export const signedIn = Effect.gen(function* () {
+export const signedIn = Effect.gen(function* signedIn() {
   const user = yield* Session.user;
-  if (user.expires > Date.now() + 60_000) return user;
+
+  if (user.expires > Date.now() + 60_000) {
+    return user;
+  }
   const tokens = yield* renew(user.refresh).pipe(
     Effect.catchIf(
       (error) => error.status === 401,
@@ -316,8 +359,10 @@ export const signedIn = Effect.gen(function* () {
         ),
     ),
   );
+
   const fresh = { ...user, ...tokens };
   yield* Session.update((session) => ({ ...session, user: fresh }));
+
   return fresh;
 });
 
@@ -328,12 +373,13 @@ export const setSecret = (
   secret: string,
   value: string,
 ) =>
-  Effect.gen(function* () {
+  Effect.gen(function* setSecret() {
     const { key, key_id } = yield* request<{ key: string; key_id: string }>(
       token,
       "GET",
       `/repos/${owner}/${name}/actions/secrets/public-key`,
     );
+
     const recipient = Buffer.from(key, "base64");
     const ephemeral = nacl.box.keyPair();
     const nonce = blake2b(Buffer.concat([ephemeral.publicKey, recipient]), { dkLen: 24 });
@@ -350,7 +396,10 @@ export const deleteSecret = (token: string, owner: string, name: string, secret:
   );
 
 /* A null content deletes the file */
-export type File = { readonly path: string; readonly content: string | null };
+export interface File {
+  readonly path: string;
+  readonly content: string | null;
+}
 
 export const head = (token: string, owner: string, name: string, branch: string) =>
   Effect.map(
@@ -369,16 +418,18 @@ export const commit = (
   name: string,
   branch: string,
   message: string,
-  files: ReadonlyArray<File>,
+  files: readonly File[],
   on?: string,
 ) =>
-  Effect.gen(function* () {
+  Effect.gen(function* commit() {
     const sha = on ?? (yield* head(token, owner, name, branch));
+
     const parent = yield* request<{ tree: { sha: string } }>(
       token,
       "GET",
       `/repos/${owner}/${name}/git/commits/${sha}`,
     );
+
     const tree = yield* request<{ sha: string }>(
       token,
       "POST",
@@ -393,6 +444,7 @@ export const commit = (
         })),
       },
     );
+
     const created = yield* request<{ sha: string }>(
       token,
       "POST",
@@ -403,6 +455,7 @@ export const commit = (
         parents: [sha],
       },
     );
+
     yield* request(token, "PATCH", `/repos/${owner}/${name}/git/refs/heads/${branch}`, {
       sha: created.sha,
     }).pipe(
@@ -412,5 +465,6 @@ export const commit = (
           : error,
       ),
     );
+
     return created.sha;
   });

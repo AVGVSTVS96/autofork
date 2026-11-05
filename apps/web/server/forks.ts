@@ -1,21 +1,8 @@
 import * as Effect from "effect/Effect";
 import * as Schedule from "effect/Schedule";
 
-import {
-  type Agent,
-  type Change,
-  EVERY,
-  type ForkState,
-  LIMITS,
-  type MyFork,
-  NotFound,
-  Problem,
-  type Repo,
-  type Run,
-  type Settings,
-  split,
-  squash,
-} from "../shared/api.ts";
+import { EVERY, LIMITS, NotFound, Problem, split, squash } from "../shared/api.ts";
+import type { Agent, Change, ForkState, MyFork, Repo, Run, Settings } from "../shared/api.ts";
 import {
   cronLines,
   parses,
@@ -30,7 +17,7 @@ import { Env } from "./env.ts";
 import * as GitHub from "./github.ts";
 import type { User } from "./session.ts";
 
-type GitHubRepo = {
+interface GitHubRepo {
   name: string;
   full_name: string;
   owner: { login: string };
@@ -43,7 +30,7 @@ type GitHubRepo = {
   private: boolean;
   parent?: { full_name: string; description: string | null; default_branch: string };
   permissions?: { admin: boolean; push: boolean };
-};
+}
 
 type Listed = Pick<GitHubRepo, "name" | "owner" | "description" | "stargazers_count">;
 
@@ -63,7 +50,10 @@ const GITHUB =
 const keep = <K, V>(cache: Map<K, V>, key: K, value: V, size = 2000) => {
   cache.delete(key);
   cache.set(key, value);
-  if (cache.size > size) cache.delete(cache.keys().next().value!);
+
+  if (cache.size > size) {
+    cache.delete(cache.keys().next().value!);
+  }
 };
 
 const searched = new Map<string, { repos: Repo[]; at: number }>();
@@ -75,10 +65,13 @@ const SEARCH = `query($q: String!) {
 }`;
 
 const search = (app: string, token: GitHub.Token) =>
-  Effect.gen(function* () {
+  Effect.gen(function* search() {
     const key = squash(app);
     const hit = searched.get(key);
-    if (hit && Date.now() - hit.at < 3_600_000) return hit.repos;
+
+    if (hit && Date.now() - hit.at < 3_600_000) {
+      return hit.repos;
+    }
     const found = yield* GitHub.request<{ data?: { search?: { nodes: (Listed | null)[] } } }>(
       token,
       "POST",
@@ -88,39 +81,53 @@ const search = (app: string, token: GitHub.Token) =>
         variables: { q: `${app.trim()} fork:false is:public sort:stars` },
       },
     ).pipe(Effect.option);
+
     const nodes = found._tag === "Some" ? found.value.data?.search?.nodes : undefined;
+
     if (!nodes) {
-      if (hit) return hit.repos;
+      if (hit) {
+        return hit.repos;
+      }
       return yield* new Problem({
         message: "GitHub search is busy. Name the repo as owner/name instead.",
       });
     }
+
     const repos = nodes.filter((node) => node !== null).map(toRepo);
     keep(searched, key, { repos, at: Date.now() });
+
     return repos;
   });
 
 export const resolve = (q: string, token: GitHub.Token) =>
-  Effect.gen(function* () {
+  Effect.gen(function* resolve() {
     const { app, change } = split(q);
-    const named = app.match(GITHUB);
+    const named = GITHUB.exec(app);
+
     if (named) {
       const missing = problem(`There's no public repo at github.com/${named[1]}/${named[2]}.`);
+
       const repo = yield* GitHub.request<GitHubRepo>(
         token,
         "GET",
         `/repos/${named[1]}/${named[2]}`,
       ).pipe(Effect.catch(missing));
-      if (repo.private) return yield* missing();
+
+      if (repo.private) {
+        return yield* missing();
+      }
       return { repo: toRepo(repo), change, others: [] };
     }
+
     const repos = yield* search(app, token);
     const exact = repos.find((repo) => squash(repo.name) === squash(app));
     const repo = exact ?? repos[0];
-    if (!repo)
+
+    if (!repo) {
       return yield* new Problem({
         message: `No open source repo on GitHub matches "${app}". Try owner/name.`,
       });
+    }
     return { repo, change, others: exact ? [] : repos.slice(1, 4) };
   });
 
@@ -168,7 +175,7 @@ const workflow = (branch: string) =>
 const slug = (change: string) =>
   change
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
+    .replaceAll(/[^a-z0-9]+/g, " ")
     .trim()
     .split(" ")
     .filter((word) => !["the", "a", "an", "to", "and", "so", "of", "it", "that"].includes(word))
@@ -179,10 +186,13 @@ const slug = (change: string) =>
 
 const NOTE = "fork-readme";
 
-const freshId = (entries: ReadonlyArray<{ name: string }>, change: string) => {
+const freshId = (entries: readonly { name: string }[], change: string) => {
   const taken = new Set([NOTE, ...entries.map((entry) => entry.name)]);
   let id = slug(change);
-  for (let n = 2; taken.has(id); n++) id = `${slug(change)}-${n}`;
+
+  for (let n = 2; taken.has(id); n++) {
+    id = `${slug(change)}-${n}`;
+  }
   return id;
 };
 
@@ -190,18 +200,22 @@ const patchDoc = (change: string) =>
   `${change.trim().replace(/^\w/, (first) => first.toUpperCase())}\n`;
 
 const describe = (token: GitHub.Token, repo: GitHubRepo) =>
-  Effect.gen(function* () {
+  Effect.gen(function* describe() {
     const owner = yield* GitHub.request<{ login: string; name: string | null; type: string }>(
       token,
       "GET",
       `/users/${repo.owner.login}`,
     );
+
     const who =
       (owner.type === "User" ? owner.name?.trim().split(/\s+/)[0] : owner.name?.trim()) ||
       owner.login;
+
     const description = [`${who}'s autofork`, repo.parent?.description].filter(Boolean).join(" · ");
-    if (description !== repo.description)
+
+    if (description !== repo.description) {
       yield* GitHub.request(token, "PATCH", `/repos/${repo.full_name}`, { description });
+    }
   }).pipe(Effect.ignore);
 
 const readme = (token: GitHub.Token, repo: string, ref?: string) =>
@@ -216,6 +230,7 @@ const readmeNote = (token: GitHub.Token, fork: string, branch: string, upstream:
     Effect.map(([mine, theirs]) => {
       const name = upstream.split("/")[1]!;
       const text = Buffer.from(mine.content, "base64").toString();
+
       return mine.sha === theirs.sha &&
         /^readme\.md$/i.test(mine.path) &&
         text.trim() &&
@@ -259,11 +274,11 @@ const makeFork = (user: User, upstream: GitHubRepo, into: string) =>
     ),
   );
 
-type Installation = {
+interface Installation {
   id: number;
   account: { login: string; type: string };
   repository_selection: "all" | "selected";
-};
+}
 
 const installations = (user: User) =>
   GitHub.request<{ installations: Installation[] }>(user.token, "GET", "/user/installations").pipe(
@@ -272,11 +287,11 @@ const installations = (user: User) =>
   );
 
 const accessPage = (installation: Installation | undefined) =>
-  !installation
-    ? "https://github.com/settings/installations"
-    : installation.account.type === "Organization"
+  installation
+    ? installation.account.type === "Organization"
       ? `https://github.com/organizations/${installation.account.login}/settings/installations/${installation.id}`
-      : `https://github.com/settings/installations/${installation.id}`;
+      : `https://github.com/settings/installations/${installation.id}`
+    : "https://github.com/settings/installations";
 
 const reachable = (user: User, owner: string, name: string) =>
   GitHub.request(user.token, "GET", `/repos/${owner}/${name}/actions/secrets/public-key`).pipe(
@@ -292,29 +307,37 @@ export const prepare = (
   into: string | undefined,
   preview: boolean,
 ) =>
-  Effect.gen(function* () {
+  Effect.gen(function* prepare() {
     const installed = yield* installations(user);
+
     const places = [
       user.login,
       ...installed
         .filter((each) => each.account.type === "Organization")
         .map((each) => each.account.login),
     ];
+
     const place = into && places.includes(into) ? into : user.login;
+
     const upstream = yield* GitHub.request<GitHubRepo>(
       user.token,
       "GET",
       `/repos/${owner}/${name}`,
     ).pipe(Effect.catch(problem(`Can't find github.com/${owner}/${name}.`)));
-    if (upstream.private)
+
+    if (upstream.private) {
       return yield* new Problem({ message: "autofork works with public repos." });
-    if (upstream.owner.login === place)
+    }
+    if (upstream.owner.login === place) {
       return yield* new Problem({
         message: "That repo is already yours. Name the repo you'd fork.",
       });
+    }
     const installation = installed.find((each) => each.account.login === place);
+
     if (!installation) {
       const { appSlug } = yield* Env;
+
       return {
         owner: place,
         name: upstream.name,
@@ -323,6 +346,7 @@ export const prepare = (
         places,
       } satisfies ForkState;
     }
+
     const fork = yield* existingFork(user, upstream, place).pipe(
       Effect.flatMap((found) =>
         found || preview ? Effect.succeed(found) : makeFork(user, upstream, place),
@@ -332,6 +356,7 @@ export const prepare = (
         problem("GitHub couldn't make the fork. Try again in a moment."),
       ),
     );
+
     if (!fork && preview && installation.repository_selection === "all") {
       return {
         owner: place,
@@ -341,6 +366,7 @@ export const prepare = (
         places,
       } satisfies ForkState;
     }
+
     if (!fork) {
       return {
         owner: place,
@@ -350,12 +376,15 @@ export const prepare = (
         places,
       } satisfies ForkState;
     }
+
     const fresh = Date.now() - Date.parse(fork.created_at) < 120_000;
+
     const ready = yield* reachable(user, fork.owner.login, fork.name).pipe(
       Effect.flatMap((ok) => (ok || !fresh ? Effect.succeed(ok) : Effect.fail("not yet"))),
       Effect.retry({ schedule: Schedule.spaced("1 second"), times: 8 }),
       Effect.orElseSucceed(() => false),
     );
+
     return {
       owner: fork.owner.login,
       name: fork.name,
@@ -371,14 +400,18 @@ const retrying = { schedule: Schedule.spaced("2 seconds"), times: 15 };
 
 /* Workflows still as upstream had them where the fork branched off, to delete. Any the user changed are theirs and stay */
 const inheritedWorkflows = (token: GitHub.Token, repo: GitHubRepo, branch: string) =>
-  Effect.gen(function* () {
-    if (!repo.parent) return [];
+  Effect.gen(function* inheritedWorkflows() {
+    if (!repo.parent) {
+      return [];
+    }
     const [parentOwner = "", parentName = ""] = repo.parent.full_name.split("/");
+
     const { merge_base_commit } = yield* GitHub.request<{ merge_base_commit: { sha: string } }>(
       token,
       "GET",
       `/repos/${repo.full_name}/compare/${parentOwner}:${repo.parent.default_branch}...${branch}`,
     );
+
     const theirs = new Set(
       (yield* listDir(
         token,
@@ -387,6 +420,7 @@ const inheritedWorkflows = (token: GitHub.Token, repo: GitHubRepo, branch: strin
         `.github/workflows?ref=${merge_base_commit.sha}`,
       )).map((entry) => `${entry.name} ${entry.sha}`),
     );
+
     return (yield* listDir(token, repo.owner.login, repo.name, ".github/workflows"))
       .filter((entry) => entry.name !== "autofork.yml" && theirs.has(`${entry.name} ${entry.sha}`))
       .map((entry): GitHub.File => ({ path: `.github/workflows/${entry.name}`, content: null }));
@@ -408,14 +442,19 @@ export const start = (
   agent: Agent,
   credential: string,
 ) =>
-  Effect.gen(function* () {
-    if (!change.trim()) return yield* new Problem({ message: "Say what you'd change." });
+  Effect.gen(function* start() {
+    if (!change.trim()) {
+      return yield* new Problem({ message: "Say what you'd change." });
+    }
     const repo = yield* GitHub.request<GitHubRepo>(
       user.token,
       "GET",
       `/repos/${owner}/${name}`,
     ).pipe(Effect.retry(retrying));
-    if (!repo.permissions?.admin) return yield* new Problem({ message: "That fork isn't yours." });
+
+    if (!repo.permissions?.admin) {
+      return yield* new Problem({ message: "That fork isn't yours." });
+    }
     const branch = repo.default_branch;
     yield* GitHub.request(
       user.token,
@@ -425,6 +464,7 @@ export const start = (
 
     const control = yield* listDir(user.token, owner, name, ".autofork");
     const managed = control.some((entry) => entry.name === "config.json");
+
     const flow = yield* GitHub.text(
       user.token,
       `/repos/${owner}/${name}/contents/.github/workflows/autofork.yml?ref=${branch}`,
@@ -433,10 +473,12 @@ export const start = (
       Effect.map((content) => Buffer.from(content, "base64").toString()),
       Effect.catchIf(GitHub.missing, () => Effect.succeed("")),
     );
-    if (managed && flow && !flow.includes(SECRETS[agent]))
+
+    if (managed && flow && !flow.includes(SECRETS[agent])) {
       return yield* new Problem({
         message: `This fork's .github/workflows/autofork.yml doesn't pass ${SECRETS[agent]} to autofork. Add it to the autofork step's env, or pick the other agent.`,
       });
+    }
 
     yield* GitHub.setSecret(user.token, owner, name, SECRETS[agent], credential);
     yield* GitHub.deleteSecret(
@@ -449,16 +491,20 @@ export const start = (
       enabled: true,
       allowed_actions: "all",
     });
-    if (!repo.has_issues)
+
+    if (!repo.has_issues) {
       yield* GitHub.request(user.token, "PATCH", `/repos/${owner}/${name}`, {
         has_issues: true,
       }).pipe(Effect.ignore);
+    }
     yield* describe(user.token, repo);
 
     const id = freshId(control, change);
     const files: GitHub.File[] = [{ path: `.autofork/${id}/PATCH.md`, content: patchDoc(change) }];
+
     if (!managed || !flow) {
       files.push({ path: ".github/workflows/autofork.yml", content: workflow(branch) });
+
       if (!managed) {
         const upstream = repo.parent?.full_name ?? `${owner}/${name}`;
         files.push(
@@ -469,10 +515,11 @@ export const start = (
           ...(!repo.parent || control.some((entry) => entry.name === NOTE)
             ? []
             : yield* readmeNote(user.token, `${owner}/${name}`, branch, upstream)),
+          ...(yield* inheritedWorkflows(user.token, repo, branch)),
         );
-        files.push(...(yield* inheritedWorkflows(user.token, repo, branch)));
       }
     }
+
     const sha = yield* GitHub.commit(
       user.token,
       owner,
@@ -481,7 +528,9 @@ export const start = (
       `autofork: ${change.trim()}`,
       files,
     );
+
     yield* kickOff(user.token, owner, name, branch, sha);
+
     return { owner, name };
   });
 
@@ -504,12 +553,18 @@ const kickOff = (token: string, owner: string, name: string, branch: string, sha
   );
 
 export const addChange = (user: User, owner: string, name: string, change: string) =>
-  Effect.gen(function* () {
-    if (!change.trim()) return yield* new Problem({ message: "Say what you'd change." });
+  Effect.gen(function* addChange() {
+    if (!change.trim()) {
+      return yield* new Problem({ message: "Say what you'd change." });
+    }
     const repo = yield* GitHub.request<GitHubRepo>(user.token, "GET", `/repos/${owner}/${name}`);
-    if (!repo.permissions?.push) return yield* new Problem({ message: "That fork isn't yours." });
+
+    if (!repo.permissions?.push) {
+      return yield* new Problem({ message: "That fork isn't yours." });
+    }
     yield* describe(user.token, repo);
     const id = freshId(yield* listDir(user.token, owner, name, ".autofork"), change);
+
     const sha = yield* GitHub.commit(
       user.token,
       owner,
@@ -518,19 +573,21 @@ export const addChange = (user: User, owner: string, name: string, change: strin
       `autofork: ${change.trim()}`,
       [{ path: `.autofork/${id}/PATCH.md`, content: patchDoc(change) }],
     );
+
     yield* kickOff(user.token, owner, name, repo.default_branch, sha);
+
     return { owner, name };
   });
 
-type Job = {
+interface Job {
   id: number;
   status: string;
   conclusion: string | null;
   started_at: string;
   completed_at: string | null;
   steps?: { name: string; status: string; conclusion: string | null }[];
-};
-type WorkflowRun = {
+}
+interface WorkflowRun {
   id: number;
   run_attempt: number;
   html_url: string;
@@ -540,7 +597,7 @@ type WorkflowRun = {
   updated_at: string;
   head_sha: string;
   head_branch: string;
-};
+}
 
 const SYNC = "autofork: sync ";
 const SUBJECT = /^autofork: sync \S+ to [0-9a-f]{12}(?:\n|$)/;
@@ -549,7 +606,8 @@ const SKIPPED = /^autofork: already failed on upstream /;
 
 /* A reason that starts with one of the fork's patch ids keeps the id as it's written */
 const sentence = (line: string, describe: (id: string) => string) => {
-  const first = line.match(/^[\w.-]+/)?.[0] ?? "";
+  const first = /^[\w.-]+/.exec(line)?.[0] ?? "";
+
   return describe(first) === first
     ? line.replace(/^[a-z]/, (letter) => letter.toUpperCase())
     : line;
@@ -558,17 +616,23 @@ const sentence = (line: string, describe: (id: string) => string) => {
 const synced = (message: string, name: (id: string) => string) =>
   message.split("\n").flatMap((line): string[] => {
     let match: RegExpMatchArray | null;
+
     if (
       line === `built ${NOTE}` ||
       line === `healed ${NOTE}` ||
       line.startsWith(`upstream has ${NOTE}:`)
-    )
+    ) {
       return [];
-    if ((match = line.match(/^built (\S+)$/))) return [`Built "${name(match[1]!)}"`];
-    if ((match = line.match(/^healed (\S+)$/)))
+    }
+    if ((match = /^built (\S+)$/.exec(line))) {
+      return [`Built "${name(match[1]!)}"`];
+    }
+    if ((match = /^healed (\S+)$/.exec(line))) {
       return [`Rebuilt "${name(match[1]!)}" on the new release`];
-    if ((match = line.match(/^upstream has (\S+): (.+)$/)))
+    }
+    if ((match = /^upstream has (\S+): (.+)$/.exec(line))) {
       return [`Paused "${name(match[1]!)}": ${match[2]}`];
+    }
     return [];
   });
 
@@ -578,17 +642,22 @@ const unsynced = (raw: string, describe: (id: string) => string): Story => {
   const lines = raw.split("\n").map((line) =>
     line
       .replace(/^\S+Z /, "")
-      .replace(/\x1b\[[0-9;]*m/g, "")
+      .replaceAll(/\x1B\[[0-9;]*m/g, "")
       .trim(),
   );
+
   const moved = lines.find((line) => MOVED.test(line));
-  if (moved) return { log: [moved], moved: true, change: null };
+
+  if (moved) {
+    return { log: [moved], moved: true, change: null };
+  }
   const reason = lines.findLast((line) => line.startsWith("autofork: ") && !line.startsWith(SYNC));
+
   return {
     log: reason ? [sentence(reason.slice("autofork: ".length), describe)] : [],
     moved: false,
     change: null,
-    skipped: !!reason && SKIPPED.test(reason),
+    skipped: !!reason && reason.startsWith("autofork: already failed on upstream "),
   };
 };
 
@@ -604,13 +673,17 @@ const outcome = (
   describe: (id: string) => string,
 ) => {
   const hit = told.get(job.id);
-  if (hit) return Effect.succeed(hit);
+
+  if (hit) {
+    return Effect.succeed(hit);
+  }
   const query = new URLSearchParams({
     sha: run.head_branch,
     since: job.started_at,
     until: job.completed_at!,
     per_page: "20",
   });
+
   return GitHub.request<
     { html_url: string; parents: { sha: string }[]; commit: { message: string } }[]
   >(token, "GET", `/repos/${owner}/${name}/commits?${query}`).pipe(
@@ -630,7 +703,11 @@ const outcome = (
             Effect.map((raw) => unsynced(raw, describe)),
           ),
     ),
-    Effect.tap((story) => Effect.sync(() => keep(told, job.id, story, 500))),
+    Effect.tap((story) =>
+      Effect.sync(() => {
+        keep(told, job.id, story, 500);
+      }),
+    ),
   );
 };
 
@@ -654,29 +731,37 @@ const finished = new Map<string, Job | undefined>();
 
 /* action.yml saves the key a skip checks only when its own step fails or is cancelled, and a skip runs on the same commit, so the failure it means is the newest run on that commit whose autofork step ended that way. Runs GitHub cancels while they wait for a turn never reach that step, and a finished attempt's job never changes */
 const failedBefore = (token: GitHub.Token, owner: string, name: string, skip: WorkflowRun) =>
-  Effect.gen(function* () {
+  Effect.gen(function* failedBefore() {
     const found = yield* Effect.forEach(
       FAILED,
       (status) =>
         runs(token, owner, name, `head_sha=${skip.head_sha}&status=${status}&per_page=20`),
       { concurrency: 3 },
     );
+
     const failed = found.flat().sort((a, b) => b.run_started_at.localeCompare(a.run_started_at));
+
     for (let at = 0; at < failed.length; at += 10) {
       const chunk = failed.slice(at, at + 10);
+
       const jobs = yield* Effect.forEach(
         chunk,
         (run) => bySha(finished, `${run.id}-${run.run_attempt}`, jobOf(token, owner, name, run)),
         { concurrency: 10 },
       );
+
       const hit = jobs.findIndex((job) =>
         job?.steps?.some(
           (step) =>
             /\/(?:autofork|autopatch)@/.test(step.name) && FAILED.includes(step.conclusion ?? ""),
         ),
       );
-      if (hit >= 0) return { run: chunk[hit]!, job: jobs[hit] };
+
+      if (hit !== -1) {
+        return { run: chunk[hit]!, job: jobs[hit] };
+      }
     }
+
     return null;
   });
 
@@ -687,22 +772,30 @@ const latestRun = (
   name: string,
   describe: (id: string) => string,
 ) =>
-  Effect.gen(function* () {
+  Effect.gen(function* latestRun() {
     const [newest] = yield* runs(token, owner, name, "per_page=1");
-    if (!newest) return null;
+
+    if (!newest) {
+      return null;
+    }
     const told = (run: WorkflowRun, job: Job | undefined) => {
       const untold: Story = { log: [], moved: false, change: null };
+
       return job?.completed_at
         ? outcome(token, owner, name, run, job, describe).pipe(Effect.orElseSucceed(() => untold))
         : Effect.succeed(untold);
     };
+
     const latest = yield* jobOf(token, owner, name, newest);
     const latestStory = yield* told(newest, latest);
+
     const failed = latestStory.skipped
       ? yield* failedBefore(token, owner, name, newest).pipe(Effect.orElseSucceed(() => null))
       : null;
+
     const { run, job } = failed ?? { run: newest, job: latest };
     const story = failed ? yield* told(run, job) : latestStory;
+
     return {
       url: run.html_url,
       status: run.status,
@@ -727,11 +820,17 @@ const summary = (doc: string) => {
       .trim()
       .replace(/^#+\s*/, "")
       .split(/\n\s*\n/)[0]
-      ?.replace(/\s*\n\s*/g, " ") ?? "";
-  return paragraph.match(/^.+?[.!?](?=\s|$)/)?.[0] ?? paragraph;
+      ?.replaceAll(/\s*\n\s*/g, " ") ?? "";
+
+  return /^.+?[.!?](?=\s|$)/.exec(paragraph)?.[0] ?? paragraph;
 };
 
-type TreeEntry = { path: string; type: string; size?: number; sha: string };
+interface TreeEntry {
+  path: string;
+  type: string;
+  size?: number;
+  sha: string;
+}
 
 const trees = new Map<string, TreeEntry[]>();
 const blobs = new Map<string, string>();
@@ -742,8 +841,13 @@ const bySha = <A>(
   load: Effect.Effect<A, GitHub.GitHubError>,
 ) => {
   const hit = cache.get(sha);
+
   return hit === undefined
-    ? Effect.tap(load, (value) => Effect.sync(() => keep(cache, sha, value)))
+    ? Effect.tap(load, (value) =>
+        Effect.sync(() => {
+          keep(cache, sha, value);
+        }),
+      )
     : Effect.succeed(hit);
 };
 
@@ -772,44 +876,59 @@ const blob = (token: GitHub.Token, owner: string, name: string, sha: string) =>
 /* A repo the site set up that isn't a GitHub fork names itself as upstream, and a config that can't be read falls back to GitHub's parent */
 const upstreamFor = (config: string | null, self: string, parent: string | undefined) => {
   const named = upstreamOf(config) ?? parent ?? null;
+
   return named?.toLowerCase() === self.toLowerCase() ? null : named;
 };
 
 export const status = (owner: string, name: string) =>
-  Effect.gen(function* () {
+  Effect.gen(function* status() {
     const token = yield* GitHub.repoToken(owner, name).pipe(Effect.catch(() => GitHub.appToken));
+
     const repo = yield* GitHub.request<GitHubRepo>(token, "GET", `/repos/${owner}/${name}`).pipe(
       Effect.catchIf(GitHub.missing, () => Effect.fail(new NotFound({ from: null }))),
     );
+
     /* This page is public and cached, and the app's token can read private repos, so a private fork reads as missing */
-    if (repo.private) return yield* new NotFound({ from: null });
+    if (repo.private) {
+      return yield* new NotFound({ from: null });
+    }
     const control = yield* listDir(token, owner, name, ".autofork");
     const config = control.find((entry) => entry.name === "config.json" && entry.type === "file");
-    if (!config) return yield* new NotFound({ from: repo.parent?.full_name ?? repo.full_name });
+
+    if (!config) {
+      return yield* new NotFound({ from: repo.parent?.full_name ?? repo.full_name });
+    }
     const upstream = upstreamFor(
       yield* blob(token, owner, name, config.sha).pipe(Effect.orElseSucceed(() => null)),
       repo.full_name,
       repo.parent?.full_name,
     );
+
     const found = yield* Effect.forEach(
       control.filter((entry) => entry.type === "dir"),
       (dir) =>
-        Effect.gen(function* () {
+        Effect.gen(function* found() {
           const files = yield* tree(token, owner, name, dir.sha);
+
           const read = (file: string) => {
             const entry = files.find((each) => each.path === file);
+
             return entry
               ? blob(token, owner, name, entry.sha).pipe(Effect.orElseSucceed(() => ""))
               : Effect.succeed("");
           };
+
           const paused = files.some((file) => file.path === "UPSTREAM.md")
             ? summary(yield* read("UPSTREAM.md"))
             : null;
+
           const built = files.some((file) => file.path.endsWith(".patch") && (file.size ?? 0) > 0);
+
           return { id: dir.name, text: summary(yield* read("PATCH.md")), paused, built };
         }),
       { concurrency: 6 },
     );
+
     const issues = found.some((change) => change.paused !== null)
       ? yield* GitHub.request<{ title: string; html_url: string }[]>(
           token,
@@ -820,16 +939,19 @@ export const status = (owner: string, name: string) =>
           Effect.orElseSucceed(() => new Map<string, string>()),
         )
       : new Map<string, string>();
+
     const note = found.some((change) => change.id === NOTE);
+
     const changes = found
       .filter((change) => change.id !== NOTE)
       .map(({ id, text, paused, built }): Change => ({
         id,
         text,
-        state: paused !== null ? "paused" : built ? "built" : "building",
+        state: paused === null ? (built ? "built" : "building") : "paused",
         upstream: paused,
-        issue: paused !== null ? (issues.get(`${id}: upstream does this now`) ?? null) : null,
+        issue: paused === null ? null : (issues.get(`${id}: upstream does this now`) ?? null),
       }));
+
     const secrets = yield* GitHub.request<{ secrets: { name: string }[] }>(
       token,
       "GET",
@@ -838,11 +960,13 @@ export const status = (owner: string, name: string) =>
       Effect.map(({ secrets }) => new Set(secrets.map((secret) => secret.name))),
       Effect.orElseSucceed(() => new Set<string>()),
     );
+
     const agent: Agent | null = secrets.has(SECRETS.claude)
       ? "claude"
       : secrets.has(SECRETS.chatgpt)
         ? "chatgpt"
         : null;
+
     return {
       owner: repo.owner.login,
       name: repo.name,
@@ -870,12 +994,12 @@ export const yours = (viewer: User, owner: string, name: string) =>
     Effect.catchIf(GitHub.missing, () =>
       Effect.succeed({ id: 0, name: `${owner}/${name}`, push: false }),
     ),
-    Effect.orElseSucceed(() => undefined),
+    Effect.orElseSucceed(() => {}),
   );
 
 type Blob = { text: string } | null;
 
-type Node = {
+interface Node {
   name: string;
   databaseId: number;
   createdAt: string;
@@ -884,7 +1008,7 @@ type Node = {
   parent: { nameWithOwner: string } | null;
   config: Blob;
   workflow: Blob;
-};
+}
 
 const NODE = `name databaseId createdAt viewerPermission owner { login } parent { nameWithOwner }
     config: object(expression: "HEAD:.autofork/config.json") { ... on Blob { text } }
@@ -902,9 +1026,12 @@ const OTHERS = `query($after: String) { viewer { repositories(first: 100, after:
   pageInfo { hasNextPage endCursor }
 } } }`;
 
-type Named = { name: string; owner: { login: string } };
+interface Named {
+  name: string;
+  owner: { login: string };
+}
 
-type Page<A> = {
+interface Page<A> {
   data?: {
     viewer: {
       repositories: {
@@ -914,15 +1041,16 @@ type Page<A> = {
     };
   } | null;
   errors?: unknown[];
-};
+}
 
 const PAGES = 20;
 
 const everyRepo = <A>(token: string, query: string) =>
-  Effect.gen(function* () {
+  Effect.gen(function* everyRepo() {
     const nodes: A[] = [];
     let after: string | null = null;
     let failed = false;
+
     for (let page = 0; page < PAGES; page++) {
       /* A later page failing still leaves the pages read so far, marked incomplete */
       const { data, errors }: Page<A> = yield* GitHub.request<Page<A>>(token, "POST", "/graphql", {
@@ -934,16 +1062,24 @@ const everyRepo = <A>(token: string, query: string) =>
           () => Effect.succeed<Page<A>>({}),
         ),
       );
-      if (!data && page > 0) return { nodes, complete: false };
-      if (!data)
+
+      if (!data && page > 0) {
+        return { nodes, complete: false };
+      }
+      if (!data) {
         return yield* new Problem({
           message: `GitHub couldn't list your repositories${errors ? "" : " right now"}. Try again.`,
         });
+      }
       failed ||= !!errors;
       nodes.push(...data.viewer.repositories.nodes.filter((node): node is A => node !== null));
-      if (!data.viewer.repositories.pageInfo.hasNextPage) return { nodes, complete: !failed };
+
+      if (!data.viewer.repositories.pageInfo.hasNextPage) {
+        return { nodes, complete: !failed };
+      }
       after = data.viewer.repositories.pageInfo.endCursor;
     }
+
     return { nodes, complete: false };
   });
 
@@ -993,7 +1129,7 @@ const others = (token: string) =>
     Effect.orElseSucceed(() => ({ nodes: [] as Node[], complete: false })),
   );
 
-const PUSH = ["ADMIN", "MAINTAIN", "WRITE"];
+const PUSH = new Set(["ADMIN", "MAINTAIN", "WRITE"]);
 
 export const mine = (user: User) =>
   Effect.all([everyRepo<Node>(user.token, FORKS), others(user.token)], { concurrency: 2 }).pipe(
@@ -1004,12 +1140,12 @@ export const mine = (user: User) =>
       return {
         complete: forks.complete && rest.complete,
         denied: nodes
-          .filter((repo) => !PUSH.includes(repo.viewerPermission ?? ""))
+          .filter((repo) => !PUSH.has(repo.viewerPermission ?? ""))
           .map((repo) => ({ id: repo.databaseId, name: `${repo.owner.login}/${repo.name}` })),
         forks: nodes
           .filter(
             (repo) =>
-              typeof repo.config?.text === "string" && PUSH.includes(repo.viewerPermission ?? ""),
+              typeof repo.config?.text === "string" && PUSH.has(repo.viewerPermission ?? ""),
           )
           .map((repo): MyFork => ({
             owner: repo.owner.login,
@@ -1044,13 +1180,18 @@ const settingsAt = (user: User, owner: string, name: string, ref: string) =>
   );
 
 const pushable = (user: User, owner: string, name: string) =>
-  Effect.gen(function* () {
+  Effect.gen(function* pushable() {
     const repo = yield* GitHub.request<GitHubRepo>(user.token, "GET", `/repos/${owner}/${name}`);
-    if (!repo.permissions?.push) return yield* new Problem({ message: "That fork isn't yours." });
+
+    if (!repo.permissions?.push) {
+      return yield* new Problem({ message: "That fork isn't yours." });
+    }
     const head = yield* GitHub.head(user.token, owner, name, repo.default_branch);
     const [config, workflow] = yield* settingsAt(user, owner, name, head);
-    if (config === null)
+
+    if (config === null) {
       return yield* new Problem({ message: `${owner}/${name} has no .autofork/config.json.` });
+    }
     return { repo, head, config, workflow };
   });
 
@@ -1063,74 +1204,95 @@ export const settings = (user: User, owner: string, name: string) =>
 const fine = (limit: number) => Number.isFinite(limit) && limit >= 0 && limit <= 100_000;
 
 export const saveSettings = (user: User, owner: string, name: string, wanted: Settings) =>
-  Effect.gen(function* () {
+  Effect.gen(function* saveSettings() {
     const { repo, head, config, workflow } = yield* pushable(user, owner, name);
+
     if (wanted.head && wanted.head !== head) {
       const [loadedConfig, loadedWorkflow] = yield* settingsAt(user, owner, name, wanted.head);
-      if (loadedConfig !== config || loadedWorkflow !== workflow)
+
+      if (loadedConfig !== config || loadedWorkflow !== workflow) {
         return yield* new Problem({
           message: `${owner}/${name}'s settings changed in the repo since this page loaded. Reload to see them.`,
         });
+      }
     }
-    if (!parses(config))
+
+    if (!parses(config)) {
       return yield* new Problem({
         message: `${owner}/${name}'s .autofork/config.json isn't valid JSON. Fix it in the repo first.`,
       });
+    }
     const now = readSettings(config, workflow);
-    if (workflow && cronLines(workflow) > 1 && wanted.cron !== now.cron)
+
+    if (workflow && cronLines(workflow) > 1 && wanted.cron !== now.cron) {
       return yield* new Problem({
         message: "This fork's autofork.yml has more than one schedule. Change it in the repo.",
       });
+    }
     if (
       wanted.cron !== null &&
       wanted.cron !== now.cron &&
       !Object.values(EVERY).includes(wanted.cron as never)
-    )
+    ) {
       return yield* new Problem({
         message: "Pick one of the schedules, or set another in autofork.yml.",
       });
+    }
     /* Limits are only checked, and only written, when they change, so a save of the schedule or follow keeps whatever the repo says */
     const newLimits = JSON.stringify(now.limits) !== JSON.stringify(wanted.limits);
     const { rebuilds, month, rebuild } = wanted.limits;
-    if (newLimits && (![rebuilds, month, rebuild].every(fine) || !Number.isInteger(rebuilds)))
+
+    if (newLimits && (![rebuilds, month, rebuild].every(fine) || !Number.isInteger(rebuilds))) {
       return yield* new Problem({ message: "Limits are whole rebuilds and dollar amounts." });
-    if (newLimits && rebuilds > 200)
+    }
+    if (newLimits && rebuilds > 200) {
       return yield* new Problem({ message: "autofork records up to 200 rebuilds a fork a month." });
-    if (newLimits && rebuild === 0)
+    }
+    if (newLimits && rebuild === 0) {
       return yield* new Problem({
         message: "A rebuild's cap has to be more than $0. To stop rebuilds, set rebuilds to 0.",
       });
-    if (newLimits && rebuild > month)
+    }
+    if (newLimits && rebuild > month) {
       return yield* new Problem({
         message: "One rebuild's cap can't be more than the month's, or nothing would ever start.",
       });
+    }
     const files: GitHub.File[] = [];
     const unchanged = now.follow === wanted.follow.trim() && !newLimits;
-    if (!unchanged && !readableFollow(config))
+
+    if (!unchanged && !readableFollow(config)) {
       return yield* new Problem({
         message: `${owner}/${name}'s "follow" in .autofork/config.json isn't text. Fix it in the repo first.`,
       });
-    if (newLimits && !readableLimits(config))
+    }
+    if (newLimits && !readableLimits(config)) {
       return yield* new Problem({
         message: `${owner}/${name}'s "limits" in .autofork/config.json aren't numbers autofork can read. Fix them in the repo first.`,
       });
+    }
     const nextConfig = unchanged
       ? config
       : withSettings(config, {
           follow: wanted.follow,
           limits: newLimits ? wanted.limits : undefined,
         });
-    if (!unchanged) files.push({ path: ".autofork/config.json", content: nextConfig });
+
+    if (!unchanged) {
+      files.push({ path: ".autofork/config.json", content: nextConfig });
+    }
     if (wanted.cron && wanted.cron !== now.cron) {
-      if (!workflow || now.cron === null)
+      if (!workflow || now.cron === null) {
         return yield* new Problem({
           message: "This fork's autofork.yml has no schedule to change.",
         });
+      }
       files.push({
         path: ".github/workflows/autofork.yml",
         content: withCron(workflow, wanted.cron),
       });
     }
+
     const saved = files.length
       ? yield* GitHub.commit(
           user.token,
@@ -1155,6 +1317,7 @@ export const saveSettings = (user: User, owner: string, name: string, wanted: Se
           ),
         )
       : head;
+
     return {
       ...readSettings(
         nextConfig,
@@ -1186,7 +1349,10 @@ export const installLink = (user: User, owner: string, name: string, slug: strin
     Effect.map(({ ownerId, repoId }) => {
       const url = new URL(`https://github.com/apps/${slug}/installations/new/permissions`);
       url.searchParams.set("suggested_target_id", String(ownerId));
-      if (repoId) url.searchParams.append("repository_ids[]", String(repoId));
+
+      if (repoId) {
+        url.searchParams.append("repository_ids[]", String(repoId));
+      }
       return url;
     }),
   );

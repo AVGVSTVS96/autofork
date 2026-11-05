@@ -5,6 +5,7 @@ import { internalMutation, internalQuery } from "./_generated/server";
 
 export const monthStart = (now = Date.now()) => {
   const date = new Date(now);
+
   return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1);
 };
 
@@ -12,7 +13,7 @@ const PER_RUN = 50;
 const PER_MONTH = 200;
 
 /* Queries take the month's start as an argument: Convex caches a query until what it read changes, not when the clock does */
-export const thisMonth = (ctx: QueryCtx, repoId: number, since = monthStart()) =>
+export const thisMonth = async (ctx: QueryCtx, repoId: number, since = monthStart()) =>
   ctx.db
     .query("rebuilds")
     .withIndex("repoId", (q) => q.eq("repoId", repoId).gte("_creationTime", since))
@@ -23,6 +24,7 @@ export const totals = internalQuery({
   args: { repoId: v.number(), since: v.number() },
   handler: async (ctx, { repoId, since }) => {
     const rows = await thisMonth(ctx, repoId, since);
+
     return { rebuilds: rows.length, spent: rows.reduce((sum, row) => sum + row.cost, 0) };
   },
 });
@@ -39,6 +41,7 @@ export const open = internalMutation({
   },
   handler: async (ctx, row) => {
     const month = await thisMonth(ctx, row.repoId);
+
     /* The engine waits 10 s for an answer, so the same patch opened again in the same run within 30 s is that open retried, and gets its row */
     const again = month.find(
       (rebuild) =>
@@ -48,15 +51,20 @@ export const open = internalMutation({
         rebuild.patch === row.patch &&
         rebuild._creationTime > Date.now() - 30_000,
     );
-    if (again) return { id: again._id };
-    if (month.length >= PER_MONTH)
+
+    if (again) {
+      return { id: again._id };
+    }
+    if (month.length >= PER_MONTH) {
       return { full: `autofork records up to ${PER_MONTH} rebuilds a fork a month` };
+    }
     if (
       month.filter(
         (rebuild) => rebuild.runId === row.runId && (rebuild.attempt ?? 1) === row.attempt,
       ).length >= PER_RUN
-    )
+    ) {
       return { full: `autofork records up to ${PER_RUN} rebuilds a run` };
+    }
     return {
       id: await ctx.db.insert("rebuilds", {
         ...row,
@@ -84,7 +92,10 @@ export const close = internalMutation({
   handler: async (ctx, { repoId, id, status, cost, model, inputTokens, outputTokens }) => {
     const key = ctx.db.normalizeId("rebuilds", id);
     const row = key && (await ctx.db.get(key));
-    if (!row || row.repoId !== repoId || row.status !== "running") return false;
+
+    if (!row || row.repoId !== repoId || row.status !== "running") {
+      return false;
+    }
     await ctx.db.patch(row._id, {
       status,
       endedAt: Date.now(),
@@ -93,6 +104,7 @@ export const close = internalMutation({
       inputTokens: inputTokens ?? null,
       outputTokens: outputTokens ?? null,
     });
+
     return true;
   },
 });
@@ -102,10 +114,12 @@ export const expire = internalMutation({
   args: {},
   handler: async (ctx) => {
     const cutoff = Date.now() - 6 * 3_600_000;
+
     for (const row of await ctx.db
       .query("rebuilds")
       .withIndex("status", (q) => q.eq("status", "running").lt("_creationTime", cutoff))
-      .take(500))
+      .take(500)) {
       await ctx.db.patch(row._id, { status: "stopped", endedAt: Date.now() });
+    }
   },
 });

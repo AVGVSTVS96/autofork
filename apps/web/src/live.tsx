@@ -11,9 +11,15 @@ const token = async ({ forceRefreshToken }: { forceRefreshToken: boolean }) => {
   for (let attempt = 0; ; attempt++) {
     try {
       const response = await fetch(`/api/auth/token${forceRefreshToken ? "?fresh=1" : ""}`);
-      if (response.status === 401 && attempt > 2) return null;
-      if (response.ok) return ((await response.json()) as { token: string }).token;
+
+      if (response.status === 401 && attempt > 2) {
+        return null;
+      }
+      if (response.ok) {
+        return ((await response.json()) as { token: string }).token;
+      }
     } catch {}
+
     await new Promise((resolve) =>
       setTimeout(resolve, Math.min(30_000, 1000 * 2 ** attempt) * (0.5 + Math.random())),
     );
@@ -27,6 +33,7 @@ export const Live = ({ children }: { children: ReactNode }) =>
 
 export const monthStart = () => {
   const now = new Date();
+
   return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
 };
 
@@ -34,7 +41,7 @@ export type Spend = NonNullable<ReturnType<typeof useSpend>>[number];
 
 /* undefined while loading, null when signed out; only forks the viewer can push to */
 export const useSpend: () => ReturnType<typeof useQuery<typeof api.dashboard.forks>> | undefined =
-  convex ? () => useQuery(api.dashboard.forks, { since: monthStart() }) : () => undefined;
+  convex ? () => useQuery(api.dashboard.forks, { since: monthStart() }) : () => {};
 
 /* A rebuild that hasn't reported after GitHub's longest job time never will; it keeps counting at its cap */
 export const rebuilding = (row: { status: string; startedAt: number }) =>

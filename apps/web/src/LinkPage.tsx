@@ -29,10 +29,15 @@ const check = async (owner: string, name: string): Promise<Linked> => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ owner, name }),
     });
-    if (response.ok) return await response.json();
-    if (response.status === 400)
+
+    if (response.ok) {
+      return await response.json();
+    }
+    if (response.status === 400) {
       return { error: "That isn't a GitHub repository name.", final: true };
+    }
   } catch {}
+
   return { error: "Couldn't reach autofork. Trying again…" };
 };
 
@@ -50,17 +55,29 @@ export const LinkRoute = () => {
     let wait = 3000;
     /* Like `autofork link`, the page gives up after 10 minutes; the install webhook still links the fork */
     const until = Date.now() + 600_000;
+
     const poll = async () => {
-      if (document.hidden) return void (timer = setTimeout(poll, 3000));
+      if (document.hidden) {
+        return void (timer = setTimeout(poll, 3000));
+      }
       const next = await check(owner, name);
-      if (stop) return;
-      setState((before) => ("checked" in next && next.checked === false ? (before ?? next) : next));
+
+      if (stop) {
+        return;
+      }
+      setState((before) => ("checked" in next && !next.checked ? (before ?? next) : next));
       wait = Math.min(wait * 1.5, 30_000);
       const waiting = "linked" in next ? !next.linked && next.why !== "not on GitHub" : !next.final;
-      if (waiting && Date.now() < until) timer = setTimeout(poll, wait);
-      else if (waiting) setStopped(true);
+
+      if (waiting && Date.now() < until) {
+        timer = setTimeout(poll, wait);
+      } else if (waiting) {
+        setStopped(true);
+      }
     };
+
     void poll();
+
     return () => {
       stop = true;
       clearTimeout(timer);
@@ -68,6 +85,7 @@ export const LinkRoute = () => {
   }, [owner, name]);
 
   const signedIn = AsyncResult.isSuccess(me) && !!me.value;
+
   return (
     <div className="page bare">
       <Nav />

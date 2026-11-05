@@ -43,22 +43,33 @@ const ICON_SOURCE_FILES = [
 
 const LINK_ICON_HTML_RE =
   /<link\b(?=[^>]*\brel=["'](?:icon|shortcut icon)["'])(?=[^>]*\bhref=["']([^"'?]+))[^>]*>/i;
+
 const ICON_REL_RE = /\brel\s*:\s*["'](?:icon|shortcut icon)["']/i;
 const ICON_HREF_RE = /\bhref\s*:\s*["']([^"'?]+)/i;
 
 const extractIconHref = (source: string) => {
-  const html = source.match(LINK_ICON_HTML_RE)?.[1];
-  if (html) return html;
-  for (const run of source.split("}")) {
-    if (!ICON_REL_RE.test(run)) continue;
-    const href = run.match(ICON_HREF_RE)?.[1];
-    if (href) return href;
+  const html = LINK_ICON_HTML_RE.exec(source)?.[1];
+
+  if (html) {
+    return html;
   }
+  for (const run of source.split("}")) {
+    if (!ICON_REL_RE.test(run)) {
+      continue;
+    }
+    const href = ICON_HREF_RE.exec(run)?.[1];
+
+    if (href) {
+      return href;
+    }
+  }
+
   return null;
 };
 
 const inRepo = (path: string) => {
   const clean = path.replace(/^\.?\//, "");
+
   return clean && !clean.includes("://") && !clean.split("/").includes("..") ? [clean] : [];
 };
 
@@ -100,52 +111,69 @@ const looksRight: Record<string, (bytes: Uint8Array) => boolean> = {
 /* T3 Code's extractIcnsPng (apps/server/src/assets/icns.ts): the smallest PNG at least 96 wide, else the largest */
 const icnsPng = (bytes: Uint8Array) => {
   const data = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  if (bytes.length < 8 || ascii(bytes, 0, 4) !== "icns") return null;
+
+  if (bytes.length < 8 || ascii(bytes, 0, 4) !== "icns") {
+    return null;
+  }
   const end = Math.min(data.getUint32(4), bytes.length);
   let best: { png: Uint8Array; width: number } | null = null;
+
   for (let offset = 8; offset + 8 <= end;) {
     const length = data.getUint32(offset + 4);
-    if (length < 8 || offset + length > end) break;
+
+    if (length < 8 || offset + length > end) {
+      break;
+    }
     const entry = bytes.subarray(offset + 8, offset + length);
     offset += length;
-    if (entry.length < 24 || !looksRight.png!(entry)) continue;
+
+    if (entry.length < 24 || !looksRight.png!(entry)) {
+      continue;
+    }
     const width = new DataView(entry.buffer, entry.byteOffset + 16, 4).getUint32(0);
-    if (!best || (best.width < 96 ? width > best.width : width >= 96 && width < best.width))
+
+    if (!best || (best.width < 96 ? width > best.width : width >= 96 && width < best.width)) {
       best = { png: entry, width };
+    }
   }
-  return best?.png.slice() ?? null;
+
+  return [...best?.png] ?? null;
 };
 
 type Blob = { byteSize?: number; text?: string | null } | null;
-type Answer = {
+
+interface Answer {
   repository:
     | ({
         owner: { avatarUrl: string };
         defaultBranchRef: { target: { oid: string } } | null;
       } & Record<string, Blob>)
     | null;
-};
+}
 
 const ask = (
   token: GitHub.Token,
   owner: string,
   name: string,
-  sizes: ReadonlyArray<string>,
-  texts: ReadonlyArray<string> = [],
+  sizes: readonly string[],
+  texts: readonly string[] = [],
 ) => {
   const blob = (alias: string, path: string, field: string) =>
     `${alias}: object(expression: ${JSON.stringify(`HEAD:${path}`)}) { ... on Blob { ${field} } }`;
+
   const query = `query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) {
     owner { avatarUrl(size: 96) }
     defaultBranchRef { target { oid } }
     ${[...sizes.map((path, i) => blob(`s${i}`, path, "byteSize")), ...texts.map((path, i) => blob(`t${i}`, path, "text"))].join("\n")}
   } }`;
+
   return GitHub.request<{ data?: Answer }>(token, "POST", "/graphql", {
     query,
     variables: { owner, name },
   }).pipe(
     Effect.map(({ data }) => {
       const repository = data?.repository ?? null;
+
       return {
         repository,
         size: (i: number) => repository?.[`s${i}`]?.byteSize,
@@ -160,37 +188,55 @@ const download = (owner: string, name: string, oid: string, path: string) =>
     const response = await fetch(
       `https://raw.githubusercontent.com/${owner}/${name}/${oid}/${path.split("/").map(encodeURIComponent).join("/")}`,
     );
+
     return response.ok ? new Uint8Array(await response.arrayBuffer()) : null;
   }).pipe(Effect.orElseSucceed(() => null));
 
-export type Icon = { path: string; type: string; extension: string; bytes: Uint8Array };
+export interface Icon {
+  path: string;
+  type: string;
+  extension: string;
+  bytes: Uint8Array;
+}
 
 export const detect = (token: GitHub.Token, owner: string, name: string) =>
-  Effect.gen(function* () {
+  Effect.gen(function* detect() {
     const first = yield* ask(token, owner, name, FAVICON_CANDIDATES, [
       "t3.json",
       ...ICON_SOURCE_FILES,
     ]);
+
     const repo = first.repository;
-    if (!repo) return null;
+
+    if (!repo) {
+      return null;
+    }
     const avatar = repo.owner.avatarUrl;
     const oid = repo.defaultBranchRef?.target.oid;
-    if (!oid) return { icon: null, avatar };
+
+    if (!oid) {
+      return { icon: null, avatar };
+    }
 
     const iconPath = (() => {
       try {
         const declared = (JSON.parse(first.text(0) ?? "{}") as { iconPath?: unknown }).iconPath;
+
         return typeof declared === "string" ? inRepo(declared) : [];
       } catch {
         return [];
       }
     })();
+
     const linked = ICON_SOURCE_FILES.flatMap((_, i) => {
       const href = extractIconHref(first.text(i + 1) ?? "");
+
       return href ? hrefPaths(href) : [];
     });
+
     const sizes = new Map(FAVICON_CANDIDATES.map((path, i) => [path, first.size(i)]));
     const unknown = [...new Set([...iconPath, ...linked])].filter((path) => !sizes.has(path));
+
     if (unknown.length) {
       const second = yield* ask(token, owner, name, unknown);
       unknown.forEach((path, i) => sizes.set(path, second.size(i)));
@@ -199,22 +245,27 @@ export const detect = (token: GitHub.Token, owner: string, name: string) =>
     for (const path of [...iconPath, ...FAVICON_CANDIDATES, ...linked]) {
       const size = sizes.get(path);
       const type = extension(path);
-      if (size === undefined || !TYPES[type] || size > (type === "icns" ? LARGEST_ICNS : LARGEST))
+
+      if (size === undefined || !TYPES[type] || size > (type === "icns" ? LARGEST_ICNS : LARGEST)) {
         continue;
+      }
       const raw = yield* download(owner, name, oid, path);
       const bytes = raw && type === "icns" ? icnsPng(raw) : raw;
-      if (!bytes || bytes.length > LARGEST || !looksRight[type === "icns" ? "png" : type]!(bytes))
+
+      if (!bytes || bytes.length > LARGEST || !looksRight[type === "icns" ? "png" : type]!(bytes)) {
         continue;
+      }
       return {
         icon: {
           path,
-          type: TYPES[type]!,
+          type: TYPES[type],
           extension: type === "icns" ? "png" : type,
           bytes,
         } satisfies Icon,
         avatar,
       };
     }
+
     return { icon: null, avatar };
   });
 
@@ -222,13 +273,19 @@ const found = new Map<string, { at: number; value: Effect.Success<ReturnType<typ
 
 /* The edge keeps each answer for a day; this keeps a warm instance from asking again for the same repo within the hour */
 export const lookup = (owner: string, name: string) =>
-  Effect.gen(function* () {
+  Effect.gen(function* lookup() {
     const key = `${owner}/${name}`.toLowerCase();
     const hit = found.get(key);
-    if (hit && Date.now() - hit.at < 3_600_000) return hit.value;
+
+    if (hit && Date.now() - hit.at < 3_600_000) {
+      return hit.value;
+    }
     const value = yield* detect(yield* GitHub.appToken, owner, name);
     found.delete(key);
     found.set(key, { at: Date.now(), value });
-    if (found.size > 200) found.delete(found.keys().next().value!);
+
+    if (found.size > 200) {
+      found.delete(found.keys().next().value!);
+    }
     return value;
   });

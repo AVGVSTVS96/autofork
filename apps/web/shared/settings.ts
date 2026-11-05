@@ -1,4 +1,5 @@
-import { LIMITS, type Limits, type Settings } from "./api.ts";
+import { LIMITS } from "./api.ts";
+import type { Limits, Settings } from "./api.ts";
 
 const CRON =
   /^([ \t]*-[ \t]*cron:[ \t]*)(["']?)((?![|>])[^"'\s#](?:[^"'\n#]*[^"'\s#])?)\2([ \t]*(?:#.*)?)$/m;
@@ -21,6 +22,7 @@ const object = (value: unknown): value is Record<string, unknown> =>
 const parse = (config: string | null): Record<string, unknown> => {
   try {
     const parsed = config ? JSON.parse(config) : {};
+
     return object(parsed) ? parsed : {};
   } catch {
     return {};
@@ -36,19 +38,19 @@ export const parses = (config: string) => {
 };
 
 export const githubRepo = (upstream: string) =>
-  upstream
-    .trim()
-    .match(
-      /^(?:(?:(?:https?|ssh|git):\/\/)?(?:[^@/\s]+@)?(?:www\.)?github\.com[/:])?([\w-]+\/[\w.-]+?)(?:\.git)?(?:\/.*)?$/i,
-    )?.[1] ?? null;
+  /^(?:(?:(?:https?|ssh|git):\/\/)?(?:[^@/\s]+@)?(?:www\.)?github\.com[/:])?([\w-]+\/[\w.-]+?)(?:\.git)?(?:\/.*)?$/i.exec(
+    upstream.trim(),
+  )?.[1] ?? null;
 
 export const upstreamOf = (config: string | null) => {
   const { upstream } = parse(config);
+
   return typeof upstream === "string" ? githubRepo(upstream) : null;
 };
 
 const usd = (value: unknown, fallback: number) =>
   typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : fallback;
+
 const whole = (value: unknown, fallback: number) =>
   Number.isInteger(value) && (value as number) >= 0 ? (value as number) : fallback;
 
@@ -56,6 +58,7 @@ const whole = (value: unknown, fallback: number) =>
 export const readSettings = (config: string | null, workflow: string | null): Settings => {
   const { follow, limits } = parse(config);
   const set = (object(limits) ? limits : {}) as Partial<Record<keyof Limits, unknown>>;
+
   return {
     cron: cronLine(workflow),
     follow: typeof follow === "string" ? follow : "",
@@ -70,15 +73,22 @@ export const readSettings = (config: string | null, workflow: string | null): Se
 /* Limits the repo sets to something unreadable show as defaults, so saving over them would replace what the owner wrote */
 export const readableLimits = (config: string | null) => {
   const { limits } = parse(config);
-  if (limits === undefined) return true;
-  if (!object(limits)) return false;
+
+  if (limits === undefined) {
+    return true;
+  }
+  if (!object(limits)) {
+    return false;
+  }
   const read: Record<string, number> = readSettings(config, null).limits;
+
   return Object.keys(LIMITS).every((key) => !(key in limits) || limits[key] === read[key]);
 };
 
 /* A follow that isn't a string shows as empty, so saving would drop what the owner wrote */
 export const readableFollow = (config: string | null) => {
   const { follow } = parse(config);
+
   return follow === undefined || typeof follow === "string";
 };
 
@@ -88,5 +98,6 @@ export const withSettings = (
 ) => {
   const { follow: _, limits: before, ...rest } = parse(config);
   const merged = limits ? { ...(object(before) ? before : {}), ...limits } : before;
+
   return `${JSON.stringify({ ...rest, ...(follow.trim() ? { follow: follow.trim() } : {}), ...(merged === undefined ? {} : { limits: merged }) }, null, 2)}\n`;
 };

@@ -6,7 +6,7 @@ import { GitHubError } from "./github.ts";
 
 const API = "https://api.workos.com/user_management";
 
-export type Signed = {
+export interface Signed {
   readonly user: { readonly id: string };
   readonly access_token: string;
   readonly refresh_token: string;
@@ -15,11 +15,11 @@ export type Signed = {
     readonly refresh_token?: string;
     readonly expires_at?: number;
   };
-};
+}
 
 /* Straight to GitHub, skipping AuthKit's own page: autofork's GitHub App is WorkOS's GitHub connection, so the GitHub token comes back too */
 export const authorizeUrl = (redirect: string, state: string) =>
-  Effect.gen(function* () {
+  Effect.gen(function* authorizeUrl() {
     const { workosClientId } = yield* Env;
     const url = new URL(`${API}/authorize`);
     url.search = new URLSearchParams({
@@ -29,15 +29,19 @@ export const authorizeUrl = (redirect: string, state: string) =>
       provider: "GitHubOAuth",
       state,
     }).toString();
+
     return url;
   });
 
 /* WorkOS checks an email address once per new account, even one GitHub already checked: it emails a code and holds the sign-in until it's typed */
-export type Verify = { readonly verify: { readonly token: string; readonly email: string } };
+export interface Verify {
+  readonly verify: { readonly token: string; readonly email: string };
+}
 
 const authenticate = (grant: Record<string, string>) =>
-  Effect.gen(function* () {
+  Effect.gen(function* authenticate() {
     const { workosClientId, workosApiKey } = yield* Env;
+
     return yield* Effect.tryPromise({
       try: async () => {
         const response = await fetch(`${API}/authenticate`, {
@@ -50,6 +54,7 @@ const authenticate = (grant: Record<string, string>) =>
             ...grant,
           }),
         });
+
         const body = (await response.json().catch(() => ({}))) as Signed & {
           code?: string;
           message?: string;
@@ -57,17 +62,20 @@ const authenticate = (grant: Record<string, string>) =>
           pending_authentication_token?: string;
           email?: string;
         };
-        if (body.code === "email_verification_required" && body.pending_authentication_token)
+
+        if (body.code === "email_verification_required" && body.pending_authentication_token) {
           return {
             verify: { token: body.pending_authentication_token, email: body.email ?? "" },
-          } as Signed | Verify;
-        if (!response.ok)
+          };
+        }
+        if (!response.ok) {
           throw new GitHubError({
             status: response.status,
             path: "workos",
             message: body.error_description ?? body.message ?? "WorkOS sign-in failed",
           });
-        return body as Signed | Verify;
+        }
+        return body;
       },
       catch: (error) =>
         error instanceof GitHubError

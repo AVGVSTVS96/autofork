@@ -1,7 +1,11 @@
-import { squash, type Repo } from "../shared/api.ts";
+import { squash } from "../shared/api.ts";
+import type { Repo } from "../shared/api.ts";
 import found from "./known.json";
 
-export type Found = { repo: Repo; others: ReadonlyArray<Repo> };
+export interface Found {
+  repo: Repo;
+  others: ReadonlyArray<Repo>;
+}
 
 const examples: Record<string, Found> = found;
 

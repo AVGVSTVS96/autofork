@@ -2,9 +2,11 @@ import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import { useEffect, useMemo, useState } from "react";
 
-import { EVERY, type Fork, type Settings } from "../shared/api.ts";
+import { EVERY } from "../shared/api.ts";
+import type { Fork, Settings } from "../shared/api.ts";
 import * as client from "./client.ts";
-import { money, rebuilding, type Spend } from "./live.tsx";
+import { money, rebuilding } from "./live.tsx";
+import type { Spend } from "./live.tsx";
 import { Item } from "./ui.tsx";
 
 export const NONE: Spend = { repoId: 0, name: "", linked: false, rebuilds: [], spent: 0 };
@@ -51,6 +53,7 @@ export const SpendCard = ({
   fork: Fork;
 }) => {
   const limits = settings?.limits;
+
   return (
     <section className="card spend">
       <div className="run-head">
@@ -127,6 +130,7 @@ export const SettingsCard = ({
   const loaded = useAtomValue(atom);
   const save = useAtomSet(client.saveSettings, { mode: "promiseExit" });
   const [draft, setDraft] = useState<Settings | null>(null);
+
   const [state, setState] = useState<{ busy: boolean; note: string | null; bad: boolean }>({
     busy: false,
     note: null,
@@ -140,10 +144,13 @@ export const SettingsCard = ({
     }
   }, [loaded]);
 
-  if (AsyncResult.isFailure(loaded))
+  if (AsyncResult.isFailure(loaded)) {
     return <p className="fine bad">{client.failure(loaded.cause)}</p>;
-  if (!draft) return null;
-  const limit = (key: keyof Settings["limits"]) => (event: React.ChangeEvent<HTMLInputElement>) =>
+  }
+  if (!draft) {
+    return null;
+  }
+  const limit = (key: keyof Settings["limits"]) => (event: React.ChangeEvent<HTMLInputElement>) => {
     setDraft({
       ...draft,
       limits: {
@@ -151,24 +158,34 @@ export const SettingsCard = ({
         [key]: event.target.value === "" ? Number.NaN : Number(event.target.value),
       },
     });
+  };
+
   const shown = (value: number) => (Number.isNaN(value) ? "" : value);
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (Object.values(draft.limits).some(Number.isNaN))
-      return setState({ busy: false, note: "Fill in every limit.", bad: true });
+
+    if (Object.values(draft.limits).some(Number.isNaN)) {
+      setState({ busy: false, note: "Fill in every limit.", bad: true });
+      return;
+    }
     setState({ busy: true, note: null, bad: false });
+
     try {
       const saved = client.unwrap(
         await save({ params: { owner, name }, payload: draft, reactivityKeys: ["settings"] }),
       );
+
       setDraft(saved);
       onSaved(saved);
       setState({ busy: false, note: "Saved in a commit to your fork.", bad: false });
-    } catch (failure) {
-      setState({ busy: false, note: (failure as Error).message, bad: true });
+    } catch (error) {
+      setState({ busy: false, note: (error as Error).message, bad: true });
     }
   };
+
   const custom = draft.cron !== null && !PRESETS.some(([, line]) => line === draft.cron);
+
   return (
     <form className="card settings" onSubmit={submit}>
       <div className="run-head">
@@ -180,14 +197,16 @@ export const SettingsCard = ({
         <input
           value={draft.follow}
           placeholder="releases"
-          onChange={(event) => setDraft({ ...draft, follow: event.target.value })}
+          onChange={(event) => {
+            setDraft({ ...draft, follow: event.target.value });
+          }}
           spellCheck={false}
         />
         <small>
           releases for stable, a tag pattern like v*-nightly.* for a channel, or a branch
         </small>
       </label>
-      {draft.cron !== null ? (
+      {draft.cron === null ? null : (
         <fieldset>
           <legend>GitHub checks every</legend>
           <div className="seg">
@@ -196,7 +215,9 @@ export const SettingsCard = ({
                 key={every}
                 type="button"
                 className={draft.cron === line ? "on" : undefined}
-                onClick={() => setDraft({ ...draft, cron: line })}
+                onClick={() => {
+                  setDraft({ ...draft, cron: line });
+                }}
               >
                 {LABEL[every]}
               </button>
@@ -204,7 +225,7 @@ export const SettingsCard = ({
             {custom ? <code>{draft.cron}</code> : null}
           </div>
         </fieldset>
-      ) : null}
+      )}
       <div className="limits">
         <label>
           <span>Rebuilds a month</span>

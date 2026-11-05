@@ -6,9 +6,12 @@ import { savedIcon } from "./known.ts";
 
 const icon = (body: string, cls = "") =>
   `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true">${body}</svg>`;
+
 const folderPath =
   '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>';
+
 const panel = '<rect width="18" height="18" x="3" y="3" rx="2"/>';
+
 const I = {
   sidebar: icon(
     '<path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM9 3v18M16 15l-3-3 3-3"/>',
@@ -60,6 +63,7 @@ const I = {
     "spin",
   ),
 };
+
 const claude = `<svg class="claude" viewBox="0 0 256 257" aria-hidden="true"><path d="${claudePath}"/></svg>`;
 const t3 = `<svg class="t3-mark" viewBox="15.5309 37 94.3941 56.96" aria-hidden="true"><path d="M33.4509 93V47.56H15.5309V37H64.3309V47.56H46.4109V93H33.4509ZM86.7253 93.96C82.832 93.96 78.9653 93.4533 75.1253 92.44C71.2853 91.3733 68.032 89.88 65.3653 87.96L70.4053 78.04C72.5386 79.5867 75.0186 80.8133 77.8453 81.72C80.672 82.6267 83.5253 83.08 86.4053 83.08C89.6586 83.08 92.2186 82.44 94.0853 81.16C95.952 79.88 96.8853 78.12 96.8853 75.88C96.8853 73.7467 96.0586 72.0667 94.4053 70.84C92.752 69.6133 90.0853 69 86.4053 69H80.4853V60.44L96.0853 42.76L97.5253 47.4H68.1653V37H107.365V45.4L91.8453 63.08L85.2853 59.32H89.0453C95.9253 59.32 101.125 60.8667 104.645 63.96C108.165 67.0533 109.925 71.0267 109.925 75.88C109.925 79.0267 109.099 81.9867 107.445 84.76C105.792 87.48 103.259 89.6933 99.8453 91.4C96.432 93.1067 92.0586 93.96 86.7253 93.96Z"/></svg>`;
 
@@ -85,20 +89,28 @@ const hues: Record<string, [string, string]> = {
   pink: ["59.2% 0.249 0.584", "71.8% 0.202 349.761"],
   rose: ["58.6% 0.253 17.585", "71.2% 0.194 13.428"],
 };
+
 const ownIcons: Record<string, { text: string; color: string }> = {
   autofork: { text: "AF", color: "violet" },
 };
 
 const identity = (project: string) => {
-  if (ownIcons[project]) return ownIcons[project];
+  if (ownIcons[project]) {
+    return ownIcons[project];
+  }
   const words = project.match(/[\p{L}\p{N}]+/gu) ?? [];
-  const glyphs = Array.from(words[0] ?? "P");
+  const glyphs = [...(words[0] ?? "P")];
+
   const second =
     glyphs.slice(1).find((g) => /\p{N}/u.test(g)) ??
-    (words.length > 1 ? Array.from(words.at(-1)!)[0] : glyphs.at(-1));
+    (words.length > 1 ? [...words.at(-1)!][0] : glyphs.at(-1));
+
   const names = Object.keys(hues);
   let i = 0;
-  for (const g of project.toLowerCase()) i = (i * 31 + g.codePointAt(0)!) % names.length;
+
+  for (const g of project.toLowerCase()) {
+    i = (i * 31 + g.codePointAt(0)!) % names.length;
+  }
   return { text: `${glyphs[0]}${second}`.toUpperCase(), color: names[i]! };
 };
 
@@ -108,17 +120,22 @@ const repos: Record<string, string> = {
   autofork: "AVGVSTVS96/autofork-app",
   "react-shiki": "AVGVSTVS96/react-shiki",
 };
+
 const favicons = new Map<string, string>();
 
 const mono = (project: string) => {
   const favicon = favicons.get(project);
-  if (favicon) return `<img class="favicon" src="${favicon}" alt="" data-project="${project}">`;
+
+  if (favicon) {
+    return `<img class="favicon" src="${favicon}" alt="" data-project="${project}">`;
+  }
   const { text, color } = identity(project);
   const [light, dark] = hues[color]!;
+
   return `<svg class="mono" data-project="${project}" viewBox="0 0 16 16" style="color:light-dark(oklch(${light}),oklch(${dark}))" aria-hidden="true"><text x="8" y="10.8" text-anchor="middle" font-size="8.25" textLength="${text.length === 1 ? 6 : 12}" lengthAdjust="spacingAndGlyphs">${text}</text></svg>`;
 };
 
-type Thread = {
+interface Thread {
   project: string;
   title: string;
   branch: string;
@@ -129,7 +146,7 @@ type Thread = {
   worked: string;
   reply: string[];
   files: [number, number, number];
-};
+}
 
 const threads: Thread[] = [
   {
@@ -158,7 +175,7 @@ const threads: Thread[] = [
       "Done. Every change we've made to his template, from calling your assistant to the orb on the Lock Screen, is now one patch, and its PATCH.md says what you said.",
       "Until he pushes something new, the check every 15 minutes is git only and ends in seconds.",
     ],
-    files: [5, 80593, 0],
+    files: [5, 80_593, 0],
   },
   {
     project: "autofork",
@@ -207,14 +224,20 @@ const inWorktree = (t: Thread) => t.branch !== "main";
 
 /* The fork's tooltip line: Claude's prompt cache lasts an hour from the thread's last turn */
 const promptCache = (t: Thread) => {
-  const hours = t.working ? 0 : parseInt(t.time) * (t.time.endsWith("d") ? 24 : 1);
-  if (hours < 1) return "Prompt cache warm, 59m left";
+  const hours = t.working ? 0 : Number.parseInt(t.time) * (t.time.endsWith("d") ? 24 : 1);
+
+  if (hours < 1) {
+    return "Prompt cache warm, 59m left";
+  }
   const expired = hours - 1;
+
   return `Prompt cache expired ${expired === 0 ? "just now" : expired < 24 ? `${expired}h ago` : `${Math.floor(expired / 24)}d ago`}`;
 };
 
 export function mount(root: HTMLElement | null) {
-  if (!root) return;
+  if (!root) {
+    return;
+  }
   let active = 0;
   const compact = new Set<number>([4]);
 
@@ -287,12 +310,15 @@ export function mount(root: HTMLElement | null) {
       <p class="worked"><span>${t.working ? I.working : ""}${t.worked}${I.right}</span></p>
       ${t.reply.map((p) => `<p class="a">${p}</p>`).join("")}
       <div class="changed"><span>${t.files[0]} changed file${t.files[0] === 1 ? "" : "s"}<em><i class="plus">+${t.files[1]}</i><i class="minus">-${t.files[2]}</i></em></span><span class="open">${I.diff}Open diff</span></div>`;
-    requestAnimationFrame(() => msgs.classList.add("in"));
+    requestAnimationFrame(() => {
+      msgs.classList.add("in");
+    });
     paintCtx();
   };
 
-  for (const r of [...rows, ...tabs])
+  for (const r of [...rows, ...tabs]) {
     r.addEventListener("click", () => +r.dataset.i! !== active && show(+r.dataset.i!));
+  }
   ctx.addEventListener("click", () => {
     compact.has(active) ? compact.delete(active) : compact.add(active);
     paintCtx();
@@ -300,13 +326,18 @@ export function mount(root: HTMLElement | null) {
   show(0);
 
   for (const [project, repo] of Object.entries(repos)) {
-    if (ownIcons[project]) continue;
+    if (ownIcons[project]) {
+      continue;
+    }
     const icon = new Image();
     icon.onload = () => {
       favicons.set(project, icon.src);
-      for (const badge of root.querySelectorAll(`[data-project="${project}"]`))
+
+      for (const badge of root.querySelectorAll(`[data-project="${project}"]`)) {
         badge.outerHTML = mono(project);
+      }
     };
+
     icon.src = savedIcon(repo) ?? `/api/icon/${repo}?fallback=none`;
   }
 }

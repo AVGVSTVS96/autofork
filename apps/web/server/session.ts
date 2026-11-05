@@ -7,63 +7,73 @@ import * as Redacted from "effect/Redacted";
 import { SignedOut } from "../shared/api.ts";
 import { Env } from "./env.ts";
 
-export type User = {
+export interface User {
   readonly login: string;
   readonly id: number;
   readonly avatar: string;
   readonly token: string;
   readonly refresh: string;
   readonly expires: number;
-};
+}
 
-export type Account = { readonly id: string; readonly access: string; readonly refresh: string };
+export interface Account {
+  readonly id: string;
+  readonly access: string;
+  readonly refresh: string;
+}
 
-export type Session = {
+export interface Session {
   readonly user?: User;
   readonly account?: Account;
   readonly signIn?: { readonly state: string; readonly back: string; readonly verify?: string };
   readonly claude?: { readonly verifier: string; readonly state: string };
   readonly chatgpt?: { readonly id: string; readonly code: string; readonly at?: number };
-};
+}
 
 const COOKIE = "autofork";
 const ACCOUNT = "autofork-account";
 const text = new TextEncoder();
 
-const aes = Effect.gen(function* () {
+const aes = Effect.gen(function* aes() {
   const { sessionKey } = yield* Env;
-  return yield* Effect.promise(async () =>
-    crypto.subtle.importKey(
-      "raw",
-      await crypto.subtle.digest("SHA-256", text.encode(Redacted.value(sessionKey))),
-      "AES-GCM",
-      false,
-      ["encrypt", "decrypt"],
-    ),
+
+  return yield* Effect.promise(
+    async () =>
+      await crypto.subtle.importKey(
+        "raw",
+        await crypto.subtle.digest("SHA-256", text.encode(Redacted.value(sessionKey))),
+        "AES-GCM",
+        false,
+        ["encrypt", "decrypt"],
+      ),
   );
 });
 
 const encrypt = (session: Session | Saved) =>
-  Effect.gen(function* () {
+  Effect.gen(function* encrypt() {
     const key = yield* aes;
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const sealed = yield* Effect.promise(() =>
+
+    const sealed = yield* Effect.promise(async () =>
       crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, text.encode(JSON.stringify(session))),
     );
+
     return Buffer.concat([iv, new Uint8Array(sealed)]).toString("base64url");
   });
 
 const decrypt = <A = Session>(cookie: string) =>
-  Effect.gen(function* () {
+  Effect.gen(function* decrypt() {
     const key = yield* aes;
     const bytes = Buffer.from(cookie, "base64url");
-    const plain = yield* Effect.tryPromise(() =>
+
+    const plain = yield* Effect.tryPromise(async () =>
       crypto.subtle.decrypt(
         { name: "AES-GCM", iv: bytes.subarray(0, 12) },
         key,
         bytes.subarray(12),
       ),
     );
+
     return JSON.parse(new TextDecoder().decode(plain)) as A;
   }).pipe(Effect.orElseSucceed(() => ({}) as A));
 
@@ -75,12 +85,16 @@ const COOKIE_OPTIONS = {
   maxAge: "30 days",
 } as const;
 
-type Saved = { account?: Account; user?: number };
+interface Saved {
+  account?: Account;
+  user?: number;
+}
 
-const fromCookies = Effect.gen(function* () {
+const fromCookies = Effect.gen(function* fromCookies() {
   const { cookies } = yield* HttpServerRequest.HttpServerRequest;
   const main: Session = cookies[COOKIE] ? yield* decrypt(cookies[COOKIE]) : {};
   const saved: Saved = cookies[ACCOUNT] ? yield* decrypt<Saved>(cookies[ACCOUNT]) : {};
+
   return { main, saved };
 });
 
@@ -92,16 +106,19 @@ export const read = Effect.map(fromCookies, ({ main, saved }): Session => ({
 /* The WorkOS tokens live in their own cookie, tied to the GitHub user they came with, and each cookie is only sent back when it changed,
    so renewing them and changing the main cookie don't overwrite each other */
 export const write = (session: Session) =>
-  Effect.gen(function* () {
+  Effect.gen(function* write() {
     const { account, ...rest } = session;
     const { main, saved } = yield* fromCookies;
     const { account: _, ...restBefore } = main;
     const next: Saved = account ? { account, user: rest.user?.id ?? saved.user } : {};
     const changes: [string, string][] = [];
-    if (JSON.stringify(rest) !== JSON.stringify(restBefore))
+
+    if (JSON.stringify(rest) !== JSON.stringify(restBefore)) {
       changes.push([COOKIE, yield* encrypt(rest)]);
-    if (JSON.stringify(next) !== JSON.stringify(saved))
+    }
+    if (JSON.stringify(next) !== JSON.stringify(saved)) {
       changes.push([ACCOUNT, yield* encrypt(next)]);
+    }
     yield* HttpEffect.appendPreResponseHandler((_request, response) =>
       Effect.succeed(
         changes.reduce(

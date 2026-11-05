@@ -7,6 +7,7 @@ import { makeRouter } from "./router.tsx";
 export const render = async (path: string) => {
   const router = makeRouter(createMemoryHistory({ initialEntries: [path] }));
   await router.load();
+
   /* In the browser, RouterProvider wraps the matched routes in a Suspense boundary it leaves out when rendering on a server (Matches.tsx);
      this one stands in for it, so the HTML has the boundary markers hydration expects */
   const { prelude } = await prerender(
@@ -16,5 +17,6 @@ export const render = async (path: string) => {
       </Suspense>
     </StrictMode>,
   );
-  return new Response(prelude).text();
+
+  return await new Response(prelude).text();
 };

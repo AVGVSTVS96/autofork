@@ -5,7 +5,8 @@ import * as AsyncResult from "effect/reactivity/AsyncResult";
 import type { MyFork } from "../shared/api.ts";
 import * as client from "./client.ts";
 import { repoIcon } from "./known.ts";
-import { Live, money, rebuilding, type Spend, useSpend } from "./live.tsx";
+import { Live, money, rebuilding, useSpend } from "./live.tsx";
+import type { Spend } from "./live.tsx";
 import { Meter, SignInAgain } from "./Spend.tsx";
 import { Nav, Retry, useTitle } from "./ui.tsx";
 
@@ -14,6 +15,7 @@ const route = getRouteApi("/forks");
 const Row = ({ fork, spend }: { fork: MyFork; spend: Spend | undefined }) => {
   const { limits } = fork.settings;
   const running = spend?.rebuilds.some(rebuilding);
+
   return (
     <li className="dash-row">
       <Link
@@ -55,19 +57,25 @@ const Forks = () => {
   const mine = useAtomValue(client.mine);
   const retry = useAtomRefresh(client.mine);
   const spend = useSpend();
-  if (AsyncResult.isFailure(mine))
+
+  if (AsyncResult.isFailure(mine)) {
     return <Retry className="note" message={client.failure(mine.cause)} onRetry={retry} />;
-  if (!AsyncResult.isSuccess(mine)) return <p className="note wait">Loading your forks…</p>;
-  if (!mine.value.length)
+  }
+  if (!AsyncResult.isSuccess(mine)) {
+    return <p className="note wait">Loading your forks…</p>;
+  }
+  if (!mine.value.length) {
     return (
       <p className="note">
         Forks you make on autofork show up here, with what each one's rebuilds cost.
       </p>
     );
+  }
   const total = mine.value.reduce(
     (sum, fork) => sum + (spend?.find((row) => row.repoId === fork.repoId)?.spent ?? 0),
     0,
   );
+
   return (
     <>
       {spend === null ? <SignInAgain back="/forks" many /> : null}
@@ -103,6 +111,7 @@ export const Dashboard = () => {
   const me = useAtomValue(client.me);
   const signedOut = AsyncResult.isSuccess(me) && !me.value;
   const { error } = route.useSearch();
+
   return (
     <div className="page bare">
       <Nav />

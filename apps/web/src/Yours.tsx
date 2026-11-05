@@ -7,8 +7,10 @@ import { SettingsCard, SignInAgain, SpendCard } from "./Spend.tsx";
 const Cards = ({ fork }: { fork: Fork }) => {
   const forks = useSpend();
   const [settings, setSettings] = useState<Settings | null>(null);
+
   const spend =
     forks && forks.find((each) => each.name === `${fork.owner}/${fork.name}`.toLowerCase());
+
   return (
     <>
       {forks === null ? (

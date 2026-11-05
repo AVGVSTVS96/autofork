@@ -4,11 +4,11 @@ import {
   createRouter,
   lazyRouteComponent,
   Outlet,
-  type ParsedLocation,
-  type RouterHistory,
 } from "@tanstack/react-router";
+import type { ParsedLocation, RouterHistory } from "@tanstack/react-router";
 
-import { isAgent, type Agent } from "../shared/api.ts";
+import { isAgent } from "../shared/api.ts";
+import type { Agent } from "../shared/api.ts";
 import { Home } from "./Home.tsx";
 import { NotFound } from "./ui.tsx";
 
@@ -26,6 +26,7 @@ const home = createRoute({
   }),
   component: function HomeRoute() {
     const { q, agent, error } = home.useSearch();
+
     return <Home q={q ?? ""} agent={agent} error={error} />;
   },
 });
@@ -37,7 +38,7 @@ const fork = createRoute({
     ...(typeof search.since === "string" ? { since: search.since } : {}),
     ...(typeof search.error === "string" ? { error: search.error } : {}),
   }),
-  component: lazyRouteComponent(() => import("./ForkPage.tsx"), "ForkRoute"),
+  component: lazyRouteComponent(async () => import("./ForkPage.tsx"), "ForkRoute"),
 });
 
 const forks = createRoute({
@@ -45,7 +46,7 @@ const forks = createRoute({
   path: "/forks",
   validateSearch: (search: Record<string, unknown>): { error?: string } =>
     typeof search.error === "string" ? { error: search.error } : {},
-  component: lazyRouteComponent(() => import("./Dashboard.tsx"), "Dashboard"),
+  component: lazyRouteComponent(async () => import("./Dashboard.tsx"), "Dashboard"),
 });
 
 const link = createRoute({
@@ -53,7 +54,7 @@ const link = createRoute({
   path: "/link/$owner/$name",
   validateSearch: (search: Record<string, unknown>): { error?: string } =>
     typeof search.error === "string" ? { error: search.error } : {},
-  component: lazyRouteComponent(() => import("./LinkPage.tsx"), "LinkRoute"),
+  component: lazyRouteComponent(async () => import("./LinkPage.tsx"), "LinkRoute"),
 });
 
 const verify = createRoute({
@@ -68,7 +69,7 @@ const verify = createRoute({
       : {}),
     ...(typeof search.error === "string" ? { error: search.error } : {}),
   }),
-  component: lazyRouteComponent(() => import("./Verify.tsx"), "VerifyRoute"),
+  component: lazyRouteComponent(async () => import("./Verify.tsx"), "VerifyRoute"),
 });
 
 const asking = (location: ParsedLocation) => "q" in location.search;

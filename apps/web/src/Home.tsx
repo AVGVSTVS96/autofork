@@ -1,15 +1,19 @@
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { useNavigate } from "@tanstack/react-router";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
-import { Fragment, useEffect, useEffectEvent, useRef, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useEffectEvent, useRef, useState } from "react";
+import type { FormEvent } from "react";
 
-import { isAgent, split, type Agent, type ForkState, type Repo } from "../shared/api.ts";
+import { isAgent, split } from "../shared/api.ts";
+import type { Agent, ForkState, Repo } from "../shared/api.ts";
 import * as client from "./client.ts";
 import examples from "./examples.json";
 import facts from "./facts.json";
-import { known, repoIcon, type Found } from "./known.ts";
+import { known, repoIcon } from "./known.ts";
+import type { Found } from "./known.ts";
 import { start } from "./landing.ts";
-import { History, Meant, MineToday, Yours, type Mine } from "./Sections.tsx";
+import { History, Meant, MineToday, Yours } from "./Sections.tsx";
+import type { Mine } from "./Sections.tsx";
 import {
   Ask,
   ClaudeIcon,
@@ -20,11 +24,10 @@ import {
   Retry,
   stars,
   useTitle,
-  type AskHandle,
-  type Example,
 } from "./ui.tsx";
+import type { AskHandle, Example } from "./ui.tsx";
 
-const EXAMPLES: ReadonlyArray<Example> = examples.examples.map(({ app, change }) => ({
+const EXAMPLES: readonly Example[] = examples.examples.map(({ app, change }) => ({
   app,
   change,
   avatar: known(app)!.repo.avatar,
@@ -43,6 +46,7 @@ const Headline = () => (
 
 const useAsk = () => {
   const navigate = useNavigate();
+
   return (text: string, agent: Agent | undefined) =>
     void navigate({ to: "/", search: { q: text, agent } });
 };
@@ -62,6 +66,7 @@ const Landing = () => {
   const page = useRef<HTMLDivElement>(null);
   const composer = useRef<AskHandle>(null);
   useEffect(() => start(page.current!), []);
+
   const pick = ({ repo, name, change, ask }: Mine, keyboard: boolean) =>
     composer.current?.fill({
       change: ask ?? change,
@@ -70,6 +75,7 @@ const Landing = () => {
         ? { app: name }
         : { app: repo, face: { name: repo.split("/")[1]!, avatar: repoIcon(repo) } }),
     });
+
   return (
     <div className="page" ref={page}>
       <svg className="graph" aria-hidden="true" />
@@ -88,7 +94,9 @@ const Landing = () => {
           <Ask
             ref={composer}
             id="ask"
-            onSubmit={(text, via) => ask(text, isAgent(via) ? via : undefined)}
+            onSubmit={(text, via) => {
+              ask(text, isAgent(via) ? via : undefined);
+            }}
             examples={EXAMPLES}
             label="An open source app and what you'd change"
             action="Fork it"
@@ -133,6 +141,7 @@ const Start = ({
   const ask = useAsk();
   const { app } = split(q);
   useTitle(app ? `${app} · autofork` : undefined);
+
   return (
     <div className="page bare">
       <Nav />
@@ -141,7 +150,9 @@ const Start = ({
         <Fragment key={q}>
           <Ask
             initial={q}
-            onSubmit={(text) => ask(text, agent)}
+            onSubmit={(text) => {
+              ask(text, agent);
+            }}
             examples={EXAMPLES}
             label="An open source app and what you'd change"
             action="Fork it"
@@ -164,6 +175,7 @@ const Flow = ({
 }) => {
   const { app, change } = split(q);
   const ready = known(app);
+
   return ready ? (
     <Plan found={ready} app={app} initialChange={change} agent={agent} error={error} />
   ) : (
@@ -171,16 +183,17 @@ const Flow = ({
   );
 };
 
-type Asked = {
+interface Asked {
   app: string;
   initialChange: string;
   agent: Agent | undefined;
   error: string | undefined;
-};
+}
 
 const Lookup = (asked: Asked) => {
   const atom = client.resolve(asked.app);
   const retry = useAtomRefresh(atom);
+
   return AsyncResult.match(useAtomValue(atom), {
     onInitial: () => <Plan found={undefined} {...asked} />,
     onFailure: ({ cause }) => (
@@ -208,6 +221,7 @@ const Plan = ({
   const repo = found?.repo;
   const named = repo ? `${repo.owner}/${repo.name}` : app;
   const back = `/?${new URLSearchParams({ q: change.trim() ? `${named}: ${change}` : named, ...(agent ? { agent } : {}) })}`;
+
   return (
     <section className="plan">
       <a
@@ -231,13 +245,15 @@ const Plan = ({
               <Sk w="12ch" />
             )}
           </span>
-          {!repo ? (
+          {repo ? (
+            repo.description ? (
+              <span className={cold ? "about arrive" : "about"}>{repo.description}</span>
+            ) : null
+          ) : (
             <span className="about">
               <Sk w="22ch" />
             </span>
-          ) : repo.description ? (
-            <span className={cold ? "about arrive" : "about"}>{repo.description}</span>
-          ) : null}
+          )}
         </span>
         <span className="stars">
           {repo ? <span className={arrive}>★ {stars(repo.stars)}</span> : <Sk w="3.5ch" />}
@@ -267,7 +283,9 @@ const Plan = ({
         <span>What you'd change</span>
         <textarea
           value={change}
-          onChange={(event) => setChange(event.target.value)}
+          onChange={(event) => {
+            setChange(event.target.value);
+          }}
           rows={1}
           placeholder="always show context usage"
         />
@@ -339,7 +357,10 @@ const Plan = ({
   );
 };
 
-type Fork = { owner: string; name: string };
+interface Fork {
+  owner: string;
+  name: string;
+}
 
 const Prepare = ({
   repo,
@@ -365,34 +386,52 @@ const Prepare = ({
     let settled = false;
     let last = 0;
     let timer: ReturnType<typeof setTimeout>;
+
     const check = async () => {
-      if (checking || settled || Date.now() - last < 3000) return;
+      if (checking || settled || Date.now() - last < 3000) {
+        return;
+      }
       checking = true;
       clearTimeout(timer);
+
       const exit = await prepare({
         payload: { owner: repo.owner, name: repo.name, into, preview: !committed },
       });
+
       checking = false;
       last = Date.now();
-      if (!live) return;
+
+      if (!live) {
+        return;
+      }
       try {
         const next = client.unwrap(exit);
         settled = next.status === "ready" || next.status === "new";
         setState(next);
         setError(null);
-        if (!settled && document.visibilityState === "visible") timer = setTimeout(check, 15000);
-      } catch (failure) {
+
+        if (!settled && document.visibilityState === "visible") {
+          timer = setTimeout(check, 15000);
+        }
+      } catch (error_) {
         settled = true;
-        setError((failure as Error).message);
-        if ((failure as Error).message.startsWith("Your GitHub sign-in")) meRefresh();
+        setError((error_ as Error).message);
+        if ((error_ as Error).message.startsWith("Your GitHub sign-in")) {
+          meRefresh();
+        }
       }
     };
+
     const back = () => {
-      if (document.visibilityState === "visible") void check();
+      if (document.visibilityState === "visible") {
+        void check();
+      }
     };
+
     void check();
     window.addEventListener("focus", back);
     document.addEventListener("visibilitychange", back);
+
     return () => {
       live = false;
       clearTimeout(timer);
@@ -435,63 +474,81 @@ const Prepare = ({
                 setAttempt((n) => n + 1);
               }}
             />
-          ) : !state ? (
-            <p>
-              Your fork: <Sk w="16ch" />
-            </p>
-          ) : making ? (
-            <p className="wait">
-              <span>
-                Making{" "}
+          ) : state ? (
+            making ? (
+              <p className="wait">
+                <span>
+                  Making{" "}
+                  <b>
+                    {state.owner}/{state.name}
+                  </b>
+                  …
+                </span>
+              </p>
+            ) : state.status === "new" ? (
+              <p>
+                Your fork will be{" "}
                 <b>
                   {state.owner}/{state.name}
                 </b>
-                …
-              </span>
-            </p>
-          ) : state.status === "new" ? (
-            <p>
-              Your fork will be{" "}
-              <b>
-                {state.owner}/{state.name}
-              </b>
-            </p>
-          ) : state.status === "ready" ? (
-            <p>
-              Your fork:{" "}
-              <b>
-                {state.owner}/{state.name}
-              </b>
-            </p>
-          ) : state.status === "install" ? (
-            <div>
-              <p>Install autofork on GitHub so it can make your fork, then come back here.</p>
-              <a className="btn primary" href={state.link ?? "#"} target="_blank" rel="noreferrer">
-                <GitHubIcon /> Install autofork
-              </a>
-            </div>
-          ) : state.status === "fork" ? (
-            <div>
-              <p>
-                autofork can only see the repos you picked. Fork it on GitHub, then come back here.
               </p>
-              <a className="btn primary" href={state.link ?? "#"} target="_blank" rel="noreferrer">
-                <GitHubIcon /> Fork {repo.name} on GitHub
-              </a>
-            </div>
-          ) : (
-            <div>
+            ) : state.status === "ready" ? (
               <p>
-                Add{" "}
+                Your fork:{" "}
                 <b>
                   {state.owner}/{state.name}
-                </b>{" "}
-                to autofork's repos on GitHub, then come back here.
+                </b>
               </p>
-              <a className="btn primary" href={state.link ?? "#"} target="_blank" rel="noreferrer">
-                <GitHubIcon /> Open autofork's access
-              </a>
-            </div>
+            ) : state.status === "install" ? (
+              <div>
+                <p>Install autofork on GitHub so it can make your fork, then come back here.</p>
+                <a
+                  className="btn primary"
+                  href={state.link ?? "#"}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <GitHubIcon /> Install autofork
+                </a>
+              </div>
+            ) : state.status === "fork" ? (
+              <div>
+                <p>
+                  autofork can only see the repos you picked. Fork it on GitHub, then come back
+                  here.
+                </p>
+                <a
+                  className="btn primary"
+                  href={state.link ?? "#"}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <GitHubIcon /> Fork {repo.name} on GitHub
+                </a>
+              </div>
+            ) : (
+              <div>
+                <p>
+                  Add{" "}
+                  <b>
+                    {state.owner}/{state.name}
+                  </b>{" "}
+                  to autofork's repos on GitHub, then come back here.
+                </p>
+                <a
+                  className="btn primary"
+                  href={state.link ?? "#"}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <GitHubIcon /> Open autofork's access
+                </a>
+              </div>
+            )
+          ) : (
+            <p>
+              Your fork: <Sk w="16ch" />
+            </p>
           )}
         </div>
       </li>
@@ -527,7 +584,9 @@ const Connect = ({
           type="button"
           className={pick === "chatgpt" ? "btn on" : "btn"}
           aria-pressed={pick === "chatgpt"}
-          onClick={() => onPick("chatgpt")}
+          onClick={() => {
+            onPick("chatgpt");
+          }}
         >
           <OpenAIIcon /> ChatGPT
         </button>
@@ -535,7 +594,9 @@ const Connect = ({
           type="button"
           className={pick === "claude" ? "btn on" : "btn"}
           aria-pressed={pick === "claude"}
-          onClick={() => onPick("claude")}
+          onClick={() => {
+            onPick("claude");
+          }}
         >
           <ClaudeIcon /> Claude
         </button>
@@ -548,6 +609,7 @@ const Connect = ({
 
 const useStarted = () => {
   const navigate = useNavigate();
+
   return ({ owner, name }: Fork) =>
     void navigate({
       to: "/$owner/$name",
@@ -564,39 +626,56 @@ const ChatGPT = ({ fork, change }: { fork: Fork | null; change: string }) => {
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [copied, setCopied] = useState(false);
-  const signedIn = useEffectEvent((into: Fork) => finish({ params: into, payload: { change } }));
+  const signedIn = useEffectEvent(async (into: Fork) =>
+    finish({ params: into, payload: { change } }),
+  );
 
   useEffect(() => {
     let live = true;
     void start({}).then((exit) => {
-      if (!live) return;
+      if (!live) {
+        return;
+      }
       try {
         setDevice(client.unwrap(exit));
-      } catch (failure) {
-        setError((failure as Error).message);
+      } catch (error_) {
+        setError((error_ as Error).message);
       }
     });
+
     return () => {
       live = false;
     };
   }, [attempt]);
 
   useEffect(() => {
-    if (!device || !fork || error) return;
+    if (!device || !fork || error) {
+      return;
+    }
     let live = true;
     let timer: ReturnType<typeof setTimeout>;
+
     const poll = async () => {
       const exit = await signedIn({ owner: fork.owner, name: fork.name });
-      if (!live) return;
+
+      if (!live) {
+        return;
+      }
       try {
         const result = client.unwrap(exit);
-        if (result.status === "started") return started(result);
+
+        if (result.status === "started") {
+          started(result);
+          return;
+        }
         timer = setTimeout(poll, 5000);
-      } catch (failure) {
-        setError((failure as Error).message);
+      } catch (error_) {
+        setError((error_ as Error).message);
       }
     };
+
     timer = setTimeout(poll, 5000);
+
     return () => {
       live = false;
       clearTimeout(timer);
@@ -609,8 +688,12 @@ const ChatGPT = ({ fork, change }: { fork: Fork | null; change: string }) => {
     setAttempt((n) => n + 1);
   };
 
-  if (error) return <Retry message={error} onRetry={retry} />;
-  if (!device) return <p className="wait">Getting a code from ChatGPT…</p>;
+  if (error) {
+    return <Retry message={error} onRetry={retry} />;
+  }
+  if (!device) {
+    return <p className="wait">Getting a code from ChatGPT…</p>;
+  }
   return (
     <div className="device">
       <p>Open ChatGPT's sign-in page and enter this code:</p>
@@ -620,7 +703,9 @@ const ChatGPT = ({ fork, change }: { fork: Fork | null; change: string }) => {
         onClick={() =>
           void navigator.clipboard.writeText(device.code).then(() => {
             setCopied(true);
-            setTimeout(() => setCopied(false), 1400);
+            setTimeout(() => {
+              setCopied(false);
+            }, 1400);
           })
         }
         title="Copy"
@@ -645,37 +730,46 @@ const Claude = ({ fork, change }: { fork: Fork | null; change: string }) => {
   const [sent, setSent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const connect = useEffectEvent((into: Fork, pasted: string) =>
+
+  const connect = useEffectEvent(async (into: Fork, pasted: string) =>
     finish({ params: into, payload: { code: pasted, change } }),
   );
 
   useEffect(() => {
     let live = true;
     void start({}).then((exit) => {
-      if (!live) return;
+      if (!live) {
+        return;
+      }
       try {
         setUrl(client.unwrap(exit).url);
-      } catch (failure) {
-        setError((failure as Error).message);
+      } catch (error_) {
+        setError((error_ as Error).message);
       }
     });
+
     return () => {
       live = false;
     };
   }, [attempt]);
 
   useEffect(() => {
-    if (!sent || !fork) return;
+    if (!sent || !fork) {
+      return;
+    }
     let live = true;
     void connect({ owner: fork.owner, name: fork.name }, sent).then((exit) => {
-      if (!live) return;
+      if (!live) {
+        return;
+      }
       try {
         started(client.unwrap(exit));
-      } catch (failure) {
-        setError((failure as Error).message);
+      } catch (error_) {
+        setError((error_ as Error).message);
         setSent(null);
       }
     });
+
     return () => {
       live = false;
     };
@@ -700,6 +794,7 @@ const Claude = ({ fork, change }: { fork: Fork | null; change: string }) => {
       <p className="wait">Getting Claude's sign-in ready…</p>
     );
   }
+
   return (
     <form className="device" onSubmit={submit}>
       <p>Authorize on Claude's page, then copy the code it shows and paste it here.</p>
@@ -709,7 +804,9 @@ const Claude = ({ fork, change }: { fork: Fork | null; change: string }) => {
       <div className="paste">
         <input
           value={code}
-          onChange={(event) => setCode(event.target.value)}
+          onChange={(event) => {
+            setCode(event.target.value);
+          }}
           placeholder="Paste the code"
           aria-label="Code from Claude"
           autoComplete="off"

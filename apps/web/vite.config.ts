@@ -5,21 +5,27 @@ import { pathToFileURL } from "node:url";
 
 import babel from "@rolldown/plugin-babel";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
-import { defineConfig, loadEnv, type Plugin } from "vite";
+import { defineConfig, loadEnv } from "vite";
+import type { Plugin } from "vite";
 
 const api = (): Plugin => ({
   name: "autofork-api",
   configureServer(server) {
     Object.assign(process.env, loadEnv("development", process.cwd(), ""));
     server.middlewares.use(async (req, res, next) => {
-      if (!req.url?.startsWith("/api/")) return next();
+      if (!req.url?.startsWith("/api/")) {
+        next();
+        return;
+      }
       const { app } = (await server.ssrLoadModule(
         "/server/http.ts",
       )) as typeof import("./server/http.ts");
+
       const body =
         req.method === "GET" || req.method === "HEAD"
           ? undefined
           : (Readable.toWeb(req) as ReadableStream);
+
       const response = await app.handler(
         new Request(`http://${req.headers.host}${req.url}`, {
           method: req.method,
@@ -28,12 +34,18 @@ const api = (): Plugin => ({
           duplex: "half",
         } as RequestInit),
       );
+
       res.statusCode = response.status;
       response.headers.forEach((value, key) => {
-        if (key !== "set-cookie") res.setHeader(key, value);
+        if (key !== "set-cookie") {
+          res.setHeader(key, value);
+        }
       });
       const cookies = response.headers.getSetCookie();
-      if (cookies.length) res.setHeader("set-cookie", cookies);
+
+      if (cookies.length) {
+        res.setHeader("set-cookie", cookies);
+      }
       res.end(Buffer.from(await response.arrayBuffer()));
     });
   },
@@ -60,11 +72,13 @@ const prerender = (): Plugin => ({
         await builder.build(ssr);
         const out = resolve(client.config.root, client.config.build.outDir);
         const server = resolve(ssr.config.root, ssr.config.build.outDir);
+
         const { render } = (await import(
           pathToFileURL(`${server}/prerender.js`).href
         )) as typeof import("./src/prerender.tsx");
-        const shell = await readFile(`${out}/index.html`, "utf8");
-        const [, hints, body] = (await render("/")).match(/^((?:<link[^>]*>)*)([\s\S]*)$/)!;
+
+        const shell = await readFile(`${out}/index.html`, "utf-8");
+        const [, hints, body] = /^((?:<link[^>]*>)*)([\s\S]*)$/.exec(await render("/"))!;
         await writeFile(
           `${out}/home.html`,
           shell

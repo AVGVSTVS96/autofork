@@ -8,8 +8,10 @@ const SHARED: [RegExp, string][] = [
 const cached = async (request: Request) => {
   const response = await app.handler(request);
   const policy = SHARED.find(([path]) => path.test(new URL(request.url).pathname))?.[1];
-  if (policy && request.method === "GET" && response.ok && !response.headers.has("set-cookie"))
+
+  if (policy && request.method === "GET" && response.ok && !response.headers.has("set-cookie")) {
     response.headers.set("cache-control", policy);
+  }
   return response;
 };
 

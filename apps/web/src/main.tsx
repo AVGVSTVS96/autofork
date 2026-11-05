@@ -7,12 +7,17 @@ import { makeRouter } from "./router.tsx";
 import "./style.css";
 
 const router = makeRouter();
+
 const app = (
   <StrictMode>
     <RouterProvider router={router} />
   </StrictMode>
 );
-const root = document.getElementById("root")!;
 
-if (root.hasChildNodes()) void router.load().then(() => hydrateRoot(root, app));
-else createRoot(root).render(app);
+const root = document.querySelector("#root")!;
+
+if (root.hasChildNodes()) {
+  void router.load().then(() => hydrateRoot(root, app));
+} else {
+  createRoot(root).render(app);
+}

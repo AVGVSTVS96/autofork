@@ -128,9 +128,15 @@ export const Meant = () => (
   </section>
 );
 
-export type Mine = { repo: string; name: string; about?: string; change: string; ask?: string };
+export interface Mine {
+  repo: string;
+  name: string;
+  about?: string;
+  change: string;
+  ask?: string;
+}
 
-const mine: ReadonlyArray<Mine> = [
+const mine: readonly Mine[] = [
   {
     repo: "davidmokos/expo-gpt-live",
     name: "expo-gpt-live",
@@ -168,7 +174,12 @@ export const MineToday = ({ onPick }: { onPick: (fork: Mine, keyboard: boolean) 
     <ul className="asks">
       {mine.map((fork) => (
         <li key={fork.repo}>
-          <button type="button" onClick={(event) => onPick(fork, event.detail === 0)}>
+          <button
+            type="button"
+            onClick={(event) => {
+              onPick(fork, event.detail === 0);
+            }}
+          >
             <img src={repoIcon(fork.repo)} alt="" loading="lazy" />
             <span>
               <b>{fork.name}</b>
@@ -183,11 +194,15 @@ export const MineToday = ({ onPick }: { onPick: (fork: Mine, keyboard: boolean) 
 
 export const Yours = () => {
   const [copied, setCopied] = useState(false);
+
   const copy = () =>
     void navigator.clipboard.writeText(install).then(() => {
       setCopied(true);
-      setTimeout(() => setCopied(false), 1400);
+      setTimeout(() => {
+        setCopied(false);
+      }, 1400);
     });
+
   return (
     <section className="yours" id="self">
       <div className="yours-card">

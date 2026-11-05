@@ -19,7 +19,9 @@ export const report = (what: string, detail: Record<string, unknown>) => {
     secondsOnPage: Math.round(performance.now() / 1000),
     browser: navigator.userAgent,
   };
+
   console.warn("autofork:", entry);
+
   try {
     navigator.sendBeacon("/api/log", JSON.stringify(entry));
   } catch {}
@@ -43,11 +45,15 @@ const retryOnce = (client: HttpClient.HttpClient) =>
       : Effect.flatMap(Effect.exit(response), (first) => {
           const status = Exit.isSuccess(first) ? first.value.status : undefined;
           const error = Exit.isFailure(first) ? Cause.squash(first.cause) : undefined;
-          if (status ? !TRANSIENT.has(status) : !unreachable(error)) return first;
+
+          if (status ? !TRANSIENT.has(status) : !unreachable(error)) {
+            return first;
+          }
           report("retrying", {
             request: `${request.method} ${request.url}`,
             got: status ?? network(error),
           });
+
           return Effect.delay(response, "700 millis");
         }),
   );
@@ -86,12 +92,18 @@ const reported = new WeakSet<Cause.Cause<unknown>>();
 
 export const failure = (cause: Cause.Cause<unknown>) => {
   const error = Cause.squash(cause) as { _tag?: string; message?: string };
-  if (error?._tag === "SignedOut") return "Your GitHub sign-in ended. Sign in again.";
-  if (error?._tag === "Problem" && error.message) return error.message;
+
+  if (error?._tag === "SignedOut") {
+    return "Your GitHub sign-in ended. Sign in again.";
+  }
+  if (error?._tag === "Problem" && error.message) {
+    return error.message;
+  }
   if (!reported.has(cause)) {
     reported.add(cause);
     report("failed", { cause: Cause.pretty(cause).slice(0, 2000), network: network(error) });
   }
+
   return unreachable(error)
     ? "Couldn't reach autofork. Check your connection and try again."
     : "Something went wrong. Try again.";
@@ -100,14 +112,18 @@ export const failure = (cause: Cause.Cause<unknown>) => {
 /* A repo that isn't an autofork, or isn't there: `from` is the repo to fork instead, when there is one */
 export const notFound = (cause: Cause.Cause<unknown>) => {
   const error = Cause.squash(cause) as { _tag?: string; from?: string | null };
+
   return error?._tag === "NotFound" ? { from: error.from ?? null } : null;
 };
 
 export const unwrap = <A>(exit: Exit.Exit<A, unknown>) => {
-  if (Exit.isSuccess(exit)) return exit.value;
+  if (Exit.isSuccess(exit)) {
+    return exit.value;
+  }
   throw new Error(failure(exit.cause));
 };
 
 export const settings = (owner: string, name: string) =>
   Client.query("app", "settings", { params: { owner, name } });
+
 export const saveSettings = Client.mutation("app", "saveSettings");

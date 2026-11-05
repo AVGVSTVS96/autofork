@@ -1,7 +1,7 @@
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Layer from "effect/Layer";
-import * as Redacted from "effect/Redacted";
+import type * as Redacted from "effect/Redacted";
 
 export class Env extends Context.Service<
   Env,
@@ -9,13 +9,13 @@ export class Env extends Context.Service<
     readonly appId: string;
     readonly appSlug: string;
     readonly clientId: string;
-    readonly clientSecret: Redacted.Redacted<string>;
-    readonly privateKey: Redacted.Redacted<string>;
-    readonly sessionKey: Redacted.Redacted<string>;
+    readonly clientSecret: Redacted.Redacted;
+    readonly privateKey: Redacted.Redacted;
+    readonly sessionKey: Redacted.Redacted;
     readonly workosClientId: string;
-    readonly workosApiKey: Redacted.Redacted<string>;
+    readonly workosApiKey: Redacted.Redacted;
     readonly convexSite: string;
-    readonly serverSecret: Redacted.Redacted<string>;
+    readonly serverSecret: Redacted.Redacted;
   }
 >()("autofork/Env") {}
 
