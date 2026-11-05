@@ -2478,3 +2478,43 @@ test("a patch whose deletion upstream made too is healed when the agent finds no
   expect(autofork(mine, "sync").output.result).toBe("synced");
   expect(existsSync(prompt)).toBe(false);
 });
+
+test("save has an agent rebuild a patch whose change overlaps a later patch's lines", () => {
+  const origin = join(home, "refold");
+  const mine = join(home, "refold-fork");
+  mkdirSync(origin);
+  write(origin, "lines.txt", "one\ntwo\nthree\nfour\n");
+  sh(origin, "git init -q && git add -A && git commit -qm init");
+  sh(home, `git clone -q ${origin} refold-fork`);
+  expect(autofork(mine, "init", origin).ok).toBe(true);
+  sh(mine, "git add -A && git commit -qm track");
+  for (const [id, from, to] of [
+    ["a", "two", "TWO"],
+    ["b", "three", "THREE"],
+  ]) {
+    sh(mine, `sed -i s/${from}/${to}/ lines.txt && mkdir .autofork/${id}`);
+    write(mine, `.autofork/${id}/PATCH.md`, `Line ${from} reads ${to}.\n`);
+    expect(autofork(mine, "save", id).ok).toBe(true);
+    sh(mine, `git add -A && git add -f .autofork && git commit -qm ${id}`);
+  }
+  const script = join(home, "refold-agent.sh");
+  write(
+    home,
+    "refold-agent.sh",
+    `grep -q '^<<<<<<<' lines.txt || exit 1
+case "$(cat)" in
+  *.autofork/b/PATCH.md*) printf 'one\\nTwo!\\nTHREE\\nfour\\n' > lines.txt ;;
+  *) printf 'one\\nTwo!\\nthree\\nfour\\n' > lines.txt ;;
+esac
+`,
+  );
+  const config = JSON.parse(file(mine, ".autofork/config.json"));
+  write(mine, ".autofork/config.json", JSON.stringify({ ...config, agent: `sh ${script}` }));
+  sh(mine, "git commit -qam agent && sed -i s/TWO/Two!/ lines.txt");
+  const { ok, log } = autofork(mine, "save", "a");
+  expect(log).toContain("your changes to a touch lines a later patch changes too");
+  expect(ok).toBe(true);
+  expect(file(mine, ".autofork/a/a.patch")).toContain("+Two!");
+  expect(file(mine, ".autofork/b/b.patch")).toContain("+THREE");
+  expect(file(mine, "lines.txt")).toBe("one\nTwo!\nTHREE\nfour\n");
+});
