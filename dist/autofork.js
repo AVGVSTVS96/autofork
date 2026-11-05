@@ -797,21 +797,26 @@ async function build(root, config, base, options) {
   };
   if (options.healFrom)
     await fitsUpFront(config, build);
+  let folded;
   for (const id of config.patches) {
     const file = patchFile(dir, id);
     if (options.wait && !options.healFrom && isEmpty(file))
       throw new Drifted(`${id} isn't built yet`);
     if (isEmpty(file) ? options.healFrom : !apply(dir, file, config)) {
-      if (!options.healFrom)
+      if (!options.healFrom && !folded)
         throw new Drifted(`${id} doesn't apply to ${short(base)}`);
       await verify(config, build, options.healFrom);
-      await heal(config, build, id, `Upstream changed, and patch "${id}" no longer applies cleanly.`, isEmpty(file) ? undefined : { file, from: options.healFrom });
+      await heal(config, build, id, folded ? `The fork's owner changed patch "${folded}", and patch "${id}" no longer applies cleanly on top of it.` : `Upstream changed, and patch "${id}" no longer applies cleanly.`, isEmpty(file) ? undefined : { file, from: options.healFrom });
     } else {
       if (!isEmpty(file) && !changed(dir))
         build.upstreamHas.set(id, "the same change, line for line");
     }
     if (options.fold?.id === id && !apply(dir, options.fold.patch, config)) {
-      throw new Failure(`your changes don't apply on top of ${id}`);
+      say(`your changes to ${id} touch lines a later patch changes too, so an agent rebuilds ${id} with them from its PATCH.md`);
+      apply(dir, file, config);
+      git(dir, "add", "-A");
+      await heal(config, build, id, `The fork's owner changed patch "${id}", and their change was made with later patches applied, so git couldn't fit it on "${id}" alone.`, { file: options.fold.patch });
+      folded = id;
     }
     build.steps.push(commit(dir, id));
   }
