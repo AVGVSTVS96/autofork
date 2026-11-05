@@ -1,84 +1,112 @@
+import * as Data from "effect/Data";
+import { Base64, Base64Url, Hex } from "effect/encoding";
+import * as Option from "effect/Option";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
+
 const API = "https://api.github.com";
 
-export class GitHubError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
+export class GitHubError extends Data.TaggedError("GitHubError")<{
+  readonly status: number;
+  readonly message: string;
+}> {}
 
-export const request = async <A = unknown>(
+export const missing = (error: unknown): error is GitHubError =>
+  error instanceof GitHubError && error.status === 404;
+
+export const refused = (error: unknown): error is GitHubError =>
+  error instanceof GitHubError && (error.status === 403 || error.status === 404);
+
+const rateLimited = (response: Response, text: string) =>
+  response.status === 403 &&
+  (response.headers.get("x-ratelimit-remaining") === "0" ||
+    response.headers.has("retry-after") ||
+    /rate limit/iu.test(text));
+
+const call = async (
   token: string,
   method: string,
   path: string,
-  body?: unknown,
-  etag?: string | null,
+  body: Schema.JsonObject | undefined,
 ) => {
+  const headers = new Headers({
+    accept: "application/vnd.github+json",
+    "x-github-api-version": "2022-11-28",
+    "user-agent": "autofork",
+    authorization: `Bearer ${token}`,
+  });
+
+  if (body !== undefined) {
+    headers.set("content-type", "application/json");
+  }
+
   const response = await fetch(`${API}/${path}`, {
     method,
-    headers: {
-      accept: "application/vnd.github+json",
-      "x-github-api-version": "2022-11-28",
-      "user-agent": "autofork",
-      authorization: `Bearer ${token}`,
-      ...(body === undefined ? {} : { "content-type": "application/json" }),
-      ...(etag ? { "if-none-match": etag } : {}),
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    headers,
+    body: body === undefined ? null : JSON.stringify(body),
     signal: AbortSignal.timeout(15_000),
   });
 
-  if (response.status === 304) {
-    return { changed: false as const, etag: etag ?? null, body: undefined as A };
-  }
-
   const text = await response.text();
 
-  const limited =
-    response.status === 403 &&
-    (response.headers.get("x-ratelimit-remaining") === "0" ||
-      response.headers.has("retry-after") ||
-      /rate limit/i.test(text));
-
-  const status = limited ? 429 : response.status;
-
   if (!response.ok) {
-    throw new GitHubError(status, `${method} ${path}: ${response.status} ${text.slice(0, 300)}`);
+    throw new GitHubError({
+      status: rateLimited(response, text) ? 429 : response.status,
+      message: `${method} ${path}: ${response.status} ${text.slice(0, 300)}`,
+    });
   }
 
-  return {
-    changed: true as const,
-    etag: response.headers.get("etag"),
-    body: (text ? JSON.parse(text) : undefined) as A,
-  };
+  return text;
 };
 
-const base64url = (bytes: ArrayBuffer | Uint8Array) =>
-  btoa(String.fromCharCode(...new Uint8Array(bytes)))
-    .replaceAll("+", "-")
-    .replaceAll("/", "_")
-    .replace(/[=]+$/, "");
-
-const der = (tag: number, body: Uint8Array) => {
-  const n = body.length;
-
-  return Uint8Array.from([
-    tag,
-    ...(n < 128 ? [n] : n < 256 ? [0x81, n] : [0x82, n >> 8, n & 255]),
-    ...body,
-  ]);
+export const send = async (
+  token: string,
+  method: "POST" | "PUT",
+  path: string,
+  body?: Schema.JsonObject,
+) => {
+  await call(token, method, path, body);
 };
+
+export const read = async <A, I>(
+  token: string,
+  method: "GET" | "POST",
+  path: string,
+  schema: Schema.Codec<A, I>,
+  body?: Schema.JsonObject,
+) => {
+  const answer = Schema.decodeUnknownOption(Schema.fromJsonString(schema))(
+    await call(token, method, path, body),
+  );
+
+  if (Option.isNone(answer)) {
+    throw new GitHubError({
+      status: 502,
+      message: `${method} ${path}: GitHub answered something unexpected`,
+    });
+  }
+
+  return answer.value;
+};
+
+const derLength = (n: number) => {
+  if (n < 128) {
+    return [n];
+  }
+
+  return n < 256 ? [0x81, n] : [0x82, Math.floor(n / 256), n % 256];
+};
+
+const der = (tag: number, body: Uint8Array) =>
+  Uint8Array.from([tag, ...derLength(body.length), ...body]);
 
 const RSA_ENCRYPTION = [
   0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00,
 ];
 
-/* GitHub downloads App keys as PKCS#1 ("RSA PRIVATE KEY"), which WebCrypto can't import until it's wrapped as PKCS#8 */
-const pkcs8 = (pem: string) => {
-  const bytes = Uint8Array.from(atob(pem.replaceAll(/-----[^-]+-----|\s/g, "")), (c) =>
-    c.charCodeAt(0),
+const pkcs1ToPkcs8 = (pem: string) => {
+  const bytes = Uint8Array.from(
+    Result.getOrThrow(Base64.decode(pem.replaceAll(/-----[^-]+-----|\s/gu, ""))),
   );
 
   return pem.includes("RSA PRIVATE KEY")
@@ -86,32 +114,60 @@ const pkcs8 = (pem: string) => {
     : bytes;
 };
 
+const env = (name: string) => {
+  const value = process.env[name];
+
+  if (value === undefined) {
+    throw new Error(`${name} isn't set`);
+  }
+
+  return value;
+};
+
 let signer: Promise<CryptoKey> | undefined;
 
-const key = async () =>
-  (signer ??= crypto.subtle
-    .importKey(
-      "pkcs8",
-      pkcs8(process.env.GITHUB_PRIVATE_KEY!),
-      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-      false,
-      ["sign"],
-    )
-    .catch((error) => {
-      signer = undefined;
-      throw error;
-    }));
+const importSigner = async () =>
+  await crypto.subtle.importKey(
+    "pkcs8",
+    pkcs1ToPkcs8(env("GITHUB_PRIVATE_KEY")),
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+
+const key = async () => {
+  signer ??= importSigner();
+
+  try {
+    return await signer;
+  } catch (error) {
+    signer = undefined;
+    throw error;
+  }
+};
+
+const jwtPart = (value: Schema.JsonObject) => Base64Url.encode(JSON.stringify(value));
 
 const appJwt = async () => {
   const now = Math.floor(Date.now() / 1000);
-  const part = (value: object) => base64url(new TextEncoder().encode(JSON.stringify(value)));
-  const body = `${part({ alg: "RS256", typ: "JWT" })}.${part({ iat: now - 60, exp: now + 540, iss: process.env.GITHUB_CLIENT_ID })}`;
 
-  return `${body}.${base64url(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", await key(), new TextEncoder().encode(body)))}`;
+  const body = `${jwtPart({ alg: "RS256", typ: "JWT" })}.${jwtPart({ iat: now - 60, exp: now + 540, iss: env("GITHUB_CLIENT_ID") })}`;
+
+  const signature = await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5",
+    await key(),
+    new TextEncoder().encode(body),
+  );
+
+  return `${body}.${Base64Url.encode(new Uint8Array(signature))}`;
 };
 
-export const app = async <A>(method: string, path: string, body?: unknown) =>
-  (await request<A>(await appJwt(), method, path, body)).body;
+const AccessToken = Schema.Struct({ token: Schema.String, expires_at: Schema.String });
+
+const Installation = Schema.Struct({
+  id: Schema.Number,
+  suspended_at: Schema.NullOr(Schema.String),
+});
 
 const tokens = new Map<number, { token: string; until: number }>();
 
@@ -122,9 +178,11 @@ export const installationToken = async (installationId: number) => {
     return cached.token;
   }
 
-  const { token, expires_at } = await app<{ token: string; expires_at: string }>(
+  const { token, expires_at } = await read(
+    await appJwt(),
     "POST",
     `app/installations/${installationId}/access_tokens`,
+    AccessToken,
   );
 
   tokens.set(installationId, { token, until: Date.parse(expires_at) });
@@ -132,37 +190,41 @@ export const installationToken = async (installationId: number) => {
   return token;
 };
 
-/* The next call for this installation mints a new token */
-export const dropToken = (installationId: number) => void tokens.delete(installationId);
+export const dropToken = (installationId: number) => {
+  tokens.delete(installationId);
+};
 
-export const repoInstallation = async (owner: string, name: string) =>
-  app<{ id: number; suspended_at: string | null }>(
-    "GET",
-    `repos/${owner}/${name}/installation`,
-  ).then(
-    (installation) => (installation.suspended_at ? null : installation.id),
-    (error) => {
-      if (error instanceof GitHubError && error.status === 404) {
-        return null;
-      }
-
-      throw error;
-    },
-  );
-
-export const file = async (token: string, repo: string, path: string, ref?: string) => {
+export const retryWithFreshToken = async <A>(
+  installationId: number,
+  token: string,
+  attempt: (token: string) => Promise<A>,
+) => {
   try {
-    const { body } = await request<{ content: string }>(
-      token,
+    return { token, value: await attempt(token) };
+  } catch (error) {
+    if (!refused(error)) {
+      throw error;
+    }
+
+    dropToken(installationId);
+    const fresh = await installationToken(installationId);
+
+    return { token: fresh, value: await attempt(fresh) };
+  }
+};
+
+export const repoInstallation = async (owner: string, name: string) => {
+  try {
+    const installation = await read(
+      await appJwt(),
       "GET",
-      `repos/${repo}/contents/${path}${ref ? `?ref=${encodeURIComponent(ref)}` : ""}`,
+      `repos/${owner}/${name}/installation`,
+      Installation,
     );
 
-    return new TextDecoder().decode(
-      Uint8Array.from(atob(body.content.replaceAll(/\s/g, "")), (c) => c.charCodeAt(0)),
-    );
+    return installation.suspended_at === null ? installation.id : null;
   } catch (error) {
-    if (error instanceof GitHubError && error.status === 404) {
+    if (missing(error)) {
       return null;
     }
 
@@ -170,9 +232,34 @@ export const file = async (token: string, repo: string, path: string, ref?: stri
   }
 };
 
-/* Signed with the App's webhook secret: https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries */
+const Contents = Schema.Struct({ content: Schema.StringFromBase64 });
+
+export const file = async (token: string, repo: string, path: string, ref: string) => {
+  try {
+    const { content } = await read(
+      token,
+      "GET",
+      `repos/${repo}/contents/${path}?ref=${encodeURIComponent(ref)}`,
+      Contents,
+    );
+
+    return content;
+  } catch (error) {
+    if (missing(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+};
+
+const SIGNATURE = /^sha256=(?<hex>[0-9a-f]{64})$/u;
+
+// Signed with the App's webhook secret: https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries
 export const signed = async (body: string, signature: string | null) => {
-  if (!signature?.startsWith("sha256=")) {
+  const hex = SIGNATURE.exec(signature ?? "")?.groups?.hex;
+
+  if (hex === undefined) {
     return false;
   }
 
@@ -184,16 +271,10 @@ export const signed = async (body: string, signature: string | null) => {
     ["verify"],
   );
 
-  const hex = signature.slice(7);
-
-  if (!/^[0-9a-f]{64}$/.test(hex)) {
-    return false;
-  }
-
   return await crypto.subtle.verify(
     "HMAC",
     hmac,
-    Uint8Array.from(hex.match(/../g)!, (byte) => Number.parseInt(byte, 16)),
+    Uint8Array.from(Result.getOrThrow(Hex.decode(hex))),
     new TextEncoder().encode(body),
   );
 };
