@@ -2,8 +2,8 @@ import { execFileSync } from "node:child_process"
 import { appendFileSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import * as Effect from "effect/Effect"
 import sharp from "sharp"
-import { detect } from "../../server/icon.ts"
-import { squash } from "../../shared/api.ts"
+import { detect } from "../server/icon.ts"
+import { squash } from "../shared/api.ts"
 
 type Example = { app: string; repo: string; change: string; issue?: number }
 type Examples = { refreshed: string; examples: Example[] }

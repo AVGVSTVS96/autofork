@@ -16,4 +16,4 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run check
       - name: dist is built from src
-        run: git diff --exit-code dist
+        run: git diff --exit-code packages/autofork/dist

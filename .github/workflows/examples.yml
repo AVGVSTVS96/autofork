@@ -10,6 +10,10 @@ permissions:
 
 concurrency: examples
 
+defaults:
+  run:
+    working-directory: apps/web
+
 jobs:
   refresh:
     runs-on: ubuntu-latest
@@ -21,17 +25,19 @@ jobs:
         with:
           persist-credentials: false
       - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
       - run: bun install --frozen-lockfile
       - id: due
-        run: bun .github/examples/refresh.ts due
+        run: bun examples/refresh.ts due
       - if: steps.due.outputs.due == 'true'
-        run: npx -y @anthropic-ai/claude-code -p --dangerously-skip-permissions "Do what .github/examples/PATCH.md asks."
+        run: npx -y @anthropic-ai/claude-code -p --dangerously-skip-permissions "Do what examples/PATCH.md asks."
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           CLAUDE_CODE_ENTRYPOINT: autofork
       - if: steps.due.outputs.due == 'true'
         id: check
-        run: bun .github/examples/refresh.ts check
+        run: bun examples/refresh.ts check
       - if: steps.due.outputs.due == 'true'
         env:
           MESSAGE: ${{ steps.check.outputs.message }}
@@ -54,4 +60,4 @@ jobs:
 
       - name: Capture Claude accounting
         if: always()
-        uses: AVGVSTVS96/autofork/.github/actions/usage@bf88ce65d7096d600ebe31ea4e607260ba1b9826
+        uses: ./.github/actions/usage

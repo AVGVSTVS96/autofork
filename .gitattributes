@@ -1,0 +1,5 @@
+apps/** export-ignore
+brand/** export-ignore
+skills/** export-ignore
+packages/autofork/src/** export-ignore
+packages/autofork/test/** export-ignore
