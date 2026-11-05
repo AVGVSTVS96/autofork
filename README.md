@@ -1,6 +1,6 @@
 <a href="https://autofork.com"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/header-dark.png">
-  <img alt="autofork: Customized forks that maintain themselves." src="assets/header-light.png">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/AVGVSTVS96/autofork/main/brand/readme/header-dark.png">
+  <img alt="autofork: Customized forks that maintain themselves." src="https://raw.githubusercontent.com/AVGVSTVS96/autofork/main/brand/readme/header-light.png">
 </picture></a>
 
 Personal forks of open-source apps that auto-track upstream. Each change you make is saved in plain words, in a `PATCH.md`. On every upstream release your changes go back on top, and when one no longer applies, an agent rebuilds it from what you wrote, in your fork's own GitHub Actions, on your Claude or ChatGPT plan.

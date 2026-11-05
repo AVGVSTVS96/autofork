@@ -5,8 +5,8 @@
   "repo": "https://github.com/AVGVSTVS96/autofork",
   "action": "AVGVSTVS96/autofork@v1",
   "engineToday": {
-    "repo": "https://github.com/AVGVSTVS96/autopatch",
-    "site": "https://autopatchmd.vercel.app"
+    "repo": "https://github.com/AVGVSTVS96/autofork",
+    "site": "https://autofork.com"
   },
   "tool": {
     "sourceFiles": 1,

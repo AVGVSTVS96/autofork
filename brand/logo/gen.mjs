@@ -3,7 +3,7 @@ import { copyFileSync, mkdirSync, writeFileSync } from "node:fs"
 import { branch, paint, rails, stack, svg as tileSvg, tones } from "./icon.mjs"
 
 const here = import.meta.dirname
-const site = new URL("../../site/public/", import.meta.url).pathname
+const site = new URL("../../apps/web/public/", import.meta.url).pathname
 mkdirSync(site, { recursive: true })
 
 const font = opentype.loadSync(`${here}/../fonts/src/Host-800.ttf`)
@@ -90,4 +90,4 @@ writeFileSync(`${here}/github-app-round.svg`, tileSvg(32, stack({ rx: 16, zoom: 
 iconSet(`${here}/alt`, { big: stack, bigTone: "paper", small: branch, smallTone: "trunk" })
 
 copyFileSync(`${here}/favicon.svg`, `${site}/favicon.svg`)
-console.log("wordmark, icon set, alt icon set, site/public/favicon.svg")
+console.log("wordmark, icon set, alt icon set, apps/web/public/favicon.svg")

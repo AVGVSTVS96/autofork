@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process"
 import { readFileSync, readdirSync, writeFileSync } from "node:fs"
-import { homedir } from "node:os"
+import { fileURLToPath } from "node:url"
 import { join } from "node:path"
 
 const owner = "AVGVSTVS96"
@@ -68,7 +68,7 @@ const count = (fork) => {
 }
 
 const tool = (dir) => {
-  const src = readdirSync(join(dir, "src")).filter((file) => file.endsWith(".ts"))
+  const src = readdirSync(join(dir, "src"), { recursive: true }).filter((file) => file.endsWith(".ts"))
   const code = src.map((file) => readFileSync(join(dir, "src", file), "utf8"))
   const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"))
   return {
@@ -93,8 +93,8 @@ const facts = {
   site: "https://autofork.com",
   repo: `https://github.com/${owner}/autofork`,
   action: `${owner}/autofork@v1`,
-  engineToday: { repo: `https://github.com/${owner}/autopatch`, site: "https://autopatchmd.vercel.app" },
-  tool: tool(process.env.AUTOFORK_DIR ?? join(homedir(), "Developer/autofork")),
+  engineToday: { repo: `https://github.com/${owner}/autofork`, site: "https://autofork.com" },
+  tool: tool(fileURLToPath(new URL("../../packages/autofork", import.meta.url))),
   t3code: gh("api", "repos/pingdotgg/t3code", "--jq", "{stars: .stargazers_count, forks: .forks_count}"),
   lineage: {
     piPatcher: { repo: `https://github.com/${owner}/pi-patcher`, created: created("pi-patcher") },
@@ -125,7 +125,7 @@ const facts = {
     upstreamCommitsAbsorbed: "gh api compare on the upstream repo, from the first synced source commit to the latest one.",
     heals: "Distinct upstream sources where a sync commit or patched release says a patch was healed (rebuilt by the agent) after git apply failed.",
     greenDays: "First sync run to the last successful one.",
-    tool: "Read from the engine checkout (AUTOFORK_DIR, default ~/Developer/autofork): lines in src/*.ts, dependencies in package.json, commands from the usage text.",
+    tool: "Read from packages/autofork: lines in src/**/*.ts, dependencies in package.json, commands from the usage text.",
     t3code: "gh api repos/pingdotgg/t3code at countedAt. Round down when quoting.",
     proof: "The proof line's window: the T3 Code fork's first two days, from its first synced source (Oct 10) to its sync on Oct 12, via gh api compare. Fixed, so the quoted number stays true while the fork's totals grow.",
   },

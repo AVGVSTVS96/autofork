@@ -49,7 +49,7 @@ Rule: **ultramarine is yours, gray is theirs.** Ink is for words. In dark, the u
 - `logo/icon.svg`, `icon-dark.svg`: rounded tile, for sheets and docs.
 - `logo/github-app.svg` → `github-app.png` (1024): the GitHub App logo. GitHub draws it at 55% of a round badge, so the mark fills the tile and the badge color is `#3B2BFF`.
 - `logo/github-app-round.svg` → `github-app-round.png` (1024, transparent corners): the same logo as a disk, the mark as big as a line's width of clearance allows. In the badge the mark comes out smaller than the square's (42% of the circle's height against 51%), since GitHub caps either image at 55%.
-- `logo/app-icon.svg` → `app-icon.png` (1024), `site/public/apple-touch-icon.png` (180) and `icon-512.png`, all full bleed; iOS and GitHub round them.
+- `logo/app-icon.svg` → `app-icon.png` (1024), `apps/web/public/apple-touch-icon.png` (180) and `icon-512.png`, all full bleed; iOS and GitHub round them.
 - `logo/mark.svg`, `mark-dark.svg`, `mark-16.svg`, `mark-16-dark.svg`: the rails.
 - `logo/favicon.svg`: the rails, picking the 16px drawing when drawn at 24px or less, and following the system theme.
 
@@ -68,9 +68,9 @@ brand/
 ├ icons/              round 4 proposals
 ├ fonts/              Host Grotesk, Fragment Mono (OFL)
 ├ readme/             header-{light,dark}.html → .png (1676×600, 2x of GitHub's 838 column)
-├ social-preview.png  GitHub social preview, 1280×640, from site/og.html
+├ social-preview.png  GitHub social preview, 1280×640, from og.html
 └ directions/         earlier rounds
-site/og.html          → site/public/og.png, 1200×630
+og.html               → apps/web/public/og.png, 1200×630
 ```
 
 Rebuild everything from `brand/`: `bun run logo` (SVGs and icon PNGs), `bun run og`, `bun run readme`. The app (`autofork-app/public/`) and the engine README (`autofork/assets/`) take copies of `favicon.svg`, the two icon PNGs and the README headers.
