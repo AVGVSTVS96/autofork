@@ -2589,3 +2589,23 @@ test("a patch re-saved with a file renamed under a later patch keeps the rename"
   expect(file(mine, ".autofork/b/b.patch")).not.toContain("moved.txt");
   holds(mine);
 });
+
+test("a binary file git can't merge is named as a change that didn't apply, not as conflict markers", () => {
+  const origin = join(home, "binary");
+  mkdirSync(origin);
+  sh(origin, "git init -q && printf 'A\\0B' > logo.bin && git add -A && git commit -qm one");
+  sh(home, `git clone -q ${origin} binary-fork`);
+  const mine = join(home, "binary-fork");
+  expect(autofork(mine, "init", origin).ok).toBe(true);
+  sh(mine, "git add -A && git commit -qm track");
+  expect(saves(mine, "logo", () => sh(mine, "printf 'A\\0M' > logo.bin")).ok).toBe(true);
+  const prompt = join(home, "binary-prompt.txt");
+  const config = JSON.parse(file(mine, ".autofork/config.json"));
+  write(mine, ".autofork/config.json", JSON.stringify({ ...config, agent: `cat > ${prompt}` }));
+  sh(mine, "git add -A && git commit -qm logo");
+  sh(origin, "printf 'A\\0U' > logo.bin && git commit -qam logo");
+  autofork(mine, "sync");
+  const asked = file(home, "binary-prompt.txt");
+  expect(asked).toContain("the changes to logo.bin, which didn't apply at all");
+  expect(asked).not.toContain("conflict markers");
+});

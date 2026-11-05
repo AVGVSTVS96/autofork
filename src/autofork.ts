@@ -388,6 +388,8 @@ function intent(root: string, id: string) {
     );
 }
 
+const marked = (file: string) => existsSync(file) && MARKER.test(readFileSync(file, "utf8"));
+
 const isEmpty = (file: string) => !existsSync(file) || readFileSync(file).length === 0;
 
 const sourcePaths = (config: Config) => [
@@ -874,13 +876,10 @@ async function heal(
       build.upstreamHas.set(id, reason);
       return;
     }
-    const marked = (left?.conflicted ?? []).filter((path) => {
-      const file = join(build.dir, path);
-      return existsSync(file) && MARKER.test(readFileSync(file, "utf8"));
-    });
-    if (marked.length)
+    const markers = (left?.conflicted ?? []).filter((path) => marked(join(build.dir, path)));
+    if (markers.length)
       throw new Failure(
-        `the agent left conflict markers in ${marked.join(", ")} while ${doing} ${id}`,
+        `the agent left conflict markers in ${markers.join(", ")} while ${doing} ${id}`,
       );
     /* When git applied all but deletions upstream made too, the agent finding nothing left to do is
        an answer */
@@ -942,7 +941,9 @@ function merge(dir: string, file: string, config: Config): Left {
   for (const path of touched(dir, file, config)) {
     const only = [`--include=${path.replace(/[*?[\\]/g, "\\$&")}`, "--whitespace=nowarn", file];
     if (run("git", ["apply", "--3way", ...only], dir).ok) continue;
-    if (git(dir, "ls-files", "--unmerged", "--", `:(literal)${path}`)) left.conflicted.push(path);
+    if (git(dir, "ls-files", "--unmerged", "--", `:(literal)${path}`))
+      // A binary file git can't merge keeps upstream's version, without markers
+      (marked(join(dir, path)) ? left.conflicted : left.missed).push(path);
     else if (run("git", ["apply", "--reject", ...only], dir).ok) continue;
     else if (existsSync(join(dir, `${path}.rej`))) left.rejected.push(path);
     // The patch deletes it and it's already gone: the reverse, creating it, fits

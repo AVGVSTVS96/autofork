@@ -285,6 +285,7 @@ function intent(root, id) {
   if (!doc.trim())
     throw new Failure(`${DIR}/${id}/PATCH.md is empty: say what the patch does and why. It's what the agent rebuilds it from.`);
 }
+var marked = (file) => existsSync(file) && MARKER.test(readFileSync(file, "utf8"));
 var isEmpty = (file) => !existsSync(file) || readFileSync(file).length === 0;
 var sourcePaths = (config) => [
   ...SOURCE,
@@ -654,12 +655,9 @@ async function heal(config, build, id, broken, patch) {
       build.upstreamHas.set(id, reason);
       return;
     }
-    const marked = (left?.conflicted ?? []).filter((path) => {
-      const file = join(build.dir, path);
-      return existsSync(file) && MARKER.test(readFileSync(file, "utf8"));
-    });
-    if (marked.length)
-      throw new Failure(`the agent left conflict markers in ${marked.join(", ")} while ${doing} ${id}`);
+    const markers = (left?.conflicted ?? []).filter((path) => marked(join(build.dir, path)));
+    if (markers.length)
+      throw new Failure(`the agent left conflict markers in ${markers.join(", ")} while ${doing} ${id}`);
     const settled = !!left && !left.conflicted.length && !left.rejected.length && !left.missed.length && !run("git", ["diff", "--quiet", step, before, "--", ...sourcePaths(config)], build.dir).ok;
     if (workingTree(build.dir, rejects) === before && !settled)
       throw new Failure(`the agent changed nothing while ${doing} ${id}`);
@@ -700,7 +698,7 @@ function merge(dir, file, config) {
     if (run("git", ["apply", "--3way", ...only], dir).ok)
       continue;
     if (git(dir, "ls-files", "--unmerged", "--", `:(literal)${path}`))
-      left.conflicted.push(path);
+      (marked(join(dir, path)) ? left.conflicted : left.missed).push(path);
     else if (run("git", ["apply", "--reject", ...only], dir).ok)
       continue;
     else if (existsSync(join(dir, `${path}.rej`)))
