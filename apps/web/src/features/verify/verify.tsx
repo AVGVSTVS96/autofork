@@ -16,7 +16,7 @@ export const VerifyRoute = () => {
         </header>
         <p className="line">
           This is the one time your autofork account needs it. Enter the code sent to{" "}
-          {email || "your GitHub email"}.
+          {email ?? "your GitHub email"}.
         </p>
         <form className="card settings" method="post" action="/api/auth/verify">
           <input type="hidden" name="email" value={email ?? ""} />
@@ -34,7 +34,7 @@ export const VerifyRoute = () => {
             <button type="submit" className="btn primary">
               Continue
             </button>
-            {error ? <p className="bad">{error}</p> : null}
+            {error === undefined ? null : <p className="bad">{error}</p>}
           </div>
           <p className="fine">
             No code, or it expired?{" "}

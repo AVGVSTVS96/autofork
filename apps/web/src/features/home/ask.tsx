@@ -1,7 +1,10 @@
-import { RegistryContext, useAtomValue } from "@effect/atom-react";
+import { RegistryContext, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
-import { useContext, useEffect, useId, useImperativeHandle, useRef, useState } from "react";
-import type { FormEvent, Ref } from "react";
+import * as Atom from "effect/reactivity/Atom";
+import { useCallback, useContext, useId, useImperativeHandle, useRef, useState } from "react";
+import type { KeyboardEvent, Ref, SubmitEvent } from "react";
 
 import { split, squash } from "../../../shared/api.ts";
 import * as client from "../../lib/api/client.ts";
@@ -9,13 +12,16 @@ import { known } from "../../lib/repos/known.ts";
 import { sentence, Typer } from "./typer.tsx";
 import type { Example } from "./typer.tsx";
 
-const CUT = /^(.+?)(?:\s*,\s*(?:but\s+)?|\s+but\s+|\s*:\s+)(.*)$/i;
-const BUT = /^but\s+/i;
+const CUT = /^(?<app>.+?)(?:\s*,\s*(?:but\s+)?|\s+but\s+|\s*:\s+)(?<change>.*)$/iu;
+const BUT = /^but\s+/iu;
+const GUESS_AFTER = "320 millis";
+const WORDS_IN_AN_APP_NAME = 3;
+const IDLE_AFTER_BLUR = 1400;
 
 interface Guess {
   app: string;
   name: string;
-  avatar: string | undefined;
+  avatar: string;
 }
 
 export interface Face {
@@ -23,11 +29,177 @@ export interface Face {
   avatar: string;
 }
 
-export interface AskHandle {
-  fill: (ask: { app: string; change: string; face?: Face; keyboard: boolean }) => void;
+export interface Fill {
+  app: string;
+  change: string;
+  face?: Face;
+  keyboard: boolean;
 }
 
-const words = (text: string) => text.trim().split(/\s+/).length;
+export interface AskHandle {
+  fill: (ask: Fill) => void;
+}
+
+const words = (text: string) => text.trim().split(/\s+/u).length;
+
+const looksLike = (typed: string, name: string) => {
+  const app = squash(typed);
+  const repo = squash(name);
+
+  return (repo.includes(app) && app.length >= repo.length * 0.6) || app.includes(repo);
+};
+
+const decoded = (src: string) =>
+  Effect.tryPromise(async () => {
+    const icon = new Image();
+    icon.src = src;
+    await icon.decode();
+  }).pipe(Effect.ignore);
+
+const recognized = Atom.family((app: string) =>
+  Atom.make((get) =>
+    Effect.gen(function* recognize() {
+      yield* Effect.sleep(GUESS_AFTER);
+      const { repo } = yield* get.result(client.resolve(app));
+
+      if (!looksLike(app, repo.name)) {
+        return Option.none<Guess>();
+      }
+
+      if (repo.avatar !== "") {
+        yield* decoded(repo.avatar);
+      }
+
+      return Option.some<Guess>({ app, name: repo.name, avatar: repo.avatar });
+    }),
+  ),
+);
+
+const Recognize = ({ app, onFound }: { app: string; onFound: (guess: Guess) => void }) => {
+  useAtomSubscribe(
+    recognized(app),
+    (result) => {
+      if (AsyncResult.isSuccess(result) && Option.isSome(result.value)) {
+        onFound(result.value.value);
+      }
+    },
+    { immediate: true },
+  );
+
+  return null;
+};
+
+const Pick = ({ guess, onPick }: { guess: Guess; onPick: () => void }) => (
+  <button
+    type="button"
+    className="pick"
+    tabIndex={-1}
+    onPointerDown={(event) => {
+      event.preventDefault();
+    }}
+    onClick={onPick}
+    title={`Fork ${guess.name}`}
+  >
+    {guess.avatar === "" ? null : <img src={guess.avatar} alt="" />}
+    {guess.name}
+    <kbd>tab</kbd>
+  </button>
+);
+
+const Badge = ({
+  name,
+  avatar,
+  onEdit,
+}: {
+  name: string;
+  avatar: string | undefined;
+  onEdit: () => void;
+}) => (
+  <button type="button" className="badge chip" onClick={onEdit} title="Change the app">
+    {avatar === undefined || avatar === "" ? <i /> : <img src={avatar} alt="" />}
+    {name}
+  </button>
+);
+
+const Lookup = ({
+  app,
+  face,
+  onEdit,
+}: {
+  app: string;
+  face: Guess | undefined;
+  onEdit: () => void;
+}) => {
+  const found = useAtomValue(client.resolve(app));
+  const repo = AsyncResult.isSuccess(found) ? found.value.repo : undefined;
+
+  return (
+    <Badge
+      name={repo?.name ?? face?.name ?? app}
+      avatar={repo?.avatar ?? face?.avatar}
+      onEdit={onEdit}
+    />
+  );
+};
+
+const Chip = ({
+  app,
+  face,
+  onEdit,
+}: {
+  app: string;
+  face: Guess | undefined;
+  onEdit: () => void;
+}) => {
+  const ready = known(app);
+
+  return ready === undefined ? (
+    <Lookup app={app} face={face} onEdit={onEdit} />
+  ) : (
+    <Badge name={app} avatar={ready.repo.avatar} onEdit={onEdit} />
+  );
+};
+
+const exampleFor = (typed: string, examples: readonly Example[]) =>
+  typed.length >= 2 ? examples.find((one) => squash(one.app).startsWith(squash(typed))) : undefined;
+
+const guessFor = (typed: string, examples: readonly Example[], found: Guess | undefined) => {
+  const example = exampleFor(typed, examples);
+
+  if (example !== undefined) {
+    return { app: example.app, name: example.app, avatar: example.avatar };
+  }
+
+  return found?.app === typed ? found : undefined;
+};
+
+const hintFor = ({
+  live,
+  chipped,
+  fallback,
+}: {
+  live: boolean;
+  chipped: boolean;
+  fallback: string;
+}) => {
+  if (live) {
+    return "";
+  }
+
+  return chipped ? "but what you'd change" : fallback;
+};
+
+const submitter = (event: SubmitEvent<HTMLFormElement>) => {
+  const button = event.nativeEvent.submitter;
+
+  return button instanceof HTMLButtonElement && button.value !== "" ? button.value : undefined;
+};
+
+const finePointer = () => matchMedia("(pointer: fine)").matches;
+
+const caretToEnd = (field: HTMLTextAreaElement) => {
+  field.setSelectionRange(field.value.length, field.value.length);
+};
 
 export const Ask = ({
   ref,
@@ -41,7 +213,7 @@ export const Ask = ({
   ref?: Ref<AskHandle>;
   id?: string;
   initial?: string;
-  onSubmit: (ask: string, via?: string) => void;
+  onSubmit: (ask: string, via: string | undefined) => void;
   label: string;
   action: string;
   examples: readonly Example[];
@@ -51,42 +223,25 @@ export const Ask = ({
   const [text, setText] = useState(start.change);
   const [current, setCurrent] = useState(0);
   const [idle, setIdle] = useState(true);
-  const [asking, setAsking] = useState("");
   const [found, setFound] = useState<Guess | undefined>(undefined);
   const [face, setFace] = useState<Guess | undefined>(undefined);
   const resume = useRef<ReturnType<typeof setTimeout>>(undefined);
   const input = useRef<HTMLTextAreaElement>(null);
   const arrival = useRef<() => void>(undefined);
-  const live = idle && !app && !text;
-  const fallback = sentence(examples[current]!);
-  const typed = app ? "" : text.trim();
+  const registry = useContext(RegistryContext);
+  const entry = useId();
+  const live = idle && app === "" && text === "";
+  const shown = examples.at(current);
+  const fallback = shown === undefined ? "" : sentence(shown);
+  const typed = app === "" ? text.trim() : "";
 
-  const example =
-    typed.length >= 2
-      ? examples.find((one) => squash(one.app).startsWith(squash(typed)))
-      : undefined;
+  const guess = guessFor(typed, examples, found);
 
-  const guess: Guess | undefined = example
-    ? { app: example.app, name: example.app, avatar: example.avatar }
-    : found?.app === typed
-      ? found
-      : undefined;
-
-  useEffect(() => {
-    if (!typed || example || words(typed) > 3) {
-      setAsking("");
-
-      return;
-    }
-
-    const later = setTimeout(() => {
-      setAsking(typed);
-    }, 320);
-
-    return () => {
-      clearTimeout(later);
-    };
-  }, [typed, example]);
+  const guessing =
+    typed !== "" &&
+    exampleFor(typed, examples) === undefined &&
+    words(typed) <= WORDS_IN_AN_APP_NAME &&
+    known(typed) === undefined;
 
   const chip = (name: string, rest = "") => {
     setApp(name);
@@ -94,32 +249,36 @@ export const Ask = ({
   };
 
   const type = (next: string) => {
-    const cut = app ? null : CUT.exec(next);
+    const cut = app === "" ? CUT.exec(next)?.groups : undefined;
+    const named = cut?.app?.trim() ?? "";
 
-    if (cut && cut[1]!.trim()) {
-      chip(cut[1]!.trim(), cut[2]);
+    if (named === "") {
+      setText(app !== "" && text === "" ? next.trimStart() : next);
     } else {
-      setText(app && !text ? next.trimStart() : next);
+      chip(named, cut?.change);
     }
   };
 
-  /* An ask picked elsewhere on the page: the composer comes into view, and the ask lands in it once the scroll settles, so you see it arrive */
   useImperativeHandle(ref, () => ({
     fill: ({ app: name, change, face: picked, keyboard }) => {
-      const field = input.current!;
-      const form = field.form!;
+      const field = input.current;
+      const form = field?.form;
+
+      if (!field || !form) {
+        return;
+      }
 
       const land = () => {
-        setFace(picked && { app: name, ...picked });
+        setFace(picked === undefined ? undefined : { app: name, ...picked });
         chip(name, change);
 
-        if (!keyboard && !matchMedia("(pointer: fine)").matches) {
+        if (!keyboard && !finePointer()) {
           return;
         }
 
         requestAnimationFrame(() => {
           field.focus({ preventScroll: true });
-          field.setSelectionRange(field.value.length, field.value.length);
+          caretToEnd(field);
         });
       };
 
@@ -144,7 +303,7 @@ export const Ask = ({
 
   const unchip = () => {
     const rest = text.trim().replace(BUT, "");
-    const back = rest ? `${app}, but ${rest}` : app;
+    const back = rest === "" ? app : `${app}, but ${rest}`;
     setApp("");
     setText(back);
     requestAnimationFrame(() => {
@@ -153,120 +312,113 @@ export const Ask = ({
     });
   };
 
-  const registry = useContext(RegistryContext);
-  const entry = useId();
-
   const lead = (change: string) =>
     [found?.app, ...examples.map((one) => one.app)].find(
-      (name) => name && change.toLowerCase().startsWith(`${name.toLowerCase()} `),
+      (name) =>
+        name !== undefined &&
+        name !== "" &&
+        change.toLowerCase().startsWith(`${name.toLowerCase()} `),
     );
 
   const asked = () => {
     const change = text.trim().replace(BUT, "");
 
-    if (app) {
-      return change ? `${app}, but ${change}` : app;
+    if (app !== "") {
+      return change === "" ? app : `${app}, but ${change}`;
     }
 
-    if (!change) {
+    if (change === "") {
       return fallback;
     }
 
     const name = lead(change);
 
-    return name ? `${name}, but ${change.slice(name.length).trim().replace(BUT, "")}` : change;
+    return name === undefined
+      ? change
+      : `${name}, but ${change.slice(name.length).trim().replace(BUT, "")}`;
   };
 
-  const hint = live ? "" : app ? "but what you'd change" : fallback;
-  useEffect(() => {
-    const field = input.current!;
+  const hint = hintFor({ live, chipped: app !== "", fallback });
 
-    if (!initial || !matchMedia("(pointer: fine)").matches) {
-      return;
-    }
+  const field = useCallback(
+    (textarea: HTMLTextAreaElement | null) => {
+      input.current = textarea;
 
-    field.focus();
-    field.setSelectionRange(field.value.length, field.value.length);
-  }, []);
+      if (textarea !== null && initial !== "" && finePointer()) {
+        textarea.focus();
+        caretToEnd(textarea);
+      }
+    },
+    [initial],
+  );
 
   const prefetch = () => {
     const name = split(asked()).app;
 
-    if (!known(name)) {
+    if (known(name) === undefined) {
       registry.mount(client.resolve(name))();
     }
   };
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const submit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const ask = asked();
+    onSubmit(asked(), submitter(event));
+  };
 
-    const via =
-      ((event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null)?.value ||
-      undefined;
+  const keys = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    const { selectionStart, selectionEnd, form } = event.currentTarget;
 
-    onSubmit(ask, via);
+    if (event.key === "Backspace" && app !== "" && selectionStart === 0 && selectionEnd === 0) {
+      event.preventDefault();
+      unchip();
+
+      return;
+    }
+
+    if (event.key === "Tab" && !event.shiftKey && guess) {
+      event.preventDefault();
+      chip(guess.app);
+
+      return;
+    }
+
+    if (event.key !== "Enter" || event.nativeEvent.isComposing) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (guess) {
+      chip(guess.app);
+
+      return;
+    }
+
+    if (typed !== "" && lead(typed) === undefined && words(typed) <= WORDS_IN_AN_APP_NAME) {
+      chip(typed);
+
+      return;
+    }
+
+    form?.requestSubmit();
   };
 
   return (
     <form className="ask" id={id} onSubmit={submit}>
       <label className="field slots" htmlFor={entry}>
-        {app ? (
+        {app === "" ? null : (
           <Chip key={app} app={app} face={face?.app === app ? face : undefined} onEdit={unchip} />
-        ) : null}
+        )}
         <span className="entry">
           <textarea
             id={entry}
-            ref={input}
+            ref={field}
             rows={1}
             value={text}
             onChange={(event) => {
               type(event.target.value.replaceAll("\n", " "));
             }}
-            onKeyDown={(event) => {
-              const field = event.currentTarget;
-
-              if (
-                event.key === "Backspace" &&
-                app &&
-                field.selectionStart === 0 &&
-                field.selectionEnd === 0
-              ) {
-                event.preventDefault();
-
-                unchip();
-
-                return;
-              }
-
-              if (event.key === "Tab" && !event.shiftKey && guess) {
-                event.preventDefault();
-
-                chip(guess.app);
-
-                return;
-              }
-
-              if (event.key !== "Enter" || event.nativeEvent.isComposing) {
-                return;
-              }
-
-              event.preventDefault();
-
-              if (guess) {
-                chip(guess.app);
-
-                return;
-              }
-
-              if (typed && !lead(typed) && words(typed) <= 3) {
-                chip(typed);
-
-                return;
-              }
-
-              field.form?.requestSubmit();
-            }}
+            onKeyDown={keys}
             onFocus={() => {
               clearTimeout(resume.current);
               setIdle(false);
@@ -274,15 +426,15 @@ export const Ask = ({
             onBlur={() => {
               resume.current = setTimeout(() => {
                 setIdle(true);
-              }, 1400);
+              }, IDLE_AFTER_BLUR);
             }}
             placeholder={hint}
-            aria-label={app ? `What you'd change in ${app}` : label}
+            aria-label={app === "" ? label : `What you'd change in ${app}`}
             autoComplete="off"
             spellCheck={false}
           />
           <span className="mirror" aria-hidden="true">
-            {text || hint}
+            {text === "" ? hint : text}
             {guess ? (
               <Pick
                 guess={guess}
@@ -293,7 +445,7 @@ export const Ask = ({
             ) : null}{" "}
           </span>
         </span>
-        {asking && !known(asking) ? <Recognize app={asking} onFound={setFound} /> : null}
+        {guessing ? <Recognize key={typed} app={typed} onFound={setFound} /> : null}
         <Typer examples={examples} live={live} onLand={setCurrent} />
       </label>
       <button type="submit" onPointerEnter={prefetch} onPointerDown={prefetch} onFocus={prefetch}>
@@ -302,113 +454,3 @@ export const Ask = ({
     </form>
   );
 };
-
-const Recognize = ({ app, onFound }: { app: string; onFound: (guess: Guess) => void }) => {
-  const result = useAtomValue(client.resolve(app));
-  const repo = AsyncResult.isSuccess(result) ? result.value.repo : undefined;
-  const name = repo ? squash(repo.name) : "";
-
-  const close =
-    repo &&
-    ((name.includes(squash(app)) && squash(app).length >= name.length * 0.6) ||
-      squash(app).includes(name));
-
-  useEffect(() => {
-    if (!repo || !close) {
-      return;
-    }
-
-    let on = true;
-
-    const shown = () => {
-      if (on) {
-        onFound({ app, name: repo.name, avatar: repo.avatar });
-      }
-    };
-
-    if (repo.avatar) {
-      const icon = new Image();
-      icon.src = repo.avatar;
-      void icon.decode().then(shown, shown);
-    } else {
-      shown();
-    }
-
-    return () => {
-      on = false;
-    };
-  }, [repo, close, app]);
-
-  return null;
-};
-
-const Pick = ({ guess, onPick }: { guess: Guess; onPick: () => void }) => (
-  <button
-    type="button"
-    className="pick"
-    tabIndex={-1}
-    onPointerDown={(event) => {
-      event.preventDefault();
-    }}
-    onClick={onPick}
-    title={`Fork ${guess.name}`}
-  >
-    {guess.avatar ? <img src={guess.avatar} alt="" /> : null}
-    {guess.name}
-    <kbd>tab</kbd>
-  </button>
-);
-
-const Chip = ({
-  app,
-  face,
-  onEdit,
-}: {
-  app: string;
-  face: Guess | undefined;
-  onEdit: () => void;
-}) => {
-  const ready = known(app);
-
-  return ready ? (
-    <Badge name={app} avatar={ready.repo.avatar} onEdit={onEdit} />
-  ) : (
-    <Lookup app={app} face={face} onEdit={onEdit} />
-  );
-};
-
-const Lookup = ({
-  app,
-  face,
-  onEdit,
-}: {
-  app: string;
-  face: Guess | undefined;
-  onEdit: () => void;
-}) => {
-  const found = useAtomValue(client.resolve(app));
-  const repo = AsyncResult.isSuccess(found) ? found.value.repo : undefined;
-
-  return (
-    <Badge
-      name={repo?.name ?? face?.name ?? app}
-      avatar={repo?.avatar ?? face?.avatar}
-      onEdit={onEdit}
-    />
-  );
-};
-
-const Badge = ({
-  name,
-  avatar,
-  onEdit,
-}: {
-  name: string;
-  avatar: string | undefined;
-  onEdit: () => void;
-}) => (
-  <button type="button" className="badge chip" onClick={onEdit} title="Change the app">
-    {avatar ? <img src={avatar} alt="" /> : <i />}
-    {name}
-  </button>
-);

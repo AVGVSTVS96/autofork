@@ -3,7 +3,7 @@ import { useState } from "react";
 import facts from "../../lib/facts.json";
 import { repoIcon } from "../../lib/repos/known.ts";
 
-const [t3fork] = facts.forks;
+const t3fork = facts.forks.find((fork) => fork.repo === `${facts.owner}/t3code`);
 const install = `npx skills add ${facts.owner}/autofork`;
 
 const Minimize = () => (
@@ -40,7 +40,7 @@ export const Meant = () => (
         <span className="wish-label">You asked</span>
         <p>always show context usage</p>
         <span className="wish-file">
-          <b>PATCH.md</b> Always show the thread's context usage in the composer. Build it on
+          <b>PATCH.md</b> Always show the thread&apos;s context usage in the composer. Build it on
           whatever T3 Code shows for context at the time.
         </span>
       </div>
@@ -84,7 +84,7 @@ export const Meant = () => (
                 33k
               </i>
               <Send />
-              <i className="broke">didn't fit</i>
+              <i className="broke">didn&apos;t fit</i>
             </span>
           </div>
           <p className="said">
@@ -109,7 +109,7 @@ export const Meant = () => (
                 33k
               </i>
               <Send />
-              <i className="broke">didn't fit</i>
+              <i className="broke">didn&apos;t fit</i>
             </span>
             <span className="pop">
               Usage <b>33k of 200k</b>
@@ -167,7 +167,7 @@ export const MineToday = ({ onPick }: { onPick: (fork: Mine, keyboard: boolean) 
   <section className="mine-today">
     <h2 data-node>My forks, today.</h2>
     <p className="line">
-      My T3 Code fork took {t3fork!.upstreamCommitsAbsorbed} commits from T3 Code in its first two
+      My T3 Code fork took {t3fork?.upstreamCommitsAbsorbed} commits from T3 Code in its first two
       days, and I never rebased it. One change broke on day one and the agent rebuilt it.
     </p>
     <div className="t3" data-t3 />
@@ -183,7 +183,7 @@ export const MineToday = ({ onPick }: { onPick: (fork: Mine, keyboard: boolean) 
             <img src={repoIcon(fork.repo)} alt="" loading="lazy" />
             <span>
               <b>{fork.name}</b>
-              {fork.about ? `, ${fork.about}` : ""}, but {fork.change}
+              {fork.about === undefined ? "" : `, ${fork.about}`}, but {fork.change}
             </span>
           </button>
         </li>
@@ -192,16 +192,16 @@ export const MineToday = ({ onPick }: { onPick: (fork: Mine, keyboard: boolean) 
   </section>
 );
 
-export const Yours = () => {
+export const RunItYourself = () => {
   const [copied, setCopied] = useState(false);
 
-  const copy = () =>
-    void navigator.clipboard.writeText(install).then(() => {
-      setCopied(true);
-      setTimeout(() => {
-        setCopied(false);
-      }, 1400);
-    });
+  const copy = async () => {
+    await navigator.clipboard.writeText(install);
+    setCopied(true);
+    setTimeout(() => {
+      setCopied(false);
+    }, 1400);
+  };
 
   return (
     <section className="yours" id="self">
@@ -233,7 +233,12 @@ export const Yours = () => {
           <p>Rather run it yourself? The engine is open source. Use it with your own agent.</p>
           <div className="cmd">
             <code>{install}</code>
-            <button type="button" onClick={copy}>
+            <button
+              type="button"
+              onClick={() => {
+                void copy();
+              }}
+            >
               {copied ? "Copied" : "Copy"}
             </button>
           </div>
@@ -293,11 +298,11 @@ export const History = () => (
             <a href={`https://x.com/avgvstvs96/status/${post.id}`}>
               <span className="post-head">
                 {post.when}
-                {post.to && <> · to @{post.to}</>}
+                {post.to === undefined ? null : <> · to @{post.to}</>}
                 <XMark />
               </span>
               <Paragraphs text={post.text} />
-              {post.quote && (
+              {post.quote === undefined ? null : (
                 <blockquote>
                   <Paragraphs text={post.quote} />
                 </blockquote>

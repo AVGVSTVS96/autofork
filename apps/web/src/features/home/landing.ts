@@ -1,3 +1,5 @@
+import { constVoid } from "effect/Function";
+
 const NS = "http://www.w3.org/2000/svg";
 const still = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 const wait = async (ms: number) => new Promise((done) => setTimeout(done, ms));
@@ -650,7 +652,11 @@ const lineage = (root: HTMLElement) => {
   };
 };
 
-export const start = (page: HTMLElement) => {
+export const start = (page: HTMLElement | null) => {
+  if (page === null) {
+    return constVoid;
+  }
+
   void import("./t3.ts").then(({ mount }) => {
     mount(page.querySelector("[data-t3]"));
   });

@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { Fragment, useEffect, useRef } from "react";
+import { Fragment, useRef } from "react";
 
 import { isAgent } from "../../../shared/api.ts";
 import type { Agent } from "../../../shared/api.ts";
@@ -13,15 +13,15 @@ import { Ask } from "./ask.tsx";
 import type { AskHandle } from "./ask.tsx";
 import { start } from "./landing.ts";
 import { Flow } from "./plan.tsx";
-import { History, Meant, MineToday, Yours } from "./sections.tsx";
+import { History, Meant, MineToday, RunItYourself } from "./sections.tsx";
 import type { Mine } from "./sections.tsx";
 import type { Example } from "./typer.tsx";
 
-const EXAMPLES: readonly Example[] = examples.examples.map(({ app, change }) => ({
-  app,
-  change,
-  avatar: known(app)!.repo.avatar,
-}));
+const EXAMPLES: readonly Example[] = examples.examples.flatMap(({ app, change }) => {
+  const found = known(app);
+
+  return found === undefined ? [] : [{ app, change, avatar: found.repo.avatar }];
+});
 
 const Headline = () => (
   <h1>
@@ -37,37 +37,31 @@ const Headline = () => (
 const useAsk = () => {
   const navigate = useNavigate();
 
-  return (text: string, agent: Agent | undefined) =>
+  return (text: string, agent: Agent | undefined) => {
     void navigate({ to: "/", search: { q: text, agent } });
+  };
 };
 
-export const Home = ({
-  q,
-  agent,
-  error,
-}: {
-  q: string;
-  agent: Agent | undefined;
-  error: string | undefined;
-}) => (q ? <Start q={q} agent={agent} error={error} /> : <Landing />);
-
 const Landing = () => {
-  const ask = useAsk();
-  const page = useRef<HTMLDivElement>(null);
+  const submit = useAsk();
   const composer = useRef<AskHandle>(null);
-  useEffect(() => start(page.current!), []);
 
-  const pick = ({ repo, name, change, ask }: Mine, keyboard: boolean) =>
-    composer.current?.fill({
-      change: ask ?? change,
-      keyboard,
-      ...(known(name)
-        ? { app: name }
-        : { app: repo, face: { name: repo.split("/")[1]!, avatar: repoIcon(repo) } }),
-    });
+  const pick = ({ repo, name, change, ask }: Mine, keyboard: boolean) => {
+    const asked = { change: ask ?? change, keyboard };
+
+    composer.current?.fill(
+      known(name) === undefined
+        ? {
+            ...asked,
+            app: repo,
+            face: { name: repo.split("/").at(-1) ?? repo, avatar: repoIcon(repo) },
+          }
+        : { ...asked, app: name },
+    );
+  };
 
   return (
-    <div className="page" ref={page}>
+    <div className="page" ref={start}>
       <svg className="graph" aria-hidden="true" />
       <Nav>
         <a href="#how">How it works</a>
@@ -85,7 +79,7 @@ const Landing = () => {
             ref={composer}
             id="ask"
             onSubmit={(text, via) => {
-              ask(text, isAgent(via) ? via : undefined);
+              submit(text, isAgent(via) ? via : undefined);
             }}
             examples={EXAMPLES}
             label="An open source app and what you'd change"
@@ -111,7 +105,7 @@ const Landing = () => {
         </header>
         <Meant />
         <MineToday onPick={pick} />
-        <Yours />
+        <RunItYourself />
         <History />
       </main>
       <Footer />
@@ -128,7 +122,7 @@ const Start = ({
   agent: Agent | undefined;
   error: string | undefined;
 }) => {
-  const ask = useAsk();
+  const submit = useAsk();
 
   return (
     <div className="page bare">
@@ -139,7 +133,7 @@ const Start = ({
           <Ask
             initial={q}
             onSubmit={(text) => {
-              ask(text, agent);
+              submit(text, agent);
             }}
             examples={EXAMPLES}
             label="An open source app and what you'd change"
@@ -151,3 +145,13 @@ const Start = ({
     </div>
   );
 };
+
+export const Home = ({
+  q,
+  agent,
+  error,
+}: {
+  q: string;
+  agent: Agent | undefined;
+  error: string | undefined;
+}) => (q === "" ? <Landing /> : <Start q={q} agent={agent} error={error} />);
