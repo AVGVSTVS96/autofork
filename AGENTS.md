@@ -31,6 +31,7 @@ Forks are the first job. The same agent is meant to grow into automatic maintena
 | A package imports only what its `package.json` lists        | bun's isolated linker             |
 | No import reaches outside its package                       | `rootDir` in each `tsconfig.json` |
 | No comments, `as`, `any` or `useEffect`                     | `oxlint.config.ts`                |
+| A page in `apps/web/src/features` never imports another     | `oxlint.config.ts` override       |
 | `dist/autofork.js` matches the source                       | CI's `git diff --exit-code`       |
 | The action download stays small                             | `.gitattributes` `export-ignore`  |
 

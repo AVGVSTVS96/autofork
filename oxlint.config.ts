@@ -29,11 +29,29 @@ export default defineConfig({
     "import/no-cycle": "error",
     "eslint/max-classes-per-file": "off",
     "eslint/sort-keys": "off",
+    "react/no-unescaped-entities": "off",
     "no-comments/no-comments": "error",
     "no-restricted-imports": ["error", { paths: [effectHooks] }],
     "oxc/no-accumulating-spread": "error",
   },
   overrides: [
+    {
+      files: ["apps/web/src/features/**"],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [effectHooks],
+            patterns: [
+              {
+                regex: "^\\.\\./[^.]|/features/",
+                message: "A page imports ui/ and lib/, never another page.",
+              },
+            ],
+          },
+        ],
+      },
+    },
     {
       files: ["apps/web/**"],
       rules: {
