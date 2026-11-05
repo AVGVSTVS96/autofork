@@ -1276,10 +1276,7 @@ export const saveSettings = (user: User, owner: string, name: string, wanted: Se
 
     const nextConfig = unchanged
       ? config
-      : withSettings(config, {
-          follow: wanted.follow,
-          limits: newLimits ? wanted.limits : undefined,
-        });
+      : withSettings(config, wanted.follow, newLimits ? wanted.limits : undefined);
 
     if (!unchanged) {
       files.push({ path: ".autofork/config.json", content: nextConfig });

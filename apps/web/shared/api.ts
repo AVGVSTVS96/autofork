@@ -15,19 +15,21 @@ export class SignedOut extends Schema.TaggedError<SignedOut>()(
   { httpApiStatus: 401 },
 ) {}
 
-/* `from` is the repo to fork instead, when the one asked about is on GitHub but isn't an autofork */
+const RepoToForkInstead = Schema.NullOr(Schema.String);
+
 export class NotFound extends Schema.TaggedError<NotFound>()(
   "NotFound",
-  { from: Schema.NullOr(Schema.String) },
+  { from: RepoToForkInstead },
   { httpApiStatus: 404 },
 ) {}
 
-const SPLIT = /^(.+?)(?:,\s*but\s+|\s+but\s+|\s*:\s+|\s+(?:—|–|-)\s+|\s+to\s+)(.+)$/i;
+const SPLIT =
+  /^(?<app>.+?)(?:,\s*but\s+|\s+but\s+|\s*:\s+|\s+(?:—|–|-)\s+|\s+to\s+)(?<change>.+)$/iu;
 
-export const squash = (name: string) => name.toLowerCase().replaceAll(/[^a-z0-9]/g, "");
+export const squash = (name: string) => name.toLowerCase().replaceAll(/[^a-z0-9]/gu, "");
 
 export const split = (ask: string) => {
-  const [, app = ask, change = ""] = SPLIT.exec(ask.trim()) ?? [];
+  const { app = ask, change = "" } = SPLIT.exec(ask.trim())?.groups ?? {};
 
   return { app: app.trim(), change: change.trim() };
 };
@@ -76,12 +78,13 @@ export const Limits = Schema.Struct({
 
 export type Limits = typeof Limits.Type;
 
-/* `head` is the commit the settings were read at, so a save on top of a newer commit is refused */
+const CommitReadAt = Schema.String;
+
 export const Settings = Schema.Struct({
   cron: Schema.NullOr(Schema.String),
   follow: Schema.String,
   limits: Limits,
-  head: Schema.optional(Schema.String),
+  head: Schema.optional(CommitReadAt),
 });
 
 export type Settings = typeof Settings.Type;
@@ -109,6 +112,8 @@ export const Step = Schema.Struct({
   conclusion: Schema.NullOr(Schema.String),
 });
 
+const NewestRunStartedAt = Schema.String;
+
 export const Run = Schema.Struct({
   url: Schema.String,
   status: Schema.String,
@@ -119,8 +124,7 @@ export const Run = Schema.Struct({
   log: Schema.Array(Schema.String),
   moved: Schema.Boolean,
   change: Schema.NullOr(Schema.String),
-  /* When the newest run started: later than startedAt when that run only skipped and this is the failure it skipped over */
-  latestAt: Schema.String,
+  latestAt: NewestRunStartedAt,
 });
 
 export type Run = typeof Run.Type;
