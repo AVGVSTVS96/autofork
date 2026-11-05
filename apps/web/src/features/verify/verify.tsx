@@ -1,13 +1,11 @@
 import { getRouteApi } from "@tanstack/react-router";
 
 import { Nav } from "../../ui/nav.tsx";
-import { useTitle } from "../../ui/useTitle.ts";
 
 const route = getRouteApi("/verify");
 
 export const VerifyRoute = () => {
   const { email, error, back } = route.useSearch();
-  useTitle("Check your email · autofork");
 
   return (
     <div className="page bare">

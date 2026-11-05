@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 
 import * as client from "../../lib/api/client.ts";
 import { Nav } from "../../ui/nav.tsx";
-import { useTitle } from "../../ui/useTitle.ts";
 
 const route = getRouteApi("/link/$owner/$name");
 
@@ -46,7 +45,6 @@ const check = async (owner: string, name: string): Promise<Linked> => {
 export const LinkRoute = () => {
   const { owner, name } = route.useParams();
   const { error } = route.useSearch();
-  useTitle(`Link ${owner}/${name} · autofork`);
   const me = useAtomValue(client.me);
   const [state, setState] = useState<Linked | null>(null);
   const [stopped, setStopped] = useState(false);

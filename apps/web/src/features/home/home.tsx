@@ -1,7 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { Fragment, useEffect, useRef } from "react";
 
-import { isAgent, split } from "../../../shared/api.ts";
+import { isAgent } from "../../../shared/api.ts";
 import type { Agent } from "../../../shared/api.ts";
 import facts from "../../lib/facts.json";
 import examples from "../../lib/repos/examples.json";
@@ -9,7 +9,6 @@ import { known, repoIcon } from "../../lib/repos/known.ts";
 import { Footer } from "../../ui/footer.tsx";
 import { ClaudeIcon, OpenAIIcon } from "../../ui/icons.tsx";
 import { Nav } from "../../ui/nav.tsx";
-import { useTitle } from "../../ui/useTitle.ts";
 import { Ask } from "./ask.tsx";
 import type { AskHandle } from "./ask.tsx";
 import { start } from "./landing.ts";
@@ -130,8 +129,6 @@ const Start = ({
   error: string | undefined;
 }) => {
   const ask = useAsk();
-  const { app } = split(q);
-  useTitle(app ? `${app} · autofork` : undefined);
 
   return (
     <div className="page bare">

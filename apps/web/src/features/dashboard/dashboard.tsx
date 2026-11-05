@@ -11,7 +11,6 @@ import { Meter } from "../../ui/meter.tsx";
 import { Nav } from "../../ui/nav.tsx";
 import { Retry } from "../../ui/retry.tsx";
 import { SignInAgain } from "../../ui/sign-in-again.tsx";
-import { useTitle } from "../../ui/useTitle.ts";
 
 const route = getRouteApi("/forks");
 
@@ -113,7 +112,6 @@ const Forks = () => {
 };
 
 export const Dashboard = () => {
-  useTitle("Your forks · autofork");
   const me = useAtomValue(client.me);
   const signedOut = AsyncResult.isSuccess(me) && !me.value;
   const { error } = route.useSearch();

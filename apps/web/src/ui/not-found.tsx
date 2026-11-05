@@ -1,11 +1,8 @@
 import { Link } from "@tanstack/react-router";
 
 import { Nav } from "./nav.tsx";
-import { useTitle } from "./useTitle.ts";
 
 export const NotFound = () => {
-  useTitle("Not found · autofork");
-
   return (
     <div className="page bare">
       <Nav />

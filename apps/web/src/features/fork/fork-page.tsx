@@ -12,7 +12,6 @@ import { ClaudeIcon, ForkIcon, GitHubIcon, OpenAIIcon } from "../../ui/icons.tsx
 import { Item } from "../../ui/item.tsx";
 import { Nav } from "../../ui/nav.tsx";
 import { Retry } from "../../ui/retry.tsx";
-import { useTitle } from "../../ui/useTitle.ts";
 import { Composer } from "./composer.tsx";
 
 const route = getRouteApi("/$owner/$name");
@@ -53,7 +52,6 @@ const ForkPage = ({
   error: string | undefined;
 }) => {
   const atom = useMemo(() => client.fork(owner, name), [owner, name]);
-  useTitle(`${owner}/${name} · autofork`);
   const result = useAtomValue(atom);
   const refresh = useAtomRefresh(atom);
   const mine = useAtomValue(useMemo(() => client.yours(owner, name), [owner, name]));
