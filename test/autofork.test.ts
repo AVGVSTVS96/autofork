@@ -2609,3 +2609,92 @@ test("a binary file git can't merge is named as a change that didn't apply, not 
   expect(asked).toContain("the changes to logo.bin, which didn't apply at all");
   expect(asked).not.toContain("conflict markers");
 });
+
+const crlf = (text: string) => text.replaceAll("\n", "\r\n");
+
+/* stacked, with list.txt CRLF in the working tree: stored that way, or checked out that way by
+   .gitattributes or by core.autocrlf on a Windows clone. b changes `line` */
+function stackedCrlf(name: string, line: number, checkout?: "attributes" | "autocrlf") {
+  const origin = join(home, name);
+  mkdirSync(origin);
+  if (checkout === "attributes") write(origin, ".gitattributes", "*.txt text eol=crlf\n");
+  write(origin, "list.txt", checkout ? list() : crlf(list()));
+  write(origin, "other.txt", "other\n");
+  sh(origin, "git init -q && git add -A && git commit -qm one");
+  const flags = checkout === "autocrlf" ? "-c core.autocrlf=true" : "";
+  sh(home, `git clone -q ${flags} ${origin} ${name}-fork`);
+  const mine = join(home, `${name}-fork`);
+  expect(file(mine, "list.txt")).toBe(crlf(list()));
+  expect(autofork(mine, "init", origin).ok).toBe(true);
+  sh(mine, "git add -A && git commit -qm track");
+  for (const [id, lines] of [
+    ["a", { 5: "a" }],
+    ["b", { 5: "a", [line]: "b" }],
+  ] as const) {
+    expect(saves(mine, id, () => write(mine, "list.txt", crlf(list(lines)))).ok).toBe(true);
+    sh(mine, `git add -A && git commit -qm ${id}`);
+  }
+  return mine;
+}
+
+/* The re-saved fork replays on upstream's next release as it is */
+function replays(mine: string, origin: string, text: string) {
+  holds(mine);
+  sh(origin, "echo more >> other.txt && git commit -qam two");
+  expect(autofork(mine, "sync").output.result).toBe("synced");
+  expect(file(mine, "list.txt")).toBe(text);
+}
+
+for (const [where, line, checkout] of [
+  ["the line after", 6, undefined],
+  ["two lines after", 7, undefined],
+  ["the line after", 6, "attributes"],
+  ["the line after", 6, "autocrlf"],
+] as const)
+  test(`re-saving a patch in a CRLF file${checkout ? ` checked out by ${checkout === "attributes" ? "eol=crlf" : "core.autocrlf"}` : ""} keeps a later patch that changes ${where} its own`, () => {
+    const name = `resave-crlf-${line}-${checkout}`;
+    const mine = stackedCrlf(name, line, checkout);
+    const text = crlf(list({ 5: "A", [line]: "b" }));
+    write(mine, "list.txt", text);
+    expect(autofork(mine, "save", "a").ok).toBe(true);
+    const eol = checkout ? "\n" : "\r\n";
+    expect(file(mine, ".autofork/a/a.patch")).toContain(`-5${eol}+A${eol}`);
+    expect(file(mine, ".autofork/b/b.patch")).toContain(`-${line}${eol}+b${eol}`);
+    expect(file(mine, "list.txt")).toBe(text);
+    replays(mine, join(home, name), text);
+  });
+
+test("re-saving a patch that turns a CRLF line next to a later patch's into LF keeps both", () => {
+  const mine = stackedCrlf("resave-crlf-lf", 6);
+  const text = crlf(list({ 5: "a", 6: "b" })).replace("a\r\n", "a\n");
+  write(mine, "list.txt", text);
+  expect(autofork(mine, "save", "a").ok).toBe(true);
+  expect(file(mine, ".autofork/a/a.patch")).toContain("+a\n");
+  expect(file(mine, ".autofork/b/b.patch")).toContain("-6\r\n+b\r\n");
+  replays(mine, join(home, "resave-crlf-lf"), text);
+});
+
+test("re-saving a patch under a later one that changes a CRLF file's last line, with no newline at its end", () => {
+  const origin = join(home, "resave-crlf-end");
+  mkdirSync(origin);
+  const lines = (before: string, last: string) =>
+    crlf(list()).replace(/11\r\n12\r\n$/, `${before}\r\n${last}`);
+  write(origin, "list.txt", lines("11", "12"));
+  write(origin, "other.txt", "other\n");
+  sh(origin, "git init -q && git add -A && git commit -qm one");
+  sh(home, `git clone -q ${origin} resave-crlf-end-fork`);
+  const mine = join(home, "resave-crlf-end-fork");
+  expect(autofork(mine, "init", origin).ok).toBe(true);
+  sh(mine, "git add -A && git commit -qm track");
+  for (const [id, text] of [
+    ["a", lines("a", "12")],
+    ["b", lines("a", "b")],
+  ]) {
+    expect(saves(mine, id, () => write(mine, "list.txt", text)).ok).toBe(true);
+    sh(mine, `git add -A && git commit -qm ${id}`);
+  }
+  write(mine, "list.txt", lines("A", "b"));
+  expect(autofork(mine, "save", "a").ok).toBe(true);
+  expect(file(mine, ".autofork/b/b.patch")).toContain("-12\n\\ No newline at end of file\n+b\n");
+  replays(mine, origin, lines("A", "b"));
+});
