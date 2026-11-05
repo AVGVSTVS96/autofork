@@ -1,19 +1,19 @@
-// Regenerates the spec section of README.md from apps/website/src/spec.mdx.
+// Regenerates the spec section of README.md from src/spec.mdx.
 // The README is hand-written except for the region between the spec markers,
-// which this script owns. Run via `vp run gen-readme` (or the pre-commit hook).
+// which this script owns. Run via `bun run readme`.
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { remark } from "remark";
 import { visit } from "unist-util-visit";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-const specPath = new URL("../apps/website/src/spec.mdx", import.meta.url);
+const specPath = new URL("../src/spec.mdx", import.meta.url);
 const readmePath = new URL("../README.md", import.meta.url);
 
 const START = "<!-- spec:start -->";
 const END = "<!-- spec:end -->";
 const BANNER =
-  "<!-- Generated from apps/website/src/spec.mdx. Edit that file instead, then run: vp run gen-readme -->";
+  "<!-- Generated from apps/spec/src/spec.mdx. Edit that file instead, then run: bun run readme -->";
 
 // GitHub renders the README one level deeper than the site renders the spec.
 const demoteHeadings = () => (tree) => {

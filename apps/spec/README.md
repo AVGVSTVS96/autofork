@@ -15,7 +15,7 @@ That pair is enough to maintain a [self-healing fork](#example-a-self-healing-fo
 
 <!-- spec:start -->
 
-<!-- Generated from apps/website/src/spec.mdx. Edit that file instead, then run: vp run gen-readme -->
+<!-- Generated from apps/spec/src/spec.mdx. Edit that file instead, then run: bun run readme -->
 
 ## The spec
 
@@ -113,12 +113,12 @@ On a schedule or on upstream release, the workflow:
 
 When every patch applies cleanly, no model is called. When one drifts, its `PATCH.md` becomes the prompt.
 
-[autopatch](https://github.com/AVGVSTVS96/autopatch) packages this workflow as one GitHub Action and CLI.
+[autofork](https://autofork.com) packages this workflow as one GitHub Action and CLI.
 
 ### Tools built on PATCH.md
 
 - [pi-patcher](https://github.com/AVGVSTVS96/pi-patcher)
-- [autopatch](https://github.com/AVGVSTVS96/autopatch)
+- [autofork](https://github.com/AVGVSTVS96/autofork)
 
 ### Example
 
@@ -147,4 +147,4 @@ change update behavior if `pi-patcher` is missing or fails to start.
 
 ---
 
-Contributions and proposals are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
+Contributions and proposals are welcome. See [CONTRIBUTING.md](../../CONTRIBUTING.md) to get started.
