@@ -135,7 +135,7 @@ It opens autofork.com, where you sign in with GitHub and add autofork's GitHub a
 | `generated` | files `setup` writes, like lockfiles. They're left out of patches and rebuilt by `setup` once the patches are in, so they never conflict. They need your own `setup` |
 | `verify` | the command that checks a build. Without one, the next agent that builds or heals a patch picks it from upstream's CI, with `setup` too if there's none, and saves them in `picked` |
 | `picked` | the `setup` and `verify` an agent picked. They work like yours, except that when one fails on upstream alone, the sync drops them and goes on, and the next agent that builds or heals a patch picks again. Your own `setup` or `verify` replaces the pick of the same name, and once `verify` is yours, a picked `setup` counts as yours too |
-| `agent` | the command that rebuilds a patch, prompt on stdin. Default: Claude Code when `CLAUDE_CODE_OAUTH_TOKEN` is set, otherwise Codex when it's signed in (a `CODEX_AUTH` secret holding the `auth.json` of a Codex sign-in made for the fork, since each refresh retires the last one) |
+| `agent` | the command that rebuilds a patch, prompt on stdin. Default: Claude Code, with only its shell and file tools and no MCP servers, when `CLAUDE_CODE_OAUTH_TOKEN` is set, otherwise Codex when it's signed in (a `CODEX_AUTH` secret holding the `auth.json` of a Codex sign-in made for the fork, since each refresh retires the last one) |
 | `green` | when following a branch, `false` takes upstream's newest commit even when its checks failed |
 | `limits` | `rebuilds` a month, and dollars a `month` and a `rebuild`, at API prices. Default: 10, 200 and 20. See [Spend](#spend) |
 

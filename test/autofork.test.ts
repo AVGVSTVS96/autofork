@@ -2189,7 +2189,7 @@ echo '{"type":"result","subtype":"success","is_error":false,"result":"built it",
   expect(ok).toBe(true);
   expect(log).toContain("built it\nfive cost $1.25\n");
   expect(file(home, "claude-args")).toContain(
-    "-p --dangerously-skip-permissions --output-format json --max-budget-usd 20",
+    "-p --dangerously-skip-permissions --output-format json --max-budget-usd 20 --tools Bash,Read,Edit,Write,Glob,Grep --strict-mcp-config\n",
   );
   expect(file(home, "claude-env")).not.toContain("ACTIONS_ID_TOKEN_REQUEST");
   expect(file(home, "claude-env")).toContain("CLAUDE_CODE_ENTRYPOINT=autofork\n");
