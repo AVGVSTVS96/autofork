@@ -5,6 +5,11 @@
 
 Personal forks of open-source apps that auto-track upstream. Each change you make is saved in plain words, in a `PATCH.md`. On every upstream release your changes go back on top, and when one no longer applies, an agent rebuilds it from what you wrote, in your fork's own GitHub Actions, on your Claude or ChatGPT plan.
 
+<a href="https://autofork.com/AVGVSTVS96/t3code"><picture>
+<source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/AVGVSTVS96/autofork/main/brand/readme/fork-dark.png">
+<img alt="A fork's page on autofork.com: each change it keeps, in plain words, and whether it's built on the latest upstream" src="https://raw.githubusercontent.com/AVGVSTVS96/autofork/main/brand/readme/fork-light.png">
+</picture></a>
+
 Fork something at [autofork.com](https://autofork.com), or from a terminal:
 
 ```sh
