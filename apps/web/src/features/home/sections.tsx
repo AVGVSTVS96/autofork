@@ -138,10 +138,10 @@ export interface Mine {
 
 const mine: readonly Mine[] = [
   {
-    repo: "davidmokos/expo-gpt-live",
-    name: "expo-gpt-live",
-    about: "an Expo voice app template",
-    change: "it calls my assistant, and I maintain it now",
+    repo: "xtool-org/xtool",
+    name: "xtool",
+    about: "Xcode for Linux",
+    change: "free teams keep their App Groups",
   },
   { repo: "herdrdev/herdr", name: "herdr", change: "every pane shows its ID on its border" },
   {

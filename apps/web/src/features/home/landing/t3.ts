@@ -124,7 +124,6 @@ const identity = (project: string) => {
 
 const repos = {
   t3code: "pingdotgg/t3code",
-  "hex-voice": "AVGVSTVS96/hex-voice",
   autofork: "AVGVSTVS96/autofork-app",
   "react-shiki": "AVGVSTVS96/react-shiki",
 } satisfies Record<string, string>;
@@ -171,20 +170,6 @@ const threads: Thread[] = [
       "When the prompt cache is still warm, its tooltip says so.",
     ],
     files: [4, 122, 91],
-  },
-  {
-    project: "hex-voice",
-    title: "Maintain it ourselves",
-    branch: "hex-voice/autofork",
-    time: "1h",
-    ctx: "62k",
-    ask: "David's Expo voice template is ours to maintain now. If he ever updates it, bring in anything clearly valuable, and weigh our changes more heavily where his opinions differ.",
-    worked: "Worked for 6m 05s",
-    reply: [
-      "Done. Every change we've made to his template, from calling your assistant to the orb on the Lock Screen, is now one patch, and its PATCH.md says what you said.",
-      "Until he pushes something new, the check every 15 minutes is git only and ends in seconds.",
-    ],
-    files: [5, 80_593, 0],
   },
   {
     project: "autofork",

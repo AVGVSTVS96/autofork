@@ -10,7 +10,6 @@ const engine = { workflows: ["autofork.yml"], sync: /^auto(?:fork|patch): sync /
 
 const forks = [
   { repo: "t3code", name: "T3 Code", upstream: "pingdotgg/t3code", patches: ".autofork", ref: "main", ...engine, workflows: ["autofork.yml", "autopatch.yml"] },
-  { repo: "hex-voice", name: "hex-voice", upstream: "davidmokos/expo-gpt-live", patches: ".autofork", ref: "main", ...engine },
   { repo: "claude-plugins-official", name: "Claude Code plugins", upstream: "anthropics/claude-plugins-official", patches: "patches", ref: "main", ...legacy },
   { repo: "buzz", name: "buzz", upstream: "block/buzz", patches: "fork/patches", ref: "nightly-green-main", ...legacy },
   { repo: "herdr", name: "herdr", upstream: "herdrdev/herdr", patches: "patches", ref: "main", ...legacy },
@@ -119,9 +118,9 @@ const facts = {
     daysSinceFirstSync: daysBetween(firstSync, new Date().toISOString()),
   },
   how: {
-    patches: "Directories under each fork's patches folder (T3 Code and hex-voice: .autofork; buzz: fork/patches on nightly-green-main), each a PATCH.md plus its .patch. Includes each fork's own README patch and herdr's auto-managed heal-overflow.",
-    syncRuns: "gh run list on the fork's sync workflow (autofork.yml for T3 Code and hex-voice, plus T3 Code's earlier autopatch.yml; sync-upstream.yml for the older three), every conclusion. greenSyncRuns counts only success.",
-    syncCommits: "Commits on the fork's default branch whose message starts with 'autofork: sync ' or 'autopatch: sync ' (T3 Code and hex-voice) or 'chore: sync patched fork to ' (the older three), one per upstream commit or release the fork was rebuilt on.",
+    patches: "Directories under each fork's patches folder (T3 Code: .autofork; buzz: fork/patches on nightly-green-main), each a PATCH.md plus its .patch. Includes each fork's own README patch and herdr's auto-managed heal-overflow.",
+    syncRuns: "gh run list on the fork's sync workflow (autofork.yml for T3 Code, plus T3 Code's earlier autopatch.yml; sync-upstream.yml for the older three), every conclusion. greenSyncRuns counts only success.",
+    syncCommits: "Commits on the fork's default branch whose message starts with 'autofork: sync ' or 'autopatch: sync ' (T3 Code) or 'chore: sync patched fork to ' (the older three), one per upstream commit or release the fork was rebuilt on.",
     upstreamCommitsAbsorbed: "gh api compare on the upstream repo, from the first synced source commit to the latest one.",
     heals: "Distinct upstream sources where a sync commit or patched release says a patch was healed (rebuilt by the agent) after git apply failed.",
     greenDays: "First sync run to the last successful one.",

@@ -32,10 +32,10 @@ my t3 code fork took 156 upstream commits in its first 2 days
 
 one change broke on day one and the agent rebuilt it from what i asked for
 
-5/ [image: needs a retake. launch-kit/screenshots/home-1440-light.png still has the old t3 icon. better: hex-voice on a phone]
+5/ [image: needs a retake. launch-kit/screenshots/home-1440-light.png still has the old t3 icon]
 it's not a t3 code trick
 
-> hex-voice, the iphone app i call my assistant from, is a fork of an expo template i took over. it's on autofork too
+> xtool builds iphone apps without a mac, and my fork lets free teams keep their app groups. it's on autofork too
 > before autofork, an older version of the same idea ran my forks of herdr (315 upstream commits since july), buzz (58 commits, 7 changes on top) and claude code's plugins
 
 6/ [video: video/type/out/video.mp4]
@@ -60,7 +60,7 @@ Why each line is safe to say:
 - 2/ "it runs codex or claude code on the plan you already pay for": both sign-ins are live, and the agent runs in the fork's own GitHub Actions. Said plainly so nobody wonders if it gets their account banned. Actions are free on public repos (GitHub's docs).
 - 3/ each change is a `PATCH.md` (the request in plain words) plus its diff. On a release the diff goes on with git; only when it no longer applies does the agent rebuild it from the `PATCH.md`. "yours pauses until you pick": the engine stops applying it, the fork takes their version, and an issue opens (`context-usage: upstream does this now`). Deleting the folder keeps theirs; editing `PATCH.md` brings yours back.
 - 4/ is the T3 Code fork in `facts.json`. Its first sync (Oct 10, `85b3a1c`, "healed window-title") jumped 383 upstream commits and `window-title` no longer applied, so the agent rebuilt it from its `PATCH.md` (`heals: 1`). From that sync to Oct 12's (`9afde1c` to `8f25cf9`) upstream moved 156 commits (`proof.upstreamCommits`, a fixed window; the fork's running total in `upstreamCommitsAbsorbed` keeps growing, 215 by Oct 14) and every change stayed on.
-- 5/ hex-voice is the second example after T3 Code everywhere autofork shows examples, so it leads this tweet. It's AVGVSTVS96/hex-voice, a fork of davidmokos/expo-gpt-live that Bassim took over, every change in one patch, on autofork since Oct 13 with every run green (`facts.json`). The template hasn't moved since Sep 15, so it hasn't taken an update yet: say it's on autofork, not that it's survived releases. herdr, buzz and Claude Code's plugins are not: they run the older sync-upstream setup autofork grew out of, so the tweet says "before autofork". Don't call them autofork forks or say they're green (herdr has failed since Sep 16, the plugins fork since Oct 11 on a flaky test). The image needs a retake: `launch-kit/screenshots/home-1440-light.png` still has the old T3 Code icon.
+- 5/ xtool is AVGVSTVS96/xtool, a fork of xtool-org/xtool with 4 changes on top (`let-free-personal-teams-use` is the App Groups one), on autofork since Oct 13: 4 syncs onto new upstream commits and 143 of 146 runs green (counted Nov 7 with `gh run list`; it isn't in `facts.json`, which was counted Oct 14). herdr, buzz and Claude Code's plugins are not: they run the older sync-upstream setup autofork grew out of, so the tweet says "before autofork". Don't call them autofork forks or say they're green (herdr has failed since Sep 16, the plugins fork since Oct 11 on a flaky test). The image needs a retake: `launch-kit/screenshots/home-1440-light.png` still has the old T3 Code icon.
 - 6/ is the one "coming soon" `MESSAGING.md` allows: the managed platform. The living-examples job only rewrites the example text on the site from open feature requests; it doesn't fork or build anything, so the thread doesn't mention it.
 - 7/ `npx skills add AVGVSTVS96/autofork` works (checked Oct 13).
 
