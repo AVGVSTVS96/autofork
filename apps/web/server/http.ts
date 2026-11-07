@@ -2,7 +2,6 @@ import { randomBytes } from "node:crypto";
 
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as HttpRouter from "effect/http/HttpRouter";
 import * as HttpServer from "effect/http/HttpServer";
@@ -14,7 +13,7 @@ import * as Redacted from "effect/Redacted";
 import type * as Schema from "effect/Schema";
 import * as Struct from "effect/Struct";
 
-import { Api, Problem, SignedOut } from "../shared/api.ts";
+import { Api, Problem } from "../shared/api.ts";
 import * as Agents from "./agents.ts";
 import * as Env from "./env.ts";
 import * as Forks from "./forks.ts";
@@ -22,7 +21,6 @@ import * as GitHub from "./github.ts";
 import * as Icon from "./icon.ts";
 import { saveCodexAuth, workflowToken } from "./oidc.ts";
 import * as Session from "./session.ts";
-import * as WorkOS from "./workos.ts";
 
 const friendly = (error: GitHub.GitHubError) => {
   if (GitHub.busy(error)) {
@@ -72,78 +70,6 @@ const convex = Effect.fn(
   (effect) => Effect.ignore(effect),
 );
 
-const allow = Effect.fn(function* allow(
-  user: string,
-  repos: readonly { readonly id: number; readonly name: string }[],
-  mode: "replace" | "add" | "drop",
-) {
-  const { serverSecret } = yield* Env.Env;
-  yield* convex("/access", { user, repos, mode }, serverSecret);
-});
-
-const workosRenewalPerRefreshToken = new Map<
-  string,
-  Promise<Exit.Exit<WorkOS.Signed, GitHub.GitHubError>>
->();
-
-const convexToken = Effect.fn(function* convexToken(fresh: boolean) {
-  const { account } = yield* Session.read;
-
-  if (!account) {
-    return yield* new SignedOut();
-  }
-
-  if (!fresh && WorkOS.expiry(account.access) > Date.now() + 60_000) {
-    return { token: account.access };
-  }
-
-  const env = yield* Env.Env;
-  const pending = workosRenewalPerRefreshToken.get(account.refresh);
-
-  const renewal =
-    pending ??
-    Effect.runPromiseExit(
-      WorkOS.refreshed(account.refresh).pipe(Effect.provideService(Env.Env, env)),
-    );
-
-  if (pending === undefined) {
-    workosRenewalPerRefreshToken.set(account.refresh, renewal);
-    setTimeout(() => {
-      if (workosRenewalPerRefreshToken.get(account.refresh) === renewal) {
-        workosRenewalPerRefreshToken.delete(account.refresh);
-      }
-    }, 60_000);
-  }
-
-  const renewed = yield* Effect.promise(async () => await renewal);
-
-  if (Exit.isFailure(renewed)) {
-    const error = Cause.squash(renewed.cause);
-
-    if (
-      error instanceof GitHub.GitHubError &&
-      (error.status === 0 || error.status === 429 || error.status >= 500)
-    ) {
-      workosRenewalPerRefreshToken.delete(account.refresh);
-
-      return yield* Effect.die(error);
-    }
-
-    return yield* new SignedOut();
-  }
-
-  yield* Session.update((session) => ({
-    ...session,
-    account: {
-      id: account.id,
-      access: renewed.value.access_token,
-      refresh: renewed.value.refresh_token,
-    },
-  }));
-
-  return { token: renewed.value.access_token };
-});
-
 const AppLive = HttpApiBuilder.group(Api, "app", (handlers) =>
   handlers
     .handle("resolve", ({ query }) =>
@@ -162,28 +88,7 @@ const AppLive = HttpApiBuilder.group(Api, "app", (handlers) =>
       viewer.pipe(Effect.map((user) => (user ? { login: user.login, avatar: user.avatar } : null))),
     )
     .handle("signOut", () => Session.write({}))
-    .handle("mine", () =>
-      github(
-        Effect.gen(function* mine() {
-          const { forks, complete, denied } = yield* Forks.mine(yield* GitHub.signedIn);
-          const { account } = yield* Session.read;
-
-          if (account) {
-            yield* allow(
-              account.id,
-              forks.map((fork) => ({ id: fork.repoId, name: `${fork.owner}/${fork.name}` })),
-              complete ? "replace" : "add",
-            );
-
-            if (!complete && denied.length > 0) {
-              yield* allow(account.id, denied, "drop");
-            }
-          }
-
-          return forks;
-        }),
-      ),
-    )
+    .handle("mine", () => github(GitHub.signedIn.pipe(Effect.flatMap((user) => Forks.mine(user)))))
     .handle("settings", ({ params }) =>
       github(
         GitHub.signedIn.pipe(
@@ -208,7 +113,6 @@ const AppLive = HttpApiBuilder.group(Api, "app", (handlers) =>
         }),
       ),
     )
-    .handle("convexToken", ({ query }) => convexToken(query.fresh === "1"))
     .handle("prepare", ({ payload }) =>
       github(
         GitHub.signedIn.pipe(
@@ -303,23 +207,11 @@ const AppLive = HttpApiBuilder.group(Api, "app", (handlers) =>
     )
     .handle("fork", ({ params }) => github(Forks.status(params.owner, params.name)))
     .handle("yours", ({ params }) =>
-      Effect.gen(function* yours() {
-        const user = yield* viewer;
-
-        if (!user) {
-          return false;
-        }
-
-        const repo = yield* Forks.yours(user, params.owner, params.name);
-        const { account } = yield* Session.read;
-
-        if (account && Option.isSome(repo)) {
-          const { id, name, push } = repo.value;
-          yield* allow(account.id, [{ id, name }], push ? "add" : "drop");
-        }
-
-        return Option.match(repo, { onNone: () => false, onSome: (seen) => seen.push });
-      }),
+      viewer.pipe(
+        Effect.flatMap((user) =>
+          user ? Forks.yours(user, params.owner, params.name) : Effect.succeed(false),
+        ),
+      ),
     )
     .handle("addChange", ({ params, payload }) =>
       github(
@@ -353,171 +245,19 @@ const signInRoute = HttpRouter.add(
   "GET",
   "/api/github/start",
   Effect.fn(function* signInRoute(request: HttpServerRequest.HttpServerRequest) {
+    const { clientId } = yield* Env.Env;
     const state = randomBytes(16).toString("base64url");
     const back = safeBack(params(request).get("back"));
+    yield* Session.update((session) => ({ ...session, signIn: { state, back } }));
+    const url = new URL("https://github.com/login/oauth/authorize");
 
-    const unwrapped = back.startsWith("/verify")
-      ? safeBack(new URL(back, "http://x").searchParams.get("back"))
-      : back;
+    url.search = new URLSearchParams({
+      client_id: clientId,
+      state,
+      redirect_uri: `${origin(request)}/api/github/callback`,
+    }).toString();
 
-    yield* Session.update((session) => ({ ...session, signIn: { state, back: unwrapped } }));
-
-    return HttpServerResponse.redirect(
-      yield* WorkOS.authorizeUrlViaGitHub(`${origin(request)}/api/auth/callback`, state),
-    );
-  }),
-);
-
-const withAccount = (
-  session: Session.Session,
-  account: Session.Account | undefined,
-): Session.Session =>
-  account === undefined ? Struct.omit(session, ["account"]) : { ...session, account };
-
-const finish = Effect.fn(function* finish(
-  session: Session.Session,
-  back: string,
-  state: string,
-  user: Session.User,
-  installed: boolean,
-  account: Session.Account | undefined,
-) {
-  const { appSlug } = yield* Env.Env;
-
-  if (!installed) {
-    yield* Session.write(withAccount({ ...session, user, signIn: { state, back } }, account));
-    const install = new URL(`https://github.com/apps/${appSlug}/installations/new/permissions`);
-    install.search = new URLSearchParams({ target_id: String(user.id), state }).toString();
-
-    return HttpServerResponse.redirect(install);
-  }
-
-  yield* Session.write(withAccount({ user }, account));
-
-  return HttpServerResponse.redirect(back);
-});
-
-const pending = Effect.gen(function* pending() {
-  const session = yield* Session.read;
-  const { signIn } = session;
-
-  const failed = (error: string) =>
-    HttpServerResponse.redirect(
-      signIn
-        ? `${signIn.back}${signIn.back.includes("?") ? "&" : "?"}error=${encodeURIComponent(error)}`
-        : `/?error=${encodeURIComponent(error)}`,
-    );
-
-  return { session, signIn, failed };
-});
-
-type Redirect = (error: string) => HttpServerResponse.HttpServerResponse;
-
-const signedInWith = Effect.fn(function* signedInWith(
-  session: Session.Session,
-  signIn: Session.SignIn,
-  rejected: Redirect,
-  attempt: ReturnType<typeof WorkOS.withCode>,
-  failed: Redirect = rejected,
-) {
-  const signed = yield* attempt.pipe(Effect.tapError(Effect.logWarning), Effect.option);
-
-  if (Option.isNone(signed)) {
-    return rejected("GitHub didn't finish signing you in. Try again.");
-  }
-
-  if ("verify" in signed.value) {
-    yield* Session.write({
-      ...session,
-      signIn: { ...signIn, verify: signed.value.verify.token },
-    });
-
-    return HttpServerResponse.redirect(
-      `/verify?${new URLSearchParams({ email: signed.value.verify.email, back: signIn.back })}`,
-    );
-  }
-
-  const { user, access_token, refresh_token, oauth_tokens } = signed.value;
-
-  const lost = () =>
-    Effect.as(
-      Session.write({ ...session, signIn: { state: signIn.state, back: signIn.back } }),
-      failed("GitHub didn't finish signing you in. Try again."),
-    );
-
-  if (!oauth_tokens) {
-    return yield* lost();
-  }
-
-  const identified = yield* GitHub.identify(GitHub.fromWorkOS(oauth_tokens)).pipe(Effect.option);
-
-  if (Option.isNone(identified)) {
-    return yield* lost();
-  }
-
-  return yield* finish(
-    session,
-    signIn.back,
-    signIn.state,
-    identified.value.user,
-    identified.value.installed,
-    { id: user.id, access: access_token, refresh: refresh_token },
-  );
-});
-
-const accountCallbackRoute = HttpRouter.add(
-  "GET",
-  "/api/auth/callback",
-  Effect.fn(function* accountCallbackRoute(request: HttpServerRequest.HttpServerRequest) {
-    const query = params(request);
-    const { session, signIn, failed } = yield* pending;
-
-    if (!signIn || query.get("state") !== signIn.state) {
-      return failed("GitHub sign-in expired. Try again.");
-    }
-
-    const code = query.get("code") ?? "";
-    const error = query.get("error") ?? "";
-
-    if (code === "") {
-      if (error !== "") {
-        yield* Effect.logWarning(`WorkOS sign-in: ${error} ${query.get("error_description")}`);
-      }
-
-      return error === ""
-        ? HttpServerResponse.redirect(signIn.back)
-        : failed("GitHub didn't finish signing you in. Try again.");
-    }
-
-    return yield* signedInWith(session, signIn, failed, WorkOS.withCode(code));
-  }),
-);
-
-const verifyEmailRoute = HttpRouter.add(
-  "POST",
-  "/api/auth/verify",
-  Effect.fn(function* verifyEmailRoute(request: HttpServerRequest.HttpServerRequest) {
-    const { session, signIn, failed } = yield* pending;
-    const pendingToken = signIn?.verify ?? "";
-
-    if (!signIn || pendingToken === "") {
-      return failed("GitHub sign-in expired. Try again.");
-    }
-
-    const form = new URLSearchParams(yield* request.text);
-
-    const again = () =>
-      HttpServerResponse.redirect(
-        `/verify?${new URLSearchParams({ email: form.get("email") ?? "", back: signIn.back, error: "That code didn't work, or it expired. Check the email, or start over." })}`,
-      );
-
-    return yield* signedInWith(
-      session,
-      signIn,
-      again,
-      WorkOS.withEmailCode(form.get("code")?.trim() ?? "", pendingToken),
-      failed,
-    );
+    return HttpServerResponse.redirect(url);
   }),
 );
 
@@ -525,20 +265,19 @@ const callbackRoute = HttpRouter.add(
   "GET",
   "/api/github/callback",
   Effect.fn(function* callbackRoute(request: HttpServerRequest.HttpServerRequest) {
+    const { appSlug } = yield* Env.Env;
     const query = params(request);
-    const { session, signIn, failed } = yield* pending;
+    const session = yield* Session.read;
+    const { signIn } = session;
 
-    if (!signIn) {
-      return failed("GitHub sign-in expired. Try again.");
-    }
+    const failed = (error: string) =>
+      HttpServerResponse.redirect(
+        signIn
+          ? `${signIn.back}${signIn.back.includes("?") ? "&" : "?"}error=${encodeURIComponent(error)}`
+          : `/?error=${encodeURIComponent(error)}`,
+      );
 
-    if (session.user && session.account) {
-      yield* Session.write({ user: session.user, account: session.account });
-
-      return HttpServerResponse.redirect(signIn.back);
-    }
-
-    if (query.get("state") !== signIn.state) {
+    if (!signIn || query.get("state") !== signIn.state) {
       return failed("GitHub sign-in expired. Try again.");
     }
 
@@ -554,14 +293,22 @@ const callbackRoute = HttpRouter.add(
       return failed("GitHub didn't finish signing you in. Try again.");
     }
 
-    return yield* finish(
-      session,
-      signIn.back,
-      signIn.state,
-      exchanged.value.user,
-      exchanged.value.installed,
-      session.account,
-    );
+    const { user, installed } = exchanged.value;
+
+    if (!installed) {
+      yield* Session.write({ ...session, user });
+      const install = new URL(`https://github.com/apps/${appSlug}/installations/new/permissions`);
+      install.search = new URLSearchParams({
+        target_id: String(user.id),
+        state: signIn.state,
+      }).toString();
+
+      return HttpServerResponse.redirect(install);
+    }
+
+    yield* Session.write({ user });
+
+    return HttpServerResponse.redirect(signIn.back);
   }),
 );
 
@@ -579,9 +326,8 @@ const installRoute = HttpRouter.add(
 
     const back = `/link/${owner}/${name}`;
     const user = yield* Effect.option(GitHub.signedIn);
-    const { account } = yield* Session.read;
 
-    if (Option.isNone(user) || !account) {
+    if (Option.isNone(user)) {
       return HttpServerResponse.redirect(`/api/github/start?back=${encodeURIComponent(back)}`);
     }
 
@@ -688,8 +434,6 @@ const iconRoute = HttpRouter.add(
 
 const Routes = Layer.mergeAll(
   signInRoute,
-  accountCallbackRoute,
-  verifyEmailRoute,
   callbackRoute,
   installRoute,
   codexAuthRoute,

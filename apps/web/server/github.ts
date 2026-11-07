@@ -5,7 +5,6 @@ import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Option from "effect/Option";
-import * as Predicate from "effect/Predicate";
 import * as Redacted from "effect/Redacted";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
@@ -344,37 +343,6 @@ export const identify = Effect.fn(function* identify(tokens: Tokens) {
 });
 
 export const exchange = (code: string) => Effect.flatMap(oauth({ code }), identify);
-
-const expiryOf = (at: number | string | undefined) => {
-  if (at === undefined) {
-    return Number.NaN;
-  }
-
-  if (Predicate.isString(at)) {
-    return Date.parse(at);
-  }
-
-  return at < 1e12 ? at * 1000 : at;
-};
-
-export const fromWorkOS = (github: {
-  readonly access_token: string;
-  readonly refresh_token?: string;
-  readonly expires_at?: number | string;
-}): Tokens => {
-  const at = expiryOf(github.expires_at);
-  const refresh = github.refresh_token ?? "";
-
-  if (Number.isFinite(at) && at !== 0) {
-    return { token: github.access_token, refresh, expires: at };
-  }
-
-  return {
-    token: github.access_token,
-    refresh,
-    expires: refresh === "" ? Number.MAX_SAFE_INTEGER : Date.now() + 8 * 3_600_000,
-  };
-};
 
 const renewalPerRefreshToken = new Map<
   string,

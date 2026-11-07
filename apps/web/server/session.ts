@@ -4,7 +4,6 @@ import * as HttpServerRequest from "effect/http/HttpServerRequest";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
-import * as Struct from "effect/Struct";
 
 import { SignedOut } from "../shared/api.ts";
 import { Env } from "./env.ts";
@@ -20,25 +19,13 @@ export const User = Schema.Struct({
 
 export type User = typeof User.Type;
 
-export const Account = Schema.Struct({
-  id: Schema.String,
-  access: Schema.String,
-  refresh: Schema.String,
-});
-
-export type Account = typeof Account.Type;
-
 const SignIn = Schema.Struct({
   state: Schema.String,
   back: Schema.String,
-  verify: Schema.optionalKey(Schema.String),
 });
-
-export type SignIn = typeof SignIn.Type;
 
 const Session = Schema.Struct({
   user: Schema.optionalKey(User),
-  account: Schema.optionalKey(Account),
   signIn: Schema.optionalKey(SignIn),
   claude: Schema.optionalKey(Schema.Struct({ verifier: Schema.String, state: Schema.String })),
   chatgpt: Schema.optionalKey(
@@ -52,18 +39,9 @@ const Session = Schema.Struct({
 
 export type Session = typeof Session.Type;
 
-const Saved = Schema.Struct({
-  account: Schema.optionalKey(Account),
-  user: Schema.optionalKey(Schema.Number),
-});
-
-type Saved = typeof Saved.Type;
-
 const sameSession = Schema.toEquivalence(Session);
-const sameSaved = Schema.toEquivalence(Saved);
 
 const COOKIE = "autofork";
-const ACCOUNT = "autofork-account";
 const text = new TextEncoder();
 
 const aes = Effect.gen(function* aes() {
@@ -81,7 +59,7 @@ const aes = Effect.gen(function* aes() {
   );
 });
 
-const encrypt = Effect.fn(function* encrypt(contents: Session | Saved) {
+const encrypt = Effect.fn(function* encrypt(contents: Session) {
   const key = yield* aes;
   const iv = crypto.getRandomValues(new Uint8Array(12));
 
@@ -126,58 +104,22 @@ const COOKIE_OPTIONS = {
   maxAge: "30 days",
 } as const;
 
-const fromCookies = Effect.gen(function* fromCookies() {
+export const read = Effect.gen(function* read() {
   const { cookies } = yield* HttpServerRequest.HttpServerRequest;
-  const main = yield* decrypt(Session, cookies[COOKIE], {});
-  const saved = yield* decrypt(Saved, cookies[ACCOUNT], {});
 
-  return { main, saved };
+  return yield* decrypt(Session, cookies[COOKIE], {});
 });
 
-export const read = fromCookies.pipe(
-  Effect.map(({ main, saved }): Session => {
-    const rest = Struct.omit(main, ["account"]);
-
-    return main.user && saved.user === main.user.id && saved.account
-      ? { ...rest, account: saved.account }
-      : rest;
-  }),
-);
-
-const savedFor = (session: Session, saved: Saved): Saved => {
-  if (!session.account) {
-    return {};
-  }
-
-  const user = session.user?.id ?? saved.user;
-
-  return user === undefined ? { account: session.account } : { account: session.account, user };
-};
-
 export const write = Effect.fn(function* write(session: Session) {
-  const { main, saved } = yield* fromCookies;
-  const next = Struct.omit(session, ["account"]);
-  const changes: [string, string][] = [];
-
-  if (!sameSession(next, Struct.omit(main, ["account"]))) {
-    changes.push([COOKIE, yield* encrypt(next)]);
+  if (sameSession(session, yield* read)) {
+    return;
   }
 
-  const nextSaved = savedFor(session, saved);
+  const sealed = yield* encrypt(session);
 
-  if (!sameSaved(nextSaved, saved)) {
-    changes.push([ACCOUNT, yield* encrypt(nextSaved)]);
-  }
-
-  yield* HttpEffect.appendPreResponseHandler((_request, response) => {
-    let answer = response;
-
-    for (const [name, value] of changes) {
-      answer = HttpServerResponse.setCookieUnsafe(answer, name, value, COOKIE_OPTIONS);
-    }
-
-    return Effect.succeed(answer);
-  });
+  yield* HttpEffect.appendPreResponseHandler((_request, response) =>
+    Effect.succeed(HttpServerResponse.setCookieUnsafe(response, COOKIE, sealed, COOKIE_OPTIONS)),
+  );
 });
 
 export const update = (change: (session: Session) => Session) =>

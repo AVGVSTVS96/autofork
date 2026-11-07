@@ -10,7 +10,7 @@ export const monthStart = (now = Date.now()) => {
 };
 
 const PER_RUN = 50;
-const PER_MONTH = 200;
+export const PER_MONTH = 200;
 const ENGINE_RETRY_WINDOW = 30_000;
 
 // Queries take the month's start as an argument: https://docs.convex.dev/understanding/best-practices/#date-in-queries
