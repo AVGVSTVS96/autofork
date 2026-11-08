@@ -1,5 +1,5 @@
 {
-  "refreshed": "2026-11-03",
+  "refreshed": "2026-11-08",
   "examples": [
     { "app": "T3 Code", "repo": "pingdotgg/t3code", "change": "always show context usage" },
     { "app": "xtool", "repo": "xtool-org/xtool", "change": "free teams keep their App Groups" },

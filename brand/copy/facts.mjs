@@ -5,14 +5,14 @@ import { join } from "node:path"
 
 const owner = "AVGVSTVS96"
 
-const legacy = { workflows: ["sync-upstream.yml"], sync: /^chore: sync patched fork to / }
-const engine = { workflows: ["autofork.yml"], sync: /^auto(?:fork|patch): sync / }
+const sync = { patches: ".autofork", ref: "main", workflows: ["autofork.yml", "sync-upstream.yml"], sync: /^(?:auto(?:fork|patch): sync |chore: sync patched fork to )/ }
 
 const forks = [
-  { repo: "t3code", name: "T3 Code", upstream: "pingdotgg/t3code", patches: ".autofork", ref: "main", ...engine, workflows: ["autofork.yml", "autopatch.yml"] },
-  { repo: "claude-plugins-official", name: "Claude Code plugins", upstream: "anthropics/claude-plugins-official", patches: "patches", ref: "main", ...legacy },
-  { repo: "buzz", name: "buzz", upstream: "block/buzz", patches: "fork/patches", ref: "nightly-green-main", ...legacy },
-  { repo: "herdr", name: "herdr", upstream: "herdrdev/herdr", patches: "patches", ref: "main", ...legacy },
+  { repo: "t3code", name: "T3 Code", upstream: "pingdotgg/t3code", ...sync, workflows: ["autofork.yml", "autopatch.yml"] },
+  { repo: "xtool", name: "xtool", upstream: "xtool-org/xtool", ...sync },
+  { repo: "claude-plugins-official", name: "Claude Code plugins", upstream: "anthropics/claude-plugins-official", ...sync },
+  { repo: "buzz", name: "buzz", upstream: "block/buzz", ...sync },
+  { repo: "herdr", name: "herdr", upstream: "herdrdev/herdr", ...sync },
 ]
 
 const gh = (...args) => JSON.parse(execFileSync("gh", args, { encoding: "utf8", maxBuffer: 64 << 20 }))
@@ -118,9 +118,9 @@ const facts = {
     daysSinceFirstSync: daysBetween(firstSync, new Date().toISOString()),
   },
   how: {
-    patches: "Directories under each fork's patches folder (T3 Code: .autofork; buzz: fork/patches on nightly-green-main), each a PATCH.md plus its .patch. Includes each fork's own README patch and herdr's auto-managed heal-overflow.",
-    syncRuns: "gh run list on the fork's sync workflow (autofork.yml for T3 Code, plus T3 Code's earlier autopatch.yml; sync-upstream.yml for the older three), every conclusion. greenSyncRuns counts only success.",
-    syncCommits: "Commits on the fork's default branch whose message starts with 'autofork: sync ' or 'autopatch: sync ' (T3 Code) or 'chore: sync patched fork to ' (the older three), one per upstream commit or release the fork was rebuilt on.",
+    patches: "Directories under each fork's .autofork folder on main, each a PATCH.md plus its .patch. Includes each fork's own README patch.",
+    syncRuns: "gh run list on autofork.yml plus the older sync workflow each fork ran before it (T3 Code's autopatch.yml, the others' sync-upstream.yml), every conclusion. greenSyncRuns counts only success.",
+    syncCommits: "Commits on the fork's main branch whose message starts with 'autofork: sync ', 'autopatch: sync ' or the older 'chore: sync patched fork to ', one per upstream commit or release the fork was rebuilt on.",
     upstreamCommitsAbsorbed: "gh api compare on the upstream repo, from the first synced source commit to the latest one.",
     heals: "Distinct upstream sources where a sync commit or patched release says a patch was healed (rebuilt by the agent) after git apply failed.",
     greenDays: "First sync run to the last successful one.",

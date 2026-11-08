@@ -1,5 +1,5 @@
 {
-  "countedAt": "2026-10-14T03:57:27.168Z",
+  "countedAt": "2026-11-08T08:36:31.720Z",
   "owner": "AVGVSTVS96",
   "site": "https://autofork.com",
   "repo": "https://github.com/AVGVSTVS96/autofork",
@@ -9,23 +9,23 @@
     "site": "https://autofork.com"
   },
   "tool": {
-    "sourceFiles": 1,
-    "sourceLines": 615,
+    "sourceFiles": 46,
+    "sourceLines": 3388,
     "runtimeDependencies": 0,
     "node": ">=20",
     "license": "MIT",
-    "defaultCron": "17 * * * *",
     "commands": [
       "fork",
       "init",
       "save",
       "status",
-      "sync"
+      "sync",
+      "link"
     ]
   },
   "t3code": {
-    "forks": 7281,
-    "stars": 27434
+    "forks": 9920,
+    "stars": 51593
   },
   "lineage": {
     "piPatcher": {
@@ -43,49 +43,71 @@
       "repo": "AVGVSTVS96/t3code",
       "name": "T3 Code",
       "upstream": "pingdotgg/t3code",
-      "patches": 4,
+      "patches": 6,
       "patchIds": [
         "app-name",
         "context-usage",
         "fork-readme",
+        "mac-adhoc-signing",
+        "release-feed",
         "window-title"
       ],
-      "syncRuns": 24,
-      "greenSyncRuns": 20,
-      "syncCommits": 8,
-      "upstreamCommitsAbsorbed": 215,
-      "heals": 1,
-      "patchedReleases": 0,
+      "syncRuns": 207,
+      "greenSyncRuns": 158,
+      "syncCommits": 59,
+      "upstreamCommitsAbsorbed": 4466,
+      "heals": 11,
+      "patchedReleases": 33,
       "firstSync": "2026-10-10",
-      "lastGreenSync": "2026-10-14",
-      "greenDays": 3
+      "lastGreenSync": "2026-11-08",
+      "greenDays": 28
+    },
+    {
+      "repo": "AVGVSTVS96/xtool",
+      "name": "xtool",
+      "upstream": "xtool-org/xtool",
+      "patches": 5,
+      "patchIds": [
+        "free-profile-names",
+        "keep-app-identifiers",
+        "keyless-signing",
+        "let-free-personal-teams-use",
+        "skip-unbuilt-bundles"
+      ],
+      "syncRuns": 149,
+      "greenSyncRuns": 146,
+      "syncCommits": 4,
+      "upstreamCommitsAbsorbed": 18,
+      "heals": 0,
+      "patchedReleases": 0,
+      "firstSync": "2026-10-13",
+      "lastGreenSync": "2026-11-08",
+      "greenDays": 26
     },
     {
       "repo": "AVGVSTVS96/claude-plugins-official",
       "name": "Claude Code plugins",
       "upstream": "anthropics/claude-plugins-official",
-      "patches": 10,
+      "patches": 8,
       "patchIds": [
+        "0-hub",
         "buzz-threads",
         "discord-threads",
         "fork-readme",
-        "heal-overflow",
         "hex-marketplace",
-        "hub",
-        "plugin-deps",
         "t3-acp",
         "telegram-topics",
         "voice"
       ],
-      "syncRuns": 12,
-      "greenSyncRuns": 8,
-      "syncCommits": 6,
-      "upstreamCommitsAbsorbed": 28,
+      "syncRuns": 46,
+      "greenSyncRuns": 32,
+      "syncCommits": 14,
+      "upstreamCommitsAbsorbed": 389,
       "heals": 0,
       "patchedReleases": 0,
       "firstSync": "2026-10-04",
-      "lastGreenSync": "2026-10-10",
-      "greenDays": 6
+      "lastGreenSync": "2026-11-08",
+      "greenDays": 34
     },
     {
       "repo": "AVGVSTVS96/buzz",
@@ -93,44 +115,43 @@
       "upstream": "block/buzz",
       "patches": 7,
       "patchIds": [
-        "agent-files",
-        "connect-remote-agent",
-        "fork-readme",
-        "pulse-agent-presence",
-        "redeploy-after-shutdown",
-        "remote-agent-logs",
-        "remote-observer-frames"
+        "1-remote-observer-frames",
+        "2-redeploy-after-shutdown",
+        "3-pulse-agent-presence",
+        "4-remote-agent-logs",
+        "5-connect-remote-agent",
+        "6-agent-files",
+        "fork-readme"
       ],
-      "syncRuns": 11,
-      "greenSyncRuns": 10,
-      "syncCommits": 8,
-      "upstreamCommitsAbsorbed": 58,
-      "heals": 1,
+      "syncRuns": 41,
+      "greenSyncRuns": 34,
+      "syncCommits": 29,
+      "upstreamCommitsAbsorbed": 391,
+      "heals": 5,
       "patchedReleases": 1,
       "firstSync": "2026-10-06",
-      "lastGreenSync": "2026-10-13",
-      "greenDays": 7
+      "lastGreenSync": "2026-11-03",
+      "greenDays": 28
     },
     {
       "repo": "AVGVSTVS96/herdr",
       "name": "herdr",
       "upstream": "herdrdev/herdr",
-      "patches": 4,
+      "patches": 3,
       "patchIds": [
         "fork-readme",
-        "fork-update-feed",
-        "heal-overflow",
-        "pane-border-ids"
+        "pane-border-ids",
+        "release-feed"
       ],
-      "syncRuns": 176,
-      "greenSyncRuns": 99,
-      "syncCommits": 40,
-      "upstreamCommitsAbsorbed": 315,
-      "heals": 10,
-      "patchedReleases": 18,
+      "syncRuns": 235,
+      "greenSyncRuns": 121,
+      "syncCommits": 43,
+      "upstreamCommitsAbsorbed": 597,
+      "heals": 12,
+      "patchedReleases": 6,
       "firstSync": "2026-07-24",
-      "lastGreenSync": "2026-09-16",
-      "greenDays": 54
+      "lastGreenSync": "2026-11-08",
+      "greenDays": 107
     }
   ],
   "proof": {
@@ -140,24 +161,24 @@
     "upstreamCommits": 156
   },
   "totals": {
-    "forks": 4,
-    "patches": 25,
-    "syncRuns": 223,
-    "greenSyncRuns": 137,
-    "syncCommits": 62,
-    "upstreamCommitsAbsorbed": 616,
-    "heals": 12,
+    "forks": 5,
+    "patches": 29,
+    "syncRuns": 678,
+    "greenSyncRuns": 491,
+    "syncCommits": 149,
+    "upstreamCommitsAbsorbed": 5861,
+    "heals": 28,
     "firstSync": "2026-07-24",
-    "daysSinceFirstSync": 82
+    "daysSinceFirstSync": 107
   },
   "how": {
-    "patches": "Directories under each fork's patches folder (T3 Code: .autofork; buzz: fork/patches on nightly-green-main), each a PATCH.md plus its .patch. Includes each fork's own README patch and herdr's auto-managed heal-overflow.",
-    "syncRuns": "gh run list on the fork's sync workflow (autofork.yml for T3 Code, plus T3 Code's earlier autopatch.yml; sync-upstream.yml for the older three), every conclusion. greenSyncRuns counts only success.",
-    "syncCommits": "Commits on the fork's default branch whose message starts with 'autofork: sync ' or 'autopatch: sync ' (T3 Code) or 'chore: sync patched fork to ' (the older three), one per upstream commit or release the fork was rebuilt on.",
+    "patches": "Directories under each fork's .autofork folder on main, each a PATCH.md plus its .patch. Includes each fork's own README patch.",
+    "syncRuns": "gh run list on autofork.yml plus the older sync workflow each fork ran before it (T3 Code's autopatch.yml, the others' sync-upstream.yml), every conclusion. greenSyncRuns counts only success.",
+    "syncCommits": "Commits on the fork's main branch whose message starts with 'autofork: sync ', 'autopatch: sync ' or the older 'chore: sync patched fork to ', one per upstream commit or release the fork was rebuilt on.",
     "upstreamCommitsAbsorbed": "gh api compare on the upstream repo, from the first synced source commit to the latest one.",
     "heals": "Distinct upstream sources where a sync commit or patched release says a patch was healed (rebuilt by the agent) after git apply failed.",
     "greenDays": "First sync run to the last successful one.",
-    "tool": "Read from the engine checkout (AUTOFORK_DIR, default ~/Developer/autofork): lines in src/*.ts, dependencies in package.json, the cron in the workflow init writes, commands from the usage text.",
+    "tool": "Read from packages/autofork: lines in src/**/*.ts, dependencies in package.json, commands from the usage text.",
     "t3code": "gh api repos/pingdotgg/t3code at countedAt. Round down when quoting.",
     "proof": "The proof line's window: the T3 Code fork's first two days, from its first synced source (Oct 10) to its sync on Oct 12, via gh api compare. Fixed, so the quoted number stays true while the fork's totals grow."
   }
