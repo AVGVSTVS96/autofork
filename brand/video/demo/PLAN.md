@@ -44,5 +44,5 @@ Bassim replaced Simon's pair ("too heavy on the never rebased") with **Customize
 - End card: the headline. Rail: the headline, hidden on the hero and the end card so no frame shows it twice.
 - Kept: "Every change still on top. I never rebased it."
 
-- 28.2–33.3: the second example is hex-voice instead of xtool (Bassim wants it second after T3 Code everywhere): the composer types expo-gpt-live (David Mokos's avatar), "but call my own assistant instead", then the fork's real `.autofork/hex-voice/PATCH.md` on GitHub, framed on its first paragraph, where the ask lives ("Calls go to hex's voice plugin over Tailscale instead of the template's own OpenAI server"). Caption: **Any open source app.** Here's my hex-voice. Same beats.
+- 28.2–33.3: the second example stays xtool ("but free teams keep their App Groups", then its real PATCH.md on GitHub). Same beats.
 - The 156 is cited from `copy/facts.json`'s `proof` (9afde1c..8f25cf9), not the fork's running total (now 215).

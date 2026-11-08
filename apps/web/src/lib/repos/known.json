@@ -4,18 +4,18 @@
       "owner": "pingdotgg",
       "name": "t3code",
       "description": null,
-      "stars": 44062,
+      "stars": 51589,
       "avatar": "/repos/t3code.png"
     },
     "others": []
   },
-  "expogptlive": {
+  "xtool": {
     "repo": {
-      "owner": "davidmokos",
-      "name": "expo-gpt-live",
-      "description": "Expo SDK 57 voice app with GPT-Live 1 and AI Elements Persona.",
-      "stars": 138,
-      "avatar": "/repos/expo-gpt-live.jpg"
+      "owner": "xtool-org",
+      "name": "xtool",
+      "description": "Cross-platform Xcode replacement. Build and deploy iOS apps with SwiftPM on Linux, Windows, macOS.",
+      "stars": 14918,
+      "avatar": "/repos/xtool.png"
     },
     "others": []
   },
@@ -24,7 +24,7 @@
       "owner": "herdrdev",
       "name": "herdr",
       "description": "the runtime your coding agents live on",
-      "stars": 47847,
+      "stars": 49217,
       "avatar": "/repos/herdr.svg"
     },
     "others": []
@@ -34,7 +34,7 @@
       "owner": "ghostty-org",
       "name": "ghostty",
       "description": "👻 Ghostty is a fast, feature-rich, and cross-platform terminal emulator that uses platform-native UI and GPU acceleration.",
-      "stars": 63419,
+      "stars": 63852,
       "avatar": "/repos/ghostty.png"
     },
     "others": []
@@ -44,7 +44,7 @@
       "owner": "block",
       "name": "buzz",
       "description": "A hive mind communication platform",
-      "stars": 36706,
+      "stars": 36801,
       "avatar": "/repos/buzz.jpg"
     },
     "others": []
@@ -54,7 +54,7 @@
       "owner": "earendil-works",
       "name": "pi",
       "description": "AI agent toolkit: unified LLM API, agent loop, TUI, coding agent CLI",
-      "stars": 119825,
+      "stars": 120701,
       "avatar": "/repos/pi.png"
     },
     "others": []
@@ -64,7 +64,7 @@
       "owner": "manaflow-ai",
       "name": "cmux",
       "description": "Open source Ghostty-based macOS terminal with vertical tabs and notifications for AI coding agents. Built for multitasking, organization, and programmability.",
-      "stars": 28675,
+      "stars": 28745,
       "avatar": "/repos/cmux.png"
     },
     "others": []
@@ -74,7 +74,7 @@
       "owner": "tmux",
       "name": "tmux",
       "description": "tmux source code",
-      "stars": 50140,
+      "stars": 50206,
       "avatar": "/repos/tmux.png"
     },
     "others": []
@@ -84,7 +84,7 @@
       "owner": "utmapp",
       "name": "UTM",
       "description": "Virtual machines for iOS and macOS",
-      "stars": 36675,
+      "stars": 36771,
       "avatar": "/repos/utm.png"
     },
     "others": []

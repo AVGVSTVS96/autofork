@@ -37,7 +37,7 @@ autofork, one word, lowercase, even at the start of a sentence. One name for eve
 
 - **Headline:** Customized forks / that maintain themselves. Two rows: the first on their line, the second in your color on the branch.
 - **Sub line:** Every release, your changes are reapplied intelligently. When they ship the same feature, autofork stops applying yours.
-- **The action:** one rounded composer that types out examples: the app as a badge (like T3 Code's composer chips) that rolls through apps people fork (T3 Code, expo-gpt-live, herdr, Ghostty, Buzz, pi, cmux, tmux, UTM) and lands on one, then the change types out. T3 Code and "always show context usage" come first, then expo-gpt-live and "call my own assistant instead", the Expo template my hex-voice app forks. Focusing it stops the typing and leaves that example as the placeholder. Button: **Fork it**.
+- **The action:** one rounded composer that types out examples: the app as a badge (like T3 Code's composer chips) that rolls through apps people fork (T3 Code, xtool, herdr, Ghostty, Buzz, pi, cmux, tmux, UTM) and lands on one, then the change types out. T3 Code and "always show context usage" come first, then xtool and "free teams keep their App Groups". Focusing it stops the typing and leaves that example as the placeholder. Button: **Fork it**.
 - **Sign-in, right under it:** **Continue with ChatGPT** and **Continue with Claude**, side by side, both live.
 - **One small line under the buttons:** Runs on the ChatGPT or Claude plan you already pay for.
 
@@ -54,7 +54,7 @@ Bassim, Oct 13: "too many sections on the page... a lot of reading... We could c
 
 2. **My forks, today.**
    Line: My T3 Code fork took 156 commits from T3 Code in its first two days, and I never rebased it. One change broke on day one and the agent rebuilt it. (`facts.json`: `proof`; every sync commit on the fork is autofork's.)
-   Visual: T3 Code transcribed from its source (apps/web), threads you can switch, and my context-usage button in the composer, which toggles compact-before-send like the real one. Under it, my other forks as rows with their icons: hex-voice first (the iPhone app I call my assistant from, an Expo template I took over, its every change in one patch), then herdr, Buzz and Claude Code's plugins.
+   Visual: T3 Code transcribed from its source (apps/web), threads you can switch, and my context-usage button in the composer, which toggles compact-before-send like the real one. Under it, my other forks as rows with their icons: herdr, Buzz and Claude Code's plugins.
 
 3. **It runs in your GitHub.**
    Line: Your fork lives in your GitHub account and updates itself in its own GitHub Actions, on the ChatGPT or Claude plan you already pay for. Free on public forks.

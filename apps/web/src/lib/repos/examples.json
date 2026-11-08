@@ -1,12 +1,8 @@
 {
-  "refreshed": "2026-11-03",
+  "refreshed": "2026-11-08",
   "examples": [
     { "app": "T3 Code", "repo": "pingdotgg/t3code", "change": "always show context usage" },
-    {
-      "app": "expo-gpt-live",
-      "repo": "davidmokos/expo-gpt-live",
-      "change": "call my own assistant instead"
-    },
+    { "app": "xtool", "repo": "xtool-org/xtool", "change": "free teams keep their App Groups" },
     { "app": "herdr", "repo": "herdrdev/herdr", "change": "show each pane's ID on its border" },
     {
       "app": "Ghostty",
