@@ -115,9 +115,11 @@ esac
   expect(ok).toBe(true);
   expect(log).toContain("This repo is private");
   expect(log).toContain(
-    String.raw`sh -c 'd=$(mktemp -d) && trap "rm -rf \"\$d\"" EXIT && CODEX_HOME="$d" codex login --device-auth && gh secret set CODEX_AUTH --repo me/app < "$d/auth.json"', then start its first sync: gh workflow run autofork.yml --repo me/app.`,
+    String.raw`sh -c 'd=$(mktemp -d) && trap "rm -rf \"\$d\"" EXIT && CODEX_HOME="$d" codex login --device-auth && gh secret set CODEX_AUTH --repo me/app < "$d/auth.json"'`,
   );
-  expect(log).toContain("start the first sync by hand: gh workflow run autofork.yml --repo me/app");
+  expect(log).toContain(
+    "gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo me/app\nIf you pushed before the secret was set, start the first sync by hand:\n  gh workflow run autofork.yml --repo me/app",
+  );
   expect(file(path.join(home, "mine"), ".github/workflows/autofork.yml")).toContain("17 * * * *");
   const calls = file(home, "gh.log");
   expect(calls).toContain("api -X PUT repos/me/app/actions/permissions -F enabled=true");

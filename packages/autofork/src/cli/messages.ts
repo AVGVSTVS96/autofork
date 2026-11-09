@@ -1,5 +1,14 @@
+export const firstSync = (repo: string) => `  gh workflow run autofork.yml${repo}`;
+
+export const claudeSteps = (repo: string) =>
+  `  claude setup-token
+  gh secret set CLAUDE_CODE_OAUTH_TOKEN${repo}`;
+
 export const codexHint = (repo: string) =>
-  `For ChatGPT instead, give the fork a Codex sign-in of its own, since each refresh retires the last one. Turn on device code login in ChatGPT's security settings, run sh -c 'd=$(mktemp -d) && trap "rm -rf \\"\\$d\\"" EXIT && CODEX_HOME="$d" codex login --device-auth && gh secret set CODEX_AUTH${repo} < "$d/auth.json"', then start its first sync: gh workflow run autofork.yml${repo}. Link it too (below): only a linked fork saves Codex's refreshed sign-ins, and without them it stops working within about a week.`;
+  `For ChatGPT instead, give the fork a Codex sign-in of its own, since each refresh retires the last one. Turn on device code login in ChatGPT's security settings, then:
+  sh -c 'd=$(mktemp -d) && trap "rm -rf \\"\\$d\\"" EXIT && CODEX_HOME="$d" codex login --device-auth && gh secret set CODEX_AUTH${repo} < "$d/auth.json"'
+${firstSync(repo)}
+Link it too (below): only a linked fork saves Codex's refreshed sign-ins, and without them it stops working within about a week.`;
 
 export const LINK_HINT =
   "GitHub's timer can run hours late. Run it on time and track spend: npx autofork link";

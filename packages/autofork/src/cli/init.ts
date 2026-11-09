@@ -1,7 +1,7 @@
 import { AutoforkError } from "../failure.ts";
 import { say } from "../platform/action.ts";
 import { origin } from "../platform/github.ts";
-import { codexHint, FORK_OPTIONS, LINK_HINT } from "./messages.ts";
+import { claudeSteps, codexHint, firstSync, FORK_OPTIONS, LINK_HINT } from "./messages.ts";
 import { claim, options, setup } from "./setup.ts";
 
 export const init = async (root: string, args: string[]) => {
@@ -17,7 +17,7 @@ export const init = async (root: string, args: string[]) => {
   const repo = mine === "" ? "" : ` --repo ${mine}`;
 
   say(
-    `Add a CLAUDE_CODE_OAUTH_TOKEN secret (claude setup-token prints one), commit, and push. If you pushed before the secret was set, start the first sync by hand: gh workflow run autofork.yml${repo}. ${codexHint(repo)}`,
+    `Give the fork a Claude sign-in (paste the token setup-token prints), then commit and push:\n${claudeSteps(repo)}\nIf you pushed before the secret was set, start the first sync by hand:\n${firstSync(repo)}\n${codexHint(repo)}`,
   );
   say(LINK_HINT);
 };
