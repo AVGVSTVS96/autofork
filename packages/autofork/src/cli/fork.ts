@@ -7,7 +7,7 @@ import { claudeToken } from "../platform/env.ts";
 import { git } from "../platform/git.ts";
 import { origin } from "../platform/github.ts";
 import { run } from "../platform/process.ts";
-import { codexHint, FORK_OPTIONS, LINK_HINT } from "./messages.ts";
+import { claudeSteps, codexHint, FORK_OPTIONS, LINK_HINT } from "./messages.ts";
 import { claim, options, setup } from "./setup.ts";
 
 const OWNER_REPO = /^[\w.-]+\/(?<name>[\w.-]+)$/u;
@@ -50,7 +50,7 @@ export const fork = async (cwd: string, args: string[]) => {
 
   if (!secret) {
     say(
-      `Last step: run claude setup-token, then gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo ${repo}, then start its first sync: gh workflow run autofork.yml --repo ${repo}. ${codexHint(` --repo ${repo}`)}`,
+      `Last step, a Claude sign-in for the fork and its first sync:\n${claudeSteps(` --repo ${repo}`)}\n${codexHint(` --repo ${repo}`)}`,
     );
   }
 
