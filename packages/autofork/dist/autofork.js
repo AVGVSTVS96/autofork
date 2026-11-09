@@ -576,6 +576,7 @@ var runLabel = insideClaudeCode ? "autofork" : claudeEntrypoint ?? "autofork";
 var codexDir = codexHome ?? path4.join(homedir(), ".codex");
 var REBUILD_TOOLS = "Bash,Read,Edit,Write,Glob,Grep";
 var NO_UPSTREAM_MCP_SERVERS = "--strict-mcp-config";
+var NO_CODEX_CONNECTORS = "--ignore-user-config --disable apps";
 var CLAUDE_SIGNED_OUT = "Claude Code isn't signed in, so no agent can run: give the autofork step CLAUDE_CODE_OAUTH_TOKEN (claude setup-token prints one), or CODEX_AUTH for ChatGPT, from the fork's secrets";
 var signedOut = (claude, dir) => /"loggedIn":\s*false/u.test(run("sh", ["-c", `${claude} auth status --json`], dir).out.toString());
 var agentCommand = (config, cap, dir) => {
@@ -586,7 +587,7 @@ var agentCommand = (config, cap, dir) => {
     const codex = installed("codex") ? "codex" : "npx -y @openai/codex";
     return {
       agent: "codex",
-      command: `${codex} exec --json --dangerously-bypass-approvals-and-sandbox -`
+      command: `${codex} exec --json --dangerously-bypass-approvals-and-sandbox ${NO_CODEX_CONNECTORS} -`
     };
   }
   const claude = installed("claude") ? "claude" : "npx -y @anthropic-ai/claude-code";
