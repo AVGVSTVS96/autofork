@@ -7,7 +7,7 @@ import { claudeToken } from "../platform/env.ts";
 import { git } from "../platform/git.ts";
 import { origin } from "../platform/github.ts";
 import { run } from "../platform/process.ts";
-import { claudeSteps, codexHint, FORK_OPTIONS, LINK_HINT } from "./messages.ts";
+import { claudeSteps, codexHint, firstSync, FORK_OPTIONS, LINK_HINT } from "./messages.ts";
 import { claim, options, setup } from "./setup.ts";
 
 const OWNER_REPO = /^[\w.-]+\/(?<name>[\w.-]+)$/u;
@@ -50,7 +50,7 @@ export const fork = async (cwd: string, args: string[]) => {
 
   if (!secret) {
     say(
-      `Last step, a Claude sign-in for the fork and its first sync:\n${claudeSteps(` --repo ${repo}`)}\n${codexHint(` --repo ${repo}`)}`,
+      `Last step, a Claude sign-in for the fork (paste the token setup-token prints) and its first sync:\n${claudeSteps(` --repo ${repo}`)}\n${firstSync(` --repo ${repo}`)}\n${codexHint(` --repo ${repo}`)}`,
     );
   }
 

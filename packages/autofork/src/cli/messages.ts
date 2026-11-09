@@ -2,8 +2,7 @@ export const firstSync = (repo: string) => `  gh workflow run autofork.yml${repo
 
 export const claudeSteps = (repo: string) =>
   `  claude setup-token
-  gh secret set CLAUDE_CODE_OAUTH_TOKEN${repo}
-${firstSync(repo)}`;
+  gh secret set CLAUDE_CODE_OAUTH_TOKEN${repo}`;
 
 export const codexHint = (repo: string) =>
   `For ChatGPT instead, give the fork a Codex sign-in of its own, since each refresh retires the last one. Turn on device code login in ChatGPT's security settings, then:

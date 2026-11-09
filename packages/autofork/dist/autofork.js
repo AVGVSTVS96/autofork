@@ -179,8 +179,7 @@ var origin = (root) => {
 // src/cli/messages.ts
 var firstSync = (repo) => `  gh workflow run autofork.yml${repo}`;
 var claudeSteps = (repo) => `  claude setup-token
-  gh secret set CLAUDE_CODE_OAUTH_TOKEN${repo}
-${firstSync(repo)}`;
+  gh secret set CLAUDE_CODE_OAUTH_TOKEN${repo}`;
 var codexHint = (repo) => `For ChatGPT instead, give the fork a Codex sign-in of its own, since each refresh retires the last one. Turn on device code login in ChatGPT's security settings, then:
   sh -c 'd=$(mktemp -d) && trap "rm -rf \\"\\$d\\"" EXIT && CODEX_HOME="$d" codex login --device-auth && gh secret set CODEX_AUTH${repo} < "$d/auth.json"'
 ${firstSync(repo)}
@@ -1534,8 +1533,9 @@ var fork = async (cwd, args) => {
   git(root, "push", "--quiet");
   say(`${repo} now keeps itself current with ${upstream}. It's cloned in ./${path13.basename(root)}.`);
   if (!secret) {
-    say(`Last step, a Claude sign-in for the fork and its first sync:
+    say(`Last step, a Claude sign-in for the fork (paste the token setup-token prints) and its first sync:
 ${claudeSteps(` --repo ${repo}`)}
+${firstSync(` --repo ${repo}`)}
 ${codexHint(` --repo ${repo}`)}`);
   }
   say(LINK_HINT.replace("npx", `cd ${path13.basename(root)} && npx`));
@@ -1551,8 +1551,10 @@ var init = async (root, args) => {
   claim(root, upstream);
   const mine = origin(root);
   const repo = mine === "" ? "" : ` --repo ${mine}`;
-  say(`Commit and push, then give the fork a Claude sign-in and start its first sync:
+  say(`Give the fork a Claude sign-in (paste the token setup-token prints), then commit and push:
 ${claudeSteps(repo)}
+If you pushed before the secret was set, start the first sync by hand:
+${firstSync(repo)}
 ${codexHint(repo)}`);
   say(LINK_HINT);
 };
