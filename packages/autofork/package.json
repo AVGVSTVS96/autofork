@@ -1,6 +1,6 @@
 {
   "name": "autofork",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Customized forks that maintain themselves. Personal forks of open-source apps auto-track upstream: every release, your changes are reapplied, and an agent rebuilds any that break.",
   "homepage": "https://autofork.com",
   "license": "MIT",
