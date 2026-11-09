@@ -22,6 +22,8 @@ const REBUILD_TOOLS = "Bash,Read,Edit,Write,Glob,Grep";
 
 const NO_UPSTREAM_MCP_SERVERS = "--strict-mcp-config";
 
+const NO_CODEX_CONNECTORS = "--ignore-user-config --disable apps";
+
 const CLAUDE_SIGNED_OUT =
   "Claude Code isn't signed in, so no agent can run: give the autofork step CLAUDE_CODE_OAUTH_TOKEN (claude setup-token prints one), or CODEX_AUTH for ChatGPT, from the fork's secrets";
 
@@ -40,7 +42,7 @@ export const agentCommand = (config: Config, cap: number, dir: string) => {
 
     return {
       agent: "codex",
-      command: `${codex} exec --json --dangerously-bypass-approvals-and-sandbox -`,
+      command: `${codex} exec --json --dangerously-bypass-approvals-and-sandbox ${NO_CODEX_CONNECTORS} -`,
     } as const;
   }
 
