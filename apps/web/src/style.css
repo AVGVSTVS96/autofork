@@ -21,7 +21,7 @@
   --hair: #e4e4e7;
   --hair-2: #d4d4d8;
   --tint: rgb(14 14 18 / 0.05);
-  --raise: 0 1px 2px rgb(14 14 18 / 0.05), 0 1px 1px rgb(14 14 18 / 0.02);
+  --raise: 0 1px 2px rgb(14 14 18 / 0.06), 0 2px 6px -2px rgb(14 14 18 / 0.06);
   --trunk: #cacad2;
   --you: #3b2bff;
   --on-you: #ffffff;
@@ -70,16 +70,16 @@
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0c0c0f;
-    --panel: #141419;
-    --panel-2: #1a1a20;
+    --bg: #09090b;
+    --panel: #18181b;
+    --panel-2: #1f1f23;
     --ink: #eeeef2;
     --ink-2: #a6a6b2;
     --ink-3: #8a8a96;
     --hair: #27272a;
     --hair-2: #3f3f46;
     --tint: rgb(238 238 242 / 0.06);
-    --raise: inset 0 1px 0 rgb(255 255 255 / 0.04);
+    --raise: inset 0 1px 0 rgb(255 255 255 / 0.05);
     --trunk: #34343d;
     --you: #8f84ff;
     --on-you: #0c0c0f;
@@ -457,9 +457,7 @@ button.me {
   font-weight: 600;
 }
 .menu-label {
-  padding: 8px 10px 6px;
-  font: 400 12px/1 var(--mono);
-  color: var(--ink-3);
+  font-weight: 600;
 }
 .menu-list {
   display: grid;
@@ -876,7 +874,9 @@ button.me {
 }
 .ask button:disabled,
 .paste button:disabled {
-  opacity: 0.35;
+  opacity: 1;
+  background: var(--you-soft);
+  color: var(--you);
 }
 
 .signin {
@@ -3311,8 +3311,10 @@ footer .links {
   .cmd code {
     padding: 12px 14px;
     font-size: 13px;
-    white-space: normal;
-    overflow-wrap: anywhere;
+    text-overflow: clip;
+    overflow-x: auto;
+    scrollbar-width: none;
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
   }
   .cmd button {
     padding: 0 14px;
@@ -3545,7 +3547,15 @@ nav .links > :last-child {
   }
   .yours-card .gh,
   .yours-card .cmd {
+    border-color: var(--you-line);
     background: color-mix(in oklab, var(--you-soft) 90%, white);
+  }
+  .yours-card .gh-run,
+  .yours-card .cmd button {
+    border-color: var(--you-line);
+  }
+  .settings label input {
+    background: var(--bg);
   }
   .mini {
     border-color: var(--hair);
@@ -3575,7 +3585,7 @@ nav .links > :last-child {
 }
 .meter i {
   display: block;
-  min-width: 8px;
+  min-width: 3px;
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, color-mix(in oklab, var(--you) 55%, var(--panel)), var(--you));
@@ -3610,6 +3620,11 @@ nav .links > :last-child {
 .spend .item + .item,
 .spend .gauges + .list .item:first-child {
   border-top: 1px solid var(--hair);
+}
+.spend .item .end {
+  font: 500 14px var(--sans);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
 }
 .spend .why {
   margin-top: 2px;
@@ -3766,14 +3781,13 @@ nav .links > :last-child {
   overflow: hidden;
 }
 .gate .dash {
-  mask-image: linear-gradient(to bottom, #000 20%, transparent 95%);
-  -webkit-mask-image: linear-gradient(to bottom, #000 20%, transparent 95%);
+  opacity: 0.7;
 }
 .gate .sk {
   animation: none;
 }
 .gate .sk {
-  background: var(--panel-2);
+  background: var(--hair-2);
 }
 .gate .sk:not(.face) {
   height: 12px;

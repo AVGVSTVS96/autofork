@@ -125,7 +125,6 @@ const Forks = () => {
 const PREVIEW = [
   { name: 62, spent: 34, rebuilds: 45 },
   { name: 48, spent: 12, rebuilds: 20 },
-  { name: 55, spent: 58, rebuilds: 70 },
 ];
 
 const SignedOut = () => (
