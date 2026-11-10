@@ -10,15 +10,15 @@ export const init = async (root: string, args: string[]) => {
 
   if (upstream === undefined) {
     throw new AutoforkError(
-      `this isn't a GitHub fork, so name its upstream: autofork init <owner/repo | git url> ${FORK_OPTIONS}`,
+      `couldn't tell this fork's upstream from GitHub, so name it: autofork init <owner/repo | git url> ${FORK_OPTIONS}`,
     );
   }
 
-  await setup(root, upstream, options(args));
+  const drift = await setup(root, upstream, options(args));
   claim(root, upstream);
   const mine = origin(root);
 
-  say("Commit and push, and the fork follows upstream.");
+  say(`${drift.length > 0 ? "Then commit" : "Commit"} and push, and the fork follows upstream.`);
   say(signIn(mine === "" ? "" : ` --repo ${mine}`));
   say(LINK_HINT);
 };

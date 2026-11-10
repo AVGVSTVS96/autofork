@@ -145,42 +145,59 @@ esac
   expect(configOf(path.join(home, "mine")).upstream).toBe("acme/app");
 });
 
-test("init without a name needs a GitHub fork to take its upstream from", () => {
+test("init without a name says so when GitHub doesn't give the fork's upstream", () => {
   const origin = path.join(home, "unnamed");
   mkdirSync(origin);
   sh(origin, "git init -q && echo one > app.js && git add -A && git commit -qm init");
   sh(home, `git clone -q ${origin} unnamed-fork`);
   const { ok, log } = autofork(path.join(home, "unnamed-fork"), "init", "--every", "1h");
   expect(ok).toBe(false);
-  expect(log).toContain("this isn't a GitHub fork, so name its upstream: autofork init");
+  expect(log).toContain(
+    "couldn't tell this fork's upstream from GitHub, so name it: autofork init",
+  );
 });
 
 test("init removes the workflows the fork copied from upstream and never changed, and keeps the rest", () => {
   const origin = path.join(home, "flows");
   const mine = path.join(home, "flows-fork");
-  mkdirSync(path.join(origin, ".github/workflows"), { recursive: true });
+  mkdirSync(path.join(origin, ".github/workflows/scripts"), { recursive: true });
   sh(origin, "git init -q && echo one > app.js");
-  write(origin, ".github/workflows/test.yml", "name: test\n");
-  write(origin, ".github/workflows/lint.yml", "name: lint\n");
+
+  for (const name of ["test", "lint", "ci", "docs"]) {
+    write(origin, `.github/workflows/${name}.yml`, `name: ${name}\n`);
+  }
+
+  write(origin, ".github/workflows/scripts/check.sh", "true\n");
   sh(origin, "git add -A && git commit -qm init");
   sh(home, `git clone -q ${origin} flows-fork`);
   write(origin, ".github/workflows/test.yml", "name: test\non: push\n");
   sh(origin, "git commit -qam 'test on push'");
   write(mine, ".github/workflows/desktop.yml", "name: desktop\n");
   write(mine, ".github/workflows/lint.yml", "name: lint mine\n");
+  write(mine, "app.js", "mine\n");
   sh(mine, "git add -A && git commit -qm 'build the desktop app'");
+  write(mine, ".github/workflows/ci.yml", "name: ci, not committed yet\n");
+  sh(mine, "rm .github/workflows/docs.yml");
   const { ok, log } = autofork(mine, "init", origin);
   expect(ok).toBe(true);
   expect(log).toContain(
     "Removed the workflow the fork copied from upstream and never changed, since they'd run here too.",
   );
-  expect(sh(mine, "ls .github/workflows")).toBe("autofork.yml\ndesktop.yml\nlint.yml");
+  expect(sh(mine, "ls .github/workflows")).toBe(
+    "autofork.yml\nci.yml\ndesktop.yml\nlint.yml\nscripts",
+  );
+  expect(file(mine, ".github/workflows/ci.yml")).toBe("name: ci, not committed yet\n");
+  expect(log).toContain("autofork save <id>\nThen commit and push, and the fork follows upstream.");
   expect(sh(mine, "git status --porcelain .github/workflows/test.yml")).toBe(
     "D .github/workflows/test.yml",
   );
   sh(mine, "rm -rf .autofork .github/workflows/autofork.yml && git checkout -q .github");
-  write(mine, ".github/workflows/test.yml", "name: test mine\n");
-  sh(mine, "git commit -qam 'my tests'");
+
+  for (const name of ["test", "ci", "docs"]) {
+    write(mine, `.github/workflows/${name}.yml`, `name: ${name} mine\n`);
+  }
+
+  sh(mine, "git commit -qam 'my workflows'");
   expect(autofork(mine, "init", origin).log).not.toContain("Removed");
 });
 

@@ -119,15 +119,22 @@ const tellWhatItFollows = (upstream: string, follow: string, chosen: boolean) =>
   }
 };
 
-const untouchedWorkflows = (root: string, base: string) => {
-  const asBranched = new Set(git(root, "ls-tree", "-r", base, "--", WORKFLOWS).split("\n"));
+const BLOB = /^\d+ blob (?<sha>\w+)\t(?<file>.+)$/u;
 
-  return git(root, "ls-tree", "-r", "HEAD", "--", WORKFLOWS)
+const untouchedWorkflows = (root: string, base: string) =>
+  git(root, "ls-tree", base, `${WORKFLOWS}/`)
     .split("\n")
-    .filter((entry) => entry !== "" && asBranched.has(entry))
-    .map((entry) => entry.slice(entry.indexOf("\t") + 1))
-    .filter((file) => file !== OWN_WORKFLOW);
-};
+    .flatMap((entry) => {
+      const { sha, file } = BLOB.exec(entry)?.groups ?? {};
+
+      return sha !== undefined &&
+        file !== undefined &&
+        file !== OWN_WORKFLOW &&
+        existsSync(path.join(root, file)) &&
+        git(root, "hash-object", "--", file) === sha
+        ? [file]
+        : [];
+    });
 
 export const setup = async (root: string, upstream: string, { every, ...chosen }: Chosen) => {
   if (existsSync(configFile(root))) {
@@ -169,6 +176,8 @@ export const setup = async (root: string, upstream: string, { every, ...chosen }
       `Your branch already changes ${drift.length} file${drift.length === 1 ? "" : "s"}. Save them as a patch: write ${DIR}/<id>/PATCH.md, then autofork save <id>`,
     );
   }
+
+  return drift;
 };
 
 const ghApi = (root: string, ...args: string[]) => {
