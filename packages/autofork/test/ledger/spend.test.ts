@@ -67,6 +67,7 @@ test("a sync waits before paying for any rebuild when the month has no room for 
   const waiting = autoforkWith({ AUTOFORK_LEDGER: ledger }, mine, "sync");
   expect(waiting.ok).toBe(true);
   expect(waiting.output.result).toBe("waiting");
+  expect(waiting.output.limits).toMatch(/^one, two wait: 2 rebuilds won't fit/u);
   expect(waiting.log).toMatch(
     /autofork: one, two wait: 2 rebuilds won't fit in this month's 2 \(1 used\)\. It runs \w{3} 1 \(UTC\), or raise "rebuilds" in "limits" in \.autofork\/config\.json\.\n$/u,
   );

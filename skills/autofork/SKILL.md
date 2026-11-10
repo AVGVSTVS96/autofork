@@ -54,7 +54,7 @@ If `.autofork/<id>/UPSTREAM.md` exists, upstream shipped its own version of that
 
 ## Spend limits
 
-Every agent run counts against `limits` in `.autofork/config.json`: by default 10 rebuilds a month (UTC), $200 a month and $20 a rebuild, at API prices (on a Claude or ChatGPT plan, what the run would cost on the API, not a bill). With no room the sync ends `waiting`, and one line in the run's log says what's left and when it runs. To let a waiting sync run now, raise each key the line names, by as much as the user agrees to, and push.
+Every agent run counts against `limits` in `.autofork/config.json`: by default 10 rebuilds a month (UTC), $200 a month and $20 a rebuild, at API prices (on a Claude or ChatGPT plan, what the run would cost on the API, not a bill). With no room the sync ends `waiting` and opens an issue on the fork saying what's left and when it runs, which the next sync that goes through closes. To let a waiting sync run now, raise each key the line names, by as much as the user agrees to, and push.
 
 ## Apps that update themselves
 
