@@ -197,21 +197,21 @@ test("deleting UPSTREAM.md brings your version back", () => {
   );
 });
 
-test("a patch that's only a PATCH.md is built by the agent", () => {
+test("a sync that doesn't heal follows upstream without a patch that's only a PATCH.md, and the next one that heals builds it", () => {
   patch("wave", "greet() waves at the end.");
   sh(fork, "git add -A && git commit -qm wave");
   expect(autofork(fork, "status").log).toContain("wave  (not built yet)");
-  const head = sh(fork, "git rev-parse HEAD");
-  const waiting = autofork(fork, "sync", "--no-heal");
-  expect(waiting.ok).toBe(true);
-  expect(waiting.log).toContain("wave isn't built yet. The next run that heals rebuilds it.");
-  expect(waiting.output.result).toBe("waiting");
-  expect(waiting.output.limits).toBeUndefined();
-  expect(sh(fork, "git rev-parse HEAD")).toBe(head);
+  const current = autofork(fork, "sync", "--no-heal");
+  expect(current.log).toContain(
+    "autofork: the fork follows upstream without wave until a sync with an agent builds it",
+  );
+  expect(current.output.result).toBe("current");
+  expect(current.output.limits).toBeUndefined();
   write(upstream, "notes.txt", "wave pending\n");
   sh(upstream, "git commit -qam notes");
-  expect(autofork(fork, "sync", "--no-heal").output.result).toBe("waiting");
-  expect(sh(fork, "git rev-parse HEAD")).toBe(head);
+  expect(autofork(fork, "sync", "--no-heal").output.result).toBe("synced");
+  expect(file(fork, "notes.txt")).toBe("wave pending\n");
+  expect(existsSync(path.join(fork, ".autofork/wave/wave.patch"))).toBe(false);
   agent(
     `sed -i 's/ + "!";/ + "! o\\/";/' app.js\nprintf '\\nThe wave is text, so it works in any terminal.\\n' >> .autofork/wave/PATCH.md`,
   );

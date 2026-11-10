@@ -62,6 +62,7 @@ var gitConfigCount = Number(env.GIT_CONFIG_COUNT ?? 0);
 var scratchParent = env.RUNNER_TEMP;
 var onGithubRunner = env.RUNNER_ENVIRONMENT === "github-hosted";
 var claudeToken = filled(env.CLAUDE_CODE_OAUTH_TOKEN);
+var anthropicKey = filled(env.ANTHROPIC_API_KEY);
 var codexHome = env.CODEX_HOME;
 var insideClaudeCode = filled(env.CLAUDECODE) !== undefined;
 var claudeEntrypoint = filled(env.CLAUDE_CODE_ENTRYPOINT);
@@ -584,22 +585,24 @@ var REBUILD_TOOLS = "Bash,Read,Edit,Write,Glob,Grep";
 var NO_UPSTREAM_MCP_SERVERS = "--strict-mcp-config";
 var NO_CODEX_CONNECTORS = "--ignore-user-config --disable apps";
 var CLAUDE_SIGNED_OUT = "Claude Code isn't signed in, so no agent can run: give the autofork step CLAUDE_CODE_OAUTH_TOKEN (claude setup-token prints one), or CODEX_AUTH for ChatGPT, from the fork's secrets";
-var signedOut = (claude, dir) => /"loggedIn":\s*false/u.test(run("sh", ["-c", `${claude} auth status --json`], dir).out.toString());
+var claudeSignedIn = (dir) => claudeToken !== undefined || anthropicKey !== undefined || !onGithubRunner || installed("claude") && !/"loggedIn":\s*false/u.test(run("claude", ["auth", "status", "--json"], dir).out.toString());
+var codexSignedIn = () => claudeToken === undefined && existsSync3(path4.join(codexDir, "auth.json"));
+var signedIn = (config, dir) => config.agent !== undefined || codexSignedIn() || claudeSignedIn(dir);
 var agentCommand = (config, cap, dir) => {
   if (config.agent !== undefined) {
     return { agent: "custom", command: config.agent };
   }
-  if (claudeToken === undefined && existsSync3(path4.join(codexDir, "auth.json"))) {
+  if (codexSignedIn()) {
     const codex = installed("codex") ? "codex" : "npx -y @openai/codex";
     return {
       agent: "codex",
       command: `${codex} exec --json --dangerously-bypass-approvals-and-sandbox ${NO_CODEX_CONNECTORS} -`
     };
   }
-  const claude = installed("claude") ? "claude" : "npx -y @anthropic-ai/claude-code";
-  if (onGithubRunner && claudeToken === undefined && signedOut(claude, dir)) {
+  if (!claudeSignedIn(dir)) {
     throw new AutoforkError(CLAUDE_SIGNED_OUT);
   }
+  const claude = installed("claude") ? "claude" : "npx -y @anthropic-ai/claude-code";
   return {
     agent: "claude",
     command: `${claude} -p --dangerously-skip-permissions --output-format json --max-budget-usd ${cap} --tools ${REBUILD_TOOLS} ${NO_UPSTREAM_MCP_SERVERS}`
@@ -1258,9 +1261,12 @@ var verify = async (config, build, from) => {
 };
 
 // src/build/build.ts
-var fitsUpFront = async (config, build) => {
+var fitsUpFront = async (config, build, buildNew) => {
   const broken = config.patches.filter((id) => {
-    const fits = !unbuilt(build.dir, id) && apply(build.dir, patchFile(build.dir, id), config);
+    if (unbuilt(build.dir, id)) {
+      return buildNew;
+    }
+    const fits = apply(build.dir, patchFile(build.dir, id), config);
     if (fits) {
       commit(build.dir, id);
     }
@@ -1277,10 +1283,7 @@ var place = async (config, build, id, options, folded) => {
   const { dir } = build;
   const file = patchFile(dir, id);
   const { healFrom } = options;
-  if (options.wait === true && healFrom === undefined && unbuilt(dir, id)) {
-    throw new WaitError(`${id} isn't built yet`);
-  }
-  if (unbuilt(dir, id) ? healFrom !== undefined : !apply(dir, file, config)) {
+  if (unbuilt(dir, id) ? options.buildNew === true : !apply(dir, file, config)) {
     if (healFrom === undefined && folded === undefined) {
       throw new WaitError(`${id} doesn't apply to ${short(build.source)}`);
     }
@@ -1308,7 +1311,7 @@ var build = async (root, config, base, options) => {
     upstreamHas: new Map
   };
   if (options.healFrom !== undefined) {
-    await fitsUpFront(config, built);
+    await fitsUpFront(config, built, options.buildNew === true);
   }
   let folded;
   for (const id of config.patches) {
@@ -1473,7 +1476,7 @@ var setup = async (root, upstream, { every, ...chosen }) => {
     say(`Your fork has ${inherited.length} workflow${inherited.length === 1 ? "" : "s"} copied from upstream, and they run here too. Delete the ones you don't want. autofork leaves workflows to you: it never copies upstream's new ones in, and when upstream changes one you keep, the sync's agent brings that into your copy, or opens an issue when the workflow's token can't push workflow files.`);
   }
   if (readme !== undefined) {
-    say(`The first sync adds a line to ${readme} saying this is a personal fork kept current by autofork. To skip it, delete ${DIR}/${NOTE}/.`);
+    say(`The first sync with an agent adds a line to ${readme} saying this is a personal fork kept current by autofork. To skip it, delete ${DIR}/${NOTE}/.`);
   }
   if (drift.length > 0) {
     say(`Your branch already changes ${drift.length} file${drift.length === 1 ? "" : "s"}. Save them as a patch: write ${DIR}/<id>/PATCH.md, then autofork save <id>`);
@@ -1886,9 +1889,9 @@ var keepsUntracked = (base, drift) => `these files differ from what your patches
   `)}
 Where one is just an old copy of upstream's, take upstream's first: git checkout ${short(base)} -- <file>, or git rm <file> if upstream had it and deleted it. Then save the fork's own changes, on top of upstream's copies, as a patch: write ${DIR}/<id>/PATCH.md, then run autofork save <id>`;
 var rebuild = async (sync) => {
-  const { root, config, args, source, healFrom, behind, range } = sync;
+  const { root, config, args, source, healFrom, buildNew, behind, range } = sync;
   try {
-    const result = await build(root, config, source, { healFrom, wait: true });
+    const result = await build(root, config, source, { healFrom, buildNew });
     await verify(config, result, healFrom);
     regenerate(config, result);
     if (behind.length === 0 || args.includes("--no-workflows")) {
@@ -1962,7 +1965,13 @@ var sync = async (root, args) => {
     output({ result: "skipped" });
     return;
   }
-  if (base === source && config.patches.every((id) => !unbuilt(root, id))) {
+  const healFrom = args.includes("--no-heal") ? undefined : base;
+  const fresh = config.patches.filter((id) => unbuilt(root, id));
+  const buildNew = fresh.length > 0 && healFrom !== undefined && signedIn(config, root);
+  if (fresh.length > 0 && !buildNew) {
+    say(`autofork: the fork follows upstream without ${fresh.join(", ")} until a sync with an agent builds ${fresh.length === 1 ? "it" : "them"}`);
+  }
+  if (base === source && !buildNew) {
     say(`autofork: already up to date with ${config.upstream} at ${short(source)}`);
     output({ result: "current" });
     return;
@@ -1973,7 +1982,6 @@ var sync = async (root, args) => {
   }
   const moved = base === source ? short(source) : `${short(base)} → ${short(source)}`;
   say(`upstream ${moved}, ${config.patches.length} patch${config.patches.length === 1 ? "" : "es"}`);
-  const healFrom = args.includes("--no-heal") ? undefined : base;
   openLedger(ledgerPath ?? `${scratch(root)}-ledger.json`);
   const since = run("git", ["merge-base", "HEAD", source], root).out.toString().trim() || base;
   const plan = {
@@ -1984,6 +1992,7 @@ var sync = async (root, args) => {
     tip,
     tag,
     healFrom,
+    buildNew,
     behind: workflowsBehind(root, since, source),
     range: `${short(since)}..${short(source)}`
   };

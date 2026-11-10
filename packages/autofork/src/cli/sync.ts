@@ -1,3 +1,4 @@
+import { signedIn } from "../agent/command.ts";
 import { build } from "../build/build.ts";
 import { regenerate } from "../build/checks.ts";
 import { compare } from "../build/compare.ts";
@@ -29,6 +30,7 @@ interface Sync {
   tip: string;
   tag: string | undefined;
   healFrom: string | undefined;
+  buildNew: boolean;
   behind: string[];
   range: string;
 }
@@ -42,10 +44,10 @@ const keepsUntracked = (base: string, drift: string[]) =>
   `these files differ from what your patches build, so a sync would drop them:\n  ${drift.join("\n  ")}\nWhere one is just an old copy of upstream's, take upstream's first: git checkout ${short(base)} -- <file>, or git rm <file> if upstream had it and deleted it. Then save the fork's own changes, on top of upstream's copies, as a patch: write ${DIR}/<id>/PATCH.md, then run autofork save <id>`;
 
 const rebuild = async (sync: Sync): Promise<Built | undefined> => {
-  const { root, config, args, source, healFrom, behind, range } = sync;
+  const { root, config, args, source, healFrom, buildNew, behind, range } = sync;
 
   try {
-    const result = await build(root, config, source, { healFrom, wait: true });
+    const result = await build(root, config, source, { healFrom, buildNew });
 
     await verify(config, result, healFrom);
     regenerate(config, result);
@@ -152,7 +154,17 @@ export const sync = async (root: string, args: string[]) => {
     return;
   }
 
-  if (base === source && config.patches.every((id) => !unbuilt(root, id))) {
+  const healFrom = args.includes("--no-heal") ? undefined : base;
+  const fresh = config.patches.filter((id) => unbuilt(root, id));
+  const buildNew = fresh.length > 0 && healFrom !== undefined && signedIn(config, root);
+
+  if (fresh.length > 0 && !buildNew) {
+    say(
+      `autofork: the fork follows upstream without ${fresh.join(", ")} until a sync with an agent builds ${fresh.length === 1 ? "it" : "them"}`,
+    );
+  }
+
+  if (base === source && !buildNew) {
     say(`autofork: already up to date with ${config.upstream} at ${short(source)}`);
     output({ result: "current" });
 
@@ -170,7 +182,6 @@ export const sync = async (root: string, args: string[]) => {
   say(
     `upstream ${moved}, ${config.patches.length} patch${config.patches.length === 1 ? "" : "es"}`,
   );
-  const healFrom = args.includes("--no-heal") ? undefined : base;
 
   openLedger(ledgerPath ?? `${scratch(root)}-ledger.json`);
   const since = run("git", ["merge-base", "HEAD", source], root).out.toString().trim() || base;
@@ -183,6 +194,7 @@ export const sync = async (root: string, args: string[]) => {
     tip,
     tag,
     healFrom,
+    buildNew,
     behind: workflowsBehind(root, since, source),
     range: `${short(since)}..${short(source)}`,
   };

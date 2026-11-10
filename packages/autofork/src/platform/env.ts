@@ -25,6 +25,7 @@ export const gitConfigCount = Number(env.GIT_CONFIG_COUNT ?? 0);
 export const scratchParent = env.RUNNER_TEMP;
 export const onGithubRunner = env.RUNNER_ENVIRONMENT === "github-hosted";
 export const claudeToken = filled(env.CLAUDE_CODE_OAUTH_TOKEN);
+export const anthropicKey = filled(env.ANTHROPIC_API_KEY);
 export const codexHome = env.CODEX_HOME;
 export const insideClaudeCode = filled(env.CLAUDECODE) !== undefined;
 export const claudeEntrypoint = filled(env.CLAUDE_CODE_ENTRYPOINT);

@@ -156,7 +156,7 @@ export const setup = async (root: string, upstream: string, { every, ...chosen }
 
   if (readme !== undefined) {
     say(
-      `The first sync adds a line to ${readme} saying this is a personal fork kept current by autofork. To skip it, delete ${DIR}/${NOTE}/.`,
+      `The first sync with an agent adds a line to ${readme} saying this is a personal fork kept current by autofork. To skip it, delete ${DIR}/${NOTE}/.`,
     );
   }
 
