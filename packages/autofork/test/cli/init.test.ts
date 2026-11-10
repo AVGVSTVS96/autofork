@@ -118,7 +118,7 @@ esac
     String.raw`sh -c 'd=$(mktemp -d) && trap "rm -rf \"\$d\"" EXIT && CODEX_HOME="$d" codex login --device-auth && gh secret set CODEX_AUTH --repo me/app < "$d/auth.json"'`,
   );
   expect(log).toContain(
-    "gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo me/app\nIf you pushed before the secret was set, start the first sync by hand:\n  gh workflow run autofork.yml --repo me/app",
+    "Commit and push, and the fork follows upstream.\nAn agent builds new patches and the ones upstream breaks. Give it a Claude sign-in:\n  claude setup-token\n  gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo me/app\n",
   );
   expect(file(path.join(home, "mine"), ".github/workflows/autofork.yml")).toContain("17 * * * *");
   const calls = file(home, "gh.log");
@@ -138,26 +138,50 @@ esac
     ).ok,
   ).toBe(true);
   expect(file(home, "gh.log")).not.toContain("description=");
+  sh(path.join(home, "mine"), "rm -rf .autofork .github/workflows/autofork.yml");
+  expect(
+    autoforkWith({ PATH: `${bin}:${process.env.PATH}` }, path.join(home, "mine"), "init").ok,
+  ).toBe(true);
+  expect(configOf(path.join(home, "mine")).upstream).toBe("acme/app");
 });
 
-test("init counts only the workflows the fork has from upstream as copied from it", () => {
+test("init without a name needs a GitHub fork to take its upstream from", () => {
+  const origin = path.join(home, "unnamed");
+  mkdirSync(origin);
+  sh(origin, "git init -q && echo one > app.js && git add -A && git commit -qm init");
+  sh(home, `git clone -q ${origin} unnamed-fork`);
+  const { ok, log } = autofork(path.join(home, "unnamed-fork"), "init", "--every", "1h");
+  expect(ok).toBe(false);
+  expect(log).toContain("this isn't a GitHub fork, so name its upstream: autofork init");
+});
+
+test("init removes the workflows the fork copied from upstream and never changed, and keeps the rest", () => {
   const origin = path.join(home, "flows");
   const mine = path.join(home, "flows-fork");
   mkdirSync(path.join(origin, ".github/workflows"), { recursive: true });
   sh(origin, "git init -q && echo one > app.js");
   write(origin, ".github/workflows/test.yml", "name: test\n");
+  write(origin, ".github/workflows/lint.yml", "name: lint\n");
   sh(origin, "git add -A && git commit -qm init");
   sh(home, `git clone -q ${origin} flows-fork`);
+  write(origin, ".github/workflows/test.yml", "name: test\non: push\n");
+  sh(origin, "git commit -qam 'test on push'");
   write(mine, ".github/workflows/desktop.yml", "name: desktop\n");
+  write(mine, ".github/workflows/lint.yml", "name: lint mine\n");
   sh(mine, "git add -A && git commit -qm 'build the desktop app'");
-  expect(autofork(mine, "init", origin).log).toContain(
-    "Your fork has 1 workflow copied from upstream",
+  const { ok, log } = autofork(mine, "init", origin);
+  expect(ok).toBe(true);
+  expect(log).toContain(
+    "Removed the workflow the fork copied from upstream and never changed, since they'd run here too.",
   );
-  sh(
-    mine,
-    "git rm -q .github/workflows/test.yml && rm -rf .autofork .github/workflows/autofork.yml",
+  expect(sh(mine, "ls .github/workflows")).toBe("autofork.yml\ndesktop.yml\nlint.yml");
+  expect(sh(mine, "git status --porcelain .github/workflows/test.yml")).toBe(
+    "D .github/workflows/test.yml",
   );
-  expect(autofork(mine, "init", origin).log).not.toContain("copied from upstream");
+  sh(mine, "rm -rf .autofork .github/workflows/autofork.yml && git checkout -q .github");
+  write(mine, ".github/workflows/test.yml", "name: test mine\n");
+  sh(mine, "git commit -qam 'my tests'");
+  expect(autofork(mine, "init", origin).log).not.toContain("Removed");
 });
 
 test("init and fork write the limits, the schedule --every picks, id-token: write and the line about linking", () => {
@@ -172,7 +196,7 @@ test("init and fork write the limits, the schedule --every picks, id-token: writ
   const { ok, log } = autofork(mine, "init", origin, "--every", "1h");
   expect(ok).toBe(true);
   expect(log).toContain(
-    "GitHub's timer can run hours late. Run it on time and track spend: npx autofork link",
+    "To sync on time, and keep a ChatGPT sign-in working past a week: npx autofork link",
   );
   expect(configOf(mine).limits).toEqual({
     rebuilds: 10,

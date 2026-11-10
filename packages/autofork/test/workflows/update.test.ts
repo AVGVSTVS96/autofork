@@ -23,12 +23,12 @@ test("a sync brings upstream's .github/ in, but names upstream's changes to work
   sh(home, `git clone -q ${origin} ci-fork`);
   const base = sh(mine, "git rev-parse HEAD").slice(0, 12);
   expect(autofork(mine, "init", origin).log).toContain(
-    "opens an issue when the workflow's token can't push workflow files",
+    "Removed the 3 workflows the fork copied from upstream and never changed",
   );
   write(mine, ".github/workflows/release.yml", "name: release from the fork\n");
   sh(
     mine,
-    "git rm -q .github/workflows/lint.yml && git add -A && git commit -qm 'track upstream, release from the fork'",
+    "git checkout -q .github/workflows/test.yml && git add -A && git commit -qm 'track upstream, release from the fork'",
   );
   sh(origin, "echo two > app.js && echo two > .github/scripts/changes.cjs");
 

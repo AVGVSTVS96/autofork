@@ -62,7 +62,6 @@ var gitConfigCount = Number(env.GIT_CONFIG_COUNT ?? 0);
 var scratchParent = env.RUNNER_TEMP;
 var onGithubRunner = env.RUNNER_ENVIRONMENT === "github-hosted";
 var claudeToken = filled(env.CLAUDE_CODE_OAUTH_TOKEN);
-var anthropicKey = filled(env.ANTHROPIC_API_KEY);
 var codexHome = env.CODEX_HOME;
 var insideClaudeCode = filled(env.CLAUDECODE) !== undefined;
 var claudeEntrypoint = filled(env.CLAUDE_CODE_ENTRYPOINT);
@@ -178,21 +177,19 @@ var origin = (root) => {
 };
 
 // src/cli/messages.ts
-var firstSync = (repo) => `  gh workflow run autofork.yml${repo}`;
-var claudeSteps = (repo) => `  claude setup-token
-  gh secret set CLAUDE_CODE_OAUTH_TOKEN${repo}`;
-var codexHint = (repo) => `For ChatGPT instead, give the fork a Codex sign-in of its own, since each refresh retires the last one. Turn on device code login in ChatGPT's security settings, then:
-  sh -c 'd=$(mktemp -d) && trap "rm -rf \\"\\$d\\"" EXIT && CODEX_HOME="$d" codex login --device-auth && gh secret set CODEX_AUTH${repo} < "$d/auth.json"'
-${firstSync(repo)}
-Link it too (below): only a linked fork saves Codex's refreshed sign-ins, and without them it stops working within about a week.`;
-var LINK_HINT = "GitHub's timer can run hours late. Run it on time and track spend: npx autofork link";
+var signIn = (repo) => `An agent builds new patches and the ones upstream breaks. Give it a Claude sign-in:
+  claude setup-token
+  gh secret set CLAUDE_CODE_OAUTH_TOKEN${repo}
+or a ChatGPT one, with device code login on in ChatGPT's security settings:
+  sh -c 'd=$(mktemp -d) && trap "rm -rf \\"\\$d\\"" EXIT && CODEX_HOME="$d" codex login --device-auth && gh secret set CODEX_AUTH${repo} < "$d/auth.json"'`;
+var LINK_HINT = "To sync on time, and keep a ChatGPT sign-in working past a week: npx autofork link";
 var FORK_OPTIONS = "[--follow <releases | channel | branch>] [--setup <command>] [--generated <files>] [--verify <command>] [--every <5m | 15m | 1h | 1d>]";
 var USAGE = `autofork: Customized forks that maintain themselves.
 Personal forks of open-source apps that auto-track upstream.
 
 Usage:
   autofork fork <owner/repo>    fork it on GitHub, set it up and push
-  autofork init <owner/repo>    set up a fork you already have, from inside it
+  autofork init [owner/repo]    set up a fork you already have, from inside it
   autofork save <id>            save your changes as the patch in .autofork/<id>
   autofork status               your patches, and changes no patch holds yet
   autofork sync                 rebuild on upstream; an agent heals what breaks
@@ -215,7 +212,7 @@ to <id>.patch, the diff. https://github.com/AVGVSTVS96/autofork
 `;
 
 // src/cli/setup.ts
-import { existsSync as existsSync9, mkdirSync as mkdirSync3, readFileSync as readFileSync6, writeFileSync as writeFileSync7 } from "node:fs";
+import { existsSync as existsSync9, mkdirSync as mkdirSync3, readFileSync as readFileSync6, rmSync as rmSync5, writeFileSync as writeFileSync7 } from "node:fs";
 import path12 from "node:path";
 
 // ../contract/src/schedule.ts
@@ -585,24 +582,22 @@ var REBUILD_TOOLS = "Bash,Read,Edit,Write,Glob,Grep";
 var NO_UPSTREAM_MCP_SERVERS = "--strict-mcp-config";
 var NO_CODEX_CONNECTORS = "--ignore-user-config --disable apps";
 var CLAUDE_SIGNED_OUT = "Claude Code isn't signed in, so no agent can run: give the autofork step CLAUDE_CODE_OAUTH_TOKEN (claude setup-token prints one), or CODEX_AUTH for ChatGPT, from the fork's secrets";
-var claudeSignedIn = (dir) => claudeToken !== undefined || anthropicKey !== undefined || !onGithubRunner || installed("claude") && !/"loggedIn":\s*false/u.test(run("claude", ["auth", "status", "--json"], dir).out.toString());
-var codexSignedIn = () => claudeToken === undefined && existsSync3(path4.join(codexDir, "auth.json"));
-var signedIn = (config, dir) => config.agent !== undefined || codexSignedIn() || claudeSignedIn(dir);
+var signedOut = (claude, dir) => /"loggedIn":\s*false/u.test(run("sh", ["-c", `${claude} auth status --json`], dir).out.toString());
 var agentCommand = (config, cap, dir) => {
   if (config.agent !== undefined) {
     return { agent: "custom", command: config.agent };
   }
-  if (codexSignedIn()) {
+  if (claudeToken === undefined && existsSync3(path4.join(codexDir, "auth.json"))) {
     const codex = installed("codex") ? "codex" : "npx -y @openai/codex";
     return {
       agent: "codex",
       command: `${codex} exec --json --dangerously-bypass-approvals-and-sandbox ${NO_CODEX_CONNECTORS} -`
     };
   }
-  if (!claudeSignedIn(dir)) {
+  const claude = installed("claude") ? "claude" : "npx -y @anthropic-ai/claude-code";
+  if (onGithubRunner && claudeToken === undefined && signedOut(claude, dir)) {
     throw new AutoforkError(CLAUDE_SIGNED_OUT);
   }
-  const claude = installed("claude") ? "claude" : "npx -y @anthropic-ai/claude-code";
   return {
     agent: "claude",
     command: `${claude} -p --dangerously-skip-permissions --output-format json --max-budget-usd ${cap} --tools ${REBUILD_TOOLS} ${NO_UPSTREAM_MCP_SERVERS}`
@@ -753,13 +748,8 @@ var openRow = async (row) => {
     agent: row.agent,
     cap: row.cap
   });
-  if (opened?.status === 403) {
-    const refused = await readBody(opened, (value) => has(value, "error", isText));
-    say(`autofork.com didn't record this rebuild: ${refused?.error ?? "refused"}`);
-    return { id: undefined, refused: true };
-  }
   const answer = opened?.status === 201 ? await readBody(opened, (value) => has(value, "id", isText)) : undefined;
-  return { id: answer?.id, refused: false };
+  return answer?.id;
 };
 var printedBy = (dir, agent, command, prompt, env) => {
   const printed = `${dir}-agent.out`;
@@ -790,14 +780,14 @@ var runAgent = async (config, dir, what, prompt, env = process.env) => {
     status: "running",
     at: new Date().toISOString()
   };
-  const { id, refused } = await openRow(row);
+  const id = await openRow(row);
   const { ok, stdout } = printedBy(dir, agent, command, prompt, env);
   const spend = await spenders[agent](stdout);
   const status = ok ? "done" : "stopped";
   finishRebuild(row, status, spend.cost);
   const answer = id === undefined ? undefined : await callSite("ledger/close", { id, status, ...spend });
   const closed = answer?.ok === true;
-  if (reportsToSite && !refused && !closed) {
+  if (reportsToSite && !closed) {
     say("couldn't report this rebuild's cost to autofork.com");
   }
   say(`${what} cost ${spend.cost === undefined ? `up to ${usd(row.cap)}` : usd(spend.cost)}`);
@@ -1261,12 +1251,9 @@ var verify = async (config, build, from) => {
 };
 
 // src/build/build.ts
-var fitsUpFront = async (config, build, buildNew) => {
+var fitsUpFront = async (config, build) => {
   const broken = config.patches.filter((id) => {
-    if (unbuilt(build.dir, id)) {
-      return buildNew;
-    }
-    const fits = apply(build.dir, patchFile(build.dir, id), config);
+    const fits = !unbuilt(build.dir, id) && apply(build.dir, patchFile(build.dir, id), config);
     if (fits) {
       commit(build.dir, id);
     }
@@ -1283,7 +1270,10 @@ var place = async (config, build, id, options, folded) => {
   const { dir } = build;
   const file = patchFile(dir, id);
   const { healFrom } = options;
-  if (unbuilt(dir, id) ? options.buildNew === true : !apply(dir, file, config)) {
+  if (options.wait === true && healFrom === undefined && unbuilt(dir, id)) {
+    throw new WaitError(`${id} isn't built yet`);
+  }
+  if (unbuilt(dir, id) ? healFrom !== undefined : !apply(dir, file, config)) {
     if (healFrom === undefined && folded === undefined) {
       throw new WaitError(`${id} doesn't apply to ${short(build.source)}`);
     }
@@ -1311,7 +1301,7 @@ var build = async (root, config, base, options) => {
     upstreamHas: new Map
   };
   if (options.healFrom !== undefined) {
-    await fitsUpFront(config, built, options.buildNew === true);
+    await fitsUpFront(config, built);
   }
   let folded;
   for (const id of config.patches) {
@@ -1452,11 +1442,11 @@ var tellWhatItFollows = (upstream, follow, chosen) => {
     say(`autofork follows ${upstream}'s ${follow === "releases" ? "" : `${follow} `}releases.`);
   }
 };
-var inheritedWorkflows = (root, base) => {
-  const upstreamHas = new Set(git(root, "ls-tree", "-r", "--name-only", base, "--", WORKFLOWS).split(`
+var untouchedWorkflows = (root, base) => {
+  const asBranched = new Set(git(root, "ls-tree", "-r", base, "--", WORKFLOWS).split(`
 `));
-  return git(root, "ls-files", WORKFLOWS).split(`
-`).filter((file) => file !== "" && upstreamHas.has(file) && !file.endsWith("/autofork.yml"));
+  return git(root, "ls-tree", "-r", "HEAD", "--", WORKFLOWS).split(`
+`).filter((entry) => entry !== "" && asBranched.has(entry)).map((entry) => entry.slice(entry.indexOf("\t") + 1)).filter((file) => file !== OWN_WORKFLOW);
 };
 var setup = async (root, upstream, { every, ...chosen }) => {
   if (existsSync9(configFile(root))) {
@@ -1470,13 +1460,16 @@ var setup = async (root, upstream, { every, ...chosen }) => {
   writeWorkflow(root, upstream, every);
   const { drift } = await compare(root, { ...config, patches: [] }, workingTree(root), base);
   const readme = addNote(root, upstream, base, drift);
-  const inherited = inheritedWorkflows(root, base);
+  const untouched = untouchedWorkflows(root, base);
+  for (const file of untouched) {
+    rmSync5(path12.join(root, file));
+  }
   tellWhatItFollows(upstream, follow, chosen.follow !== undefined);
-  if (inherited.length > 0) {
-    say(`Your fork has ${inherited.length} workflow${inherited.length === 1 ? "" : "s"} copied from upstream, and they run here too. Delete the ones you don't want. autofork leaves workflows to you: it never copies upstream's new ones in, and when upstream changes one you keep, the sync's agent brings that into your copy, or opens an issue when the workflow's token can't push workflow files.`);
+  if (untouched.length > 0) {
+    say(`Removed the ${untouched.length === 1 ? "workflow" : `${untouched.length} workflows`} the fork copied from upstream and never changed, since they'd run here too.`);
   }
   if (readme !== undefined) {
-    say(`The first sync with an agent adds a line to ${readme} saying this is a personal fork kept current by autofork. To skip it, delete ${DIR}/${NOTE}/.`);
+    say(`The first sync with an agent sign-in adds a line to ${readme} saying this is a personal fork kept current by autofork. To skip it, delete ${DIR}/${NOTE}/.`);
   }
   if (drift.length > 0) {
     say(`Your branch already changes ${drift.length} file${drift.length === 1 ? "" : "s"}. Save them as a patch: write ${DIR}/<id>/PATCH.md, then autofork save <id>`);
@@ -1499,6 +1492,10 @@ var ownerName = (root, login) => {
   const name = has(owner, "name", isText) ? owner.name.trim() : undefined;
   const called = has(owner, "type", (type) => type === "User") ? name?.split(/\s+/u)[0] : name;
   return called === undefined || called === "" ? login : called;
+};
+var parentOf = (root) => {
+  const repo = origin(root);
+  return repo === "" ? undefined : forkOn(root, repo)?.parent;
 };
 var claim = (root, upstream) => {
   const repo = origin(root);
@@ -1536,34 +1533,28 @@ var fork = async (cwd, args) => {
   claim(root, upstream);
   const repo = origin(root);
   const secret = secretSet(root, repo);
-  git(root, "add", DIR, OWN_WORKFLOW);
+  git(root, "add", DIR, WORKFLOWS);
   git(root, "commit", "--quiet", "-m", `autofork: follow ${upstream}`);
   git(root, "push", "--quiet");
   say(`${repo} now keeps itself current with ${upstream}. It's cloned in ./${path13.basename(root)}.`);
   if (!secret) {
-    say(`Last step, a Claude sign-in for the fork (paste the token setup-token prints) and its first sync:
-${claudeSteps(` --repo ${repo}`)}
-${firstSync(` --repo ${repo}`)}
-${codexHint(` --repo ${repo}`)}`);
+    say(signIn(` --repo ${repo}`));
   }
   say(LINK_HINT.replace("npx", `cd ${path13.basename(root)} && npx`));
 };
 
 // src/cli/init.ts
 var init = async (root, args) => {
-  const [upstream] = args;
-  if (upstream === undefined || upstream === "") {
-    throw new AutoforkError(`usage: autofork init <owner/repo | git url> ${FORK_OPTIONS}`);
+  const [named = ""] = args;
+  const upstream = named === "" || named.startsWith("-") ? parentOf(root) : named;
+  if (upstream === undefined) {
+    throw new AutoforkError(`this isn't a GitHub fork, so name its upstream: autofork init <owner/repo | git url> ${FORK_OPTIONS}`);
   }
   await setup(root, upstream, options(args));
   claim(root, upstream);
   const mine = origin(root);
-  const repo = mine === "" ? "" : ` --repo ${mine}`;
-  say(`Give the fork a Claude sign-in (paste the token setup-token prints), then commit and push:
-${claudeSteps(repo)}
-If you pushed before the secret was set, start the first sync by hand:
-${firstSync(repo)}
-${codexHint(repo)}`);
+  say("Commit and push, and the fork follows upstream.");
+  say(signIn(mine === "" ? "" : ` --repo ${mine}`));
   say(LINK_HINT);
 };
 
@@ -1638,11 +1629,11 @@ var link = async (root) => {
 };
 
 // src/cli/save.ts
-import { existsSync as existsSync12, rmSync as rmSync6, writeFileSync as writeFileSync9 } from "node:fs";
+import { existsSync as existsSync12, rmSync as rmSync7, writeFileSync as writeFileSync9 } from "node:fs";
 import path15 from "node:path";
 
 // src/build/refresh.ts
-import { existsSync as existsSync10, rmSync as rmSync5, writeFileSync as writeFileSync8 } from "node:fs";
+import { existsSync as existsSync10, rmSync as rmSync6, writeFileSync as writeFileSync8 } from "node:fs";
 var refresh = (target, config, build) => {
   keepPatches(target);
   const pairs = stepPairs(build.steps);
@@ -1654,7 +1645,7 @@ var refresh = (target, config, build) => {
     }
   }
   for (const [id, reason] of build.upstreamHas) {
-    rmSync5(patchFile(target, id), { force: true });
+    rmSync6(patchFile(target, id), { force: true });
     writeFileSync8(upstreamDoc(target, id), `${reason}
 
 ${config.upstream} does this on its own as of ${short(build.source)}, so autofork stopped applying this patch.
@@ -1739,7 +1730,7 @@ var save = async (root, args) => {
     throw new AutoforkError(`write ${DIR}/${id}/PATCH.md first: what the change does and why`);
   }
   requireIntent(root, id);
-  rmSync6(upstreamDoc(root, id), { force: true });
+  rmSync7(upstreamDoc(root, id), { force: true });
   const config = await readConfig(root);
   await fetchUpstream(root, config);
   const files = workingTree(root);
@@ -1755,7 +1746,7 @@ var save = async (root, args) => {
     refresh(root, config, result);
     say(`saved ${drift.length} file${drift.length === 1 ? "" : "s"} to ${DIR}/${id}. Commit and push.`);
   } finally {
-    rmSync6(fold, { force: true });
+    rmSync7(fold, { force: true });
     cleanup(root, result.dir);
   }
 };
@@ -1889,9 +1880,9 @@ var keepsUntracked = (base, drift) => `these files differ from what your patches
   `)}
 Where one is just an old copy of upstream's, take upstream's first: git checkout ${short(base)} -- <file>, or git rm <file> if upstream had it and deleted it. Then save the fork's own changes, on top of upstream's copies, as a patch: write ${DIR}/<id>/PATCH.md, then run autofork save <id>`;
 var rebuild = async (sync) => {
-  const { root, config, args, source, healFrom, buildNew, behind, range } = sync;
+  const { root, config, args, source, healFrom, behind, range } = sync;
   try {
-    const result = await build(root, config, source, { healFrom, buildNew });
+    const result = await build(root, config, source, { healFrom, wait: true });
     await verify(config, result, healFrom);
     regenerate(config, result);
     if (behind.length === 0 || args.includes("--no-workflows")) {
@@ -1905,13 +1896,8 @@ var rebuild = async (sync) => {
     if (!(error instanceof WaitError)) {
       throw error;
     }
-    if (error instanceof NoRoomError) {
-      say(`autofork: ${error.message}`);
-      output({ result: "waiting", limits: error.message });
-    } else {
-      say(`autofork: ${error.message}. The next run that heals rebuilds it.`);
-      output({ result: "waiting" });
-    }
+    say(`autofork: ${error.message}${error instanceof NoRoomError ? "" : ". The next run that heals rebuilds it."}`);
+    output({ result: "waiting" });
     return;
   }
 };
@@ -1965,13 +1951,7 @@ var sync = async (root, args) => {
     output({ result: "skipped" });
     return;
   }
-  const healFrom = args.includes("--no-heal") ? undefined : base;
-  const fresh = config.patches.filter((id) => unbuilt(root, id));
-  const buildNew = fresh.length > 0 && healFrom !== undefined && signedIn(config, root);
-  if (fresh.length > 0 && !buildNew) {
-    say(`autofork: the fork follows upstream without ${fresh.join(", ")} until a sync with an agent builds ${fresh.length === 1 ? "it" : "them"}`);
-  }
-  if (base === source && !buildNew) {
+  if (base === source && config.patches.every((id) => !unbuilt(root, id))) {
     say(`autofork: already up to date with ${config.upstream} at ${short(source)}`);
     output({ result: "current" });
     return;
@@ -1982,6 +1962,7 @@ var sync = async (root, args) => {
   }
   const moved = base === source ? short(source) : `${short(base)} → ${short(source)}`;
   say(`upstream ${moved}, ${config.patches.length} patch${config.patches.length === 1 ? "" : "es"}`);
+  const healFrom = args.includes("--no-heal") ? undefined : base;
   openLedger(ledgerPath ?? `${scratch(root)}-ledger.json`);
   const since = run("git", ["merge-base", "HEAD", source], root).out.toString().trim() || base;
   const plan = {
@@ -1992,7 +1973,6 @@ var sync = async (root, args) => {
     tip,
     tag,
     healFrom,
-    buildNew,
     behind: workflowsBehind(root, since, source),
     range: `${short(since)}..${short(source)}`
   };
