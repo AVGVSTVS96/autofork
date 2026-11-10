@@ -31,7 +31,7 @@ export const forks = query({
         const fork = await ctx.db
           .query("forks")
           .withIndex("name", (q) => q.eq("name", name))
-          .unique();
+          .first();
 
         const month = await ctx.db
           .query("rebuilds")
