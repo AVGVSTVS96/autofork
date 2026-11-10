@@ -2,7 +2,7 @@ import type { Fork, Settings } from "../../../shared/api.ts";
 import { money, rebuilding } from "../../lib/spend/live.tsx";
 import type { Spend } from "../../lib/spend/live.tsx";
 import { Item } from "../../ui/item.tsx";
-import { Meter } from "../../ui/meter.tsx";
+import { Gauge } from "../../ui/meter.tsx";
 
 const day = (at: number) =>
   new Date(at).toLocaleDateString(undefined, { month: "short", day: "numeric" });
@@ -86,15 +86,22 @@ export const SpendCard = ({
     <section className="card spend">
       <div className="run-head">
         <b>This month</b>
-        {spend !== undefined && limits !== undefined ? (
-          <span>
-            {money(spend.spent)} of {money(limits.month)} · {spend.rebuilds.length} of{" "}
-            {limits.rebuilds} rebuilds
-          </span>
-        ) : null}
       </div>
       {spend !== undefined && limits !== undefined ? (
-        <Meter spent={spend.spent} cap={limits.month} />
+        <div className="gauges">
+          <Gauge
+            value={money(spend.spent)}
+            of={`of ${money(limits.month)}`}
+            spent={spend.spent}
+            cap={limits.month}
+          />
+          <Gauge
+            value={spend.rebuilds.length}
+            of={`of ${limits.rebuilds} rebuilds`}
+            spent={spend.rebuilds.length}
+            cap={limits.rebuilds}
+          />
+        </div>
       ) : null}
       <ul className="list">
         <Rebuilds spend={spend} />
