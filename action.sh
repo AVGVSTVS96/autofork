@@ -9,10 +9,14 @@ open_issue() {
 failed_title="autofork sync failed"
 run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/${GITHUB_RUN_ATTEMPT:-1}"
 
-close_failed() {
-  local issue
-  issue="$(open_issue "$failed_title")" || return 0
-  [ -z "$issue" ] || gh issue close "$issue" -R "$GITHUB_REPOSITORY" --comment "$1" > /dev/null || true
+limits_title="autofork is waiting for this month's limits"
+
+close_issues() {
+  local title issue
+  for title in "$failed_title" "$limits_title"; do
+    issue="$(open_issue "$title")" || continue
+    [ -z "$issue" ] || gh issue close "$issue" -R "$GITHUB_REPOSITORY" --comment "$1" > /dev/null || true
+  done
 }
 
 if [ "${1:-}" = failed ]; then
@@ -92,7 +96,17 @@ if ! node "$GITHUB_ACTION_PATH/packages/autofork/dist/autofork.js" sync ${skip:+
   echo "result=failed" >> "$GITHUB_OUTPUT"
   exit 1
 fi
-[ "$(sed -n 's/^result=//p' "$GITHUB_OUTPUT" | tail -1)" != current ] || close_failed "Up to date in $run_url."
+[ "$(sed -n 's/^result=//p' "$GITHUB_OUTPUT" | tail -1)" != current ] || close_issues "Up to date in $run_url."
+
+limits="$(sed -n 's/^limits=//p' "$GITHUB_OUTPUT" | tail -1)"
+if [ -n "$limits" ] && issue="$(open_issue "$limits_title")" && [ -z "$issue" ]; then
+  gh issue create -R "$GITHUB_REPOSITORY" --title "$limits_title" --body "$limits Until then, the fork doesn't follow upstream.
+
+$run_url
+
+The next sync that goes through closes this issue." > /dev/null ||
+    echo "::warning::the sync is waiting for this month's limits, but autofork couldn't open an issue about it: turn on the fork's issues and give the workflow issues: write"
+fi
 
 if [ "$(git rev-parse HEAD)" != "$head" ]; then
   # Until the branch moves, a failing step means nothing was pushed, whatever the sync said
@@ -127,7 +141,7 @@ if [ "$(git rev-parse HEAD)" != "$head" ]; then
   fi
   trap - ERR
   echo "pushed ${signed:0:12} to $GITHUB_REF_NAME, signed by GitHub"
-  close_failed "Synced in ${signed:0:12}."
+  close_issues "Synced in ${signed:0:12}."
 
   for doc in $(git diff --name-only --diff-filter=A "$head" HEAD -- '.autofork/*/UPSTREAM.md'); do
     id="$(basename "$(dirname "$doc")")"

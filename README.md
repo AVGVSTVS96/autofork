@@ -88,7 +88,7 @@ Each agent run is a rebuild, and `limits` in `.autofork/config.json` caps them:
 "limits": { "rebuilds": 10, "month": 200, "rebuild": 20 }
 ```
 
-Those are the defaults: at most 10 rebuilds a month (the UTC calendar month), $200 a month and $20 a rebuild, at API prices; on a Claude or ChatGPT plan, that's what the runs would cost on the API, not a bill. A key you leave out takes its default. Before paying for anything, a sync counts with git the patches that no longer apply or aren't built yet, and waits unless all of them fit, and no run starts without room for a whole `rebuild`. A sync with no room ends `waiting`, says why in one line, and runs on the 1st, or once you raise the limits it names and push.
+Those are the defaults: at most 10 rebuilds a month (the UTC calendar month), $200 a month and $20 a rebuild, at API prices; on a Claude or ChatGPT plan, that's what the runs would cost on the API, not a bill. A key you leave out takes its default. Before paying for anything, a sync counts with git the patches that no longer apply or aren't built yet, and waits unless all of them fit, and no run starts without room for a whole `rebuild`. A sync with no room ends `waiting`, opens an issue on your fork saying why, and runs on the 1st, or once you raise the limits it names and push. The next sync that goes through closes the issue.
 
 Claude Code runs with `--max-budget-usd` set to `rebuild`, which it checks between steps, so a run can end a little past it. Codex has no budget flag, so its runs can cost more; its cost is its tokens at [LiteLLM's prices](https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json). A custom `agent` command, or a run that never reports, counts at its full `rebuild`.
 

@@ -64,10 +64,13 @@ const rebuild = async (sync: Sync): Promise<Built | undefined> => {
       throw error;
     }
 
-    say(
-      `autofork: ${error.message}${error instanceof NoRoomError ? "" : ". The next run that heals rebuilds it."}`,
-    );
-    output({ result: "waiting" });
+    if (error instanceof NoRoomError) {
+      say(`autofork: ${error.message}`);
+      output({ result: "waiting", limits: error.message });
+    } else {
+      say(`autofork: ${error.message}. The next run that heals rebuilds it.`);
+      output({ result: "waiting" });
+    }
 
     return undefined;
   }

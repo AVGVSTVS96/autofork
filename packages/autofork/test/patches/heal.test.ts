@@ -206,6 +206,7 @@ test("a patch that's only a PATCH.md is built by the agent", () => {
   expect(waiting.ok).toBe(true);
   expect(waiting.log).toContain("wave isn't built yet. The next run that heals rebuilds it.");
   expect(waiting.output.result).toBe("waiting");
+  expect(waiting.output.limits).toBeUndefined();
   expect(sh(fork, "git rev-parse HEAD")).toBe(head);
   write(upstream, "notes.txt", "wave pending\n");
   sh(upstream, "git commit -qam notes");
