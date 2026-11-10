@@ -750,8 +750,13 @@ var openRow = async (row) => {
     agent: row.agent,
     cap: row.cap
   });
+  if (opened?.status === 403) {
+    const refused = await readBody(opened, (value) => has(value, "error", isText));
+    say(`autofork.com didn't record this rebuild: ${refused?.error ?? "refused"}`);
+    return { id: undefined, refused: true };
+  }
   const answer = opened?.status === 201 ? await readBody(opened, (value) => has(value, "id", isText)) : undefined;
-  return answer?.id;
+  return { id: answer?.id, refused: false };
 };
 var printedBy = (dir, agent, command, prompt, env) => {
   const printed = `${dir}-agent.out`;
@@ -782,14 +787,14 @@ var runAgent = async (config, dir, what, prompt, env = process.env) => {
     status: "running",
     at: new Date().toISOString()
   };
-  const id = await openRow(row);
+  const { id, refused } = await openRow(row);
   const { ok, stdout } = printedBy(dir, agent, command, prompt, env);
   const spend = await spenders[agent](stdout);
   const status = ok ? "done" : "stopped";
   finishRebuild(row, status, spend.cost);
   const answer = id === undefined ? undefined : await callSite("ledger/close", { id, status, ...spend });
   const closed = answer?.ok === true;
-  if (reportsToSite && !closed) {
+  if (reportsToSite && !refused && !closed) {
     say("couldn't report this rebuild's cost to autofork.com");
   }
   say(`${what} cost ${spend.cost === undefined ? `up to ${usd(row.cap)}` : usd(spend.cost)}`);

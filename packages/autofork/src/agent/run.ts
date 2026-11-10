@@ -29,12 +29,19 @@ const openRow = async (row: Row) => {
     cap: row.cap,
   } satisfies LedgerOpen);
 
+  if (opened?.status === 403) {
+    const refused = await readBody(opened, (value) => has(value, "error", isText));
+    say(`autofork.com didn't record this rebuild: ${refused?.error ?? "refused"}`);
+
+    return { id: undefined, refused: true };
+  }
+
   const answer =
     opened?.status === 201
       ? await readBody(opened, (value) => has(value, "id", isText))
       : undefined;
 
-  return answer?.id;
+  return { id: answer?.id, refused: false };
 };
 
 const printedBy = (
@@ -87,7 +94,7 @@ export const runAgent = async (
     at: new Date().toISOString(),
   };
 
-  const id = await openRow(row);
+  const { id, refused } = await openRow(row);
   const { ok, stdout } = printedBy(dir, agent, command, prompt, env);
   const spend = await spenders[agent](stdout);
   const status = ok ? "done" : "stopped";
@@ -101,7 +108,7 @@ export const runAgent = async (
 
   const closed = answer?.ok === true;
 
-  if (reportsToSite && !closed) {
+  if (reportsToSite && !refused && !closed) {
     say("couldn't report this rebuild's cost to autofork.com");
   }
 
