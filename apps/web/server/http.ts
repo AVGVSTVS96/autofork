@@ -295,7 +295,7 @@ const callbackRoute = HttpRouter.add(
 
     const { user, installed } = exchanged.value;
 
-    if (!installed) {
+    if (!installed && !query.has("setup_action")) {
       yield* Session.write({ ...session, user });
       const install = new URL(`https://github.com/apps/${appSlug}/installations/new/permissions`);
       install.search = new URLSearchParams({
