@@ -1,17 +1,12 @@
-export const firstSync = (repo: string) => `  gh workflow run autofork.yml${repo}`;
-
-export const claudeSteps = (repo: string) =>
-  `  claude setup-token
-  gh secret set CLAUDE_CODE_OAUTH_TOKEN${repo}`;
-
-export const codexHint = (repo: string) =>
-  `For ChatGPT instead, give the fork a Codex sign-in of its own, since each refresh retires the last one. Turn on device code login in ChatGPT's security settings, then:
-  sh -c 'd=$(mktemp -d) && trap "rm -rf \\"\\$d\\"" EXIT && CODEX_HOME="$d" codex login --device-auth && gh secret set CODEX_AUTH${repo} < "$d/auth.json"'
-${firstSync(repo)}
-Link it too (below): only a linked fork saves Codex's refreshed sign-ins, and without them it stops working within about a week.`;
+export const signIn = (repo: string) =>
+  `An agent builds new patches and the ones upstream breaks. Give it a Claude sign-in:
+  claude setup-token
+  gh secret set CLAUDE_CODE_OAUTH_TOKEN${repo}
+or a ChatGPT one, with device code login on in ChatGPT's security settings:
+  sh -c 'd=$(mktemp -d) && trap "rm -rf \\"\\$d\\"" EXIT && CODEX_HOME="$d" codex login --device-auth && gh secret set CODEX_AUTH${repo} < "$d/auth.json"'`;
 
 export const LINK_HINT =
-  "GitHub's timer can run hours late. Run it on time and track spend: npx autofork link";
+  "To sync on time, and keep a ChatGPT sign-in working past a week: npx autofork link";
 
 export const FORK_OPTIONS =
   "[--follow <releases | channel | branch>] [--setup <command>] [--generated <files>] [--verify <command>] [--every <5m | 15m | 1h | 1d>]";
@@ -21,7 +16,7 @@ Personal forks of open-source apps that auto-track upstream.
 
 Usage:
   autofork fork <owner/repo>    fork it on GitHub, set it up and push
-  autofork init <owner/repo>    set up a fork you already have, from inside it
+  autofork init [owner/repo]    set up a fork you already have, from inside it
   autofork save <id>            save your changes as the patch in .autofork/<id>
   autofork status               your patches, and changes no patch holds yet
   autofork sync                 rebuild on upstream; an agent heals what breaks

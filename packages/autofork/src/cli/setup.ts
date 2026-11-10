@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { EVERY, isEvery, LIMITS, workflow } from "@autofork/contract";
@@ -119,15 +119,22 @@ const tellWhatItFollows = (upstream: string, follow: string, chosen: boolean) =>
   }
 };
 
-const inheritedWorkflows = (root: string, base: string) => {
-  const upstreamHas = new Set(
-    git(root, "ls-tree", "-r", "--name-only", base, "--", WORKFLOWS).split("\n"),
-  );
+const BLOB = /^\d+ blob (?<sha>\w+)\t(?<file>.+)$/u;
 
-  return git(root, "ls-files", WORKFLOWS)
+const untouchedWorkflows = (root: string, base: string) =>
+  git(root, "ls-tree", base, `${WORKFLOWS}/`)
     .split("\n")
-    .filter((file) => file !== "" && upstreamHas.has(file) && !file.endsWith("/autofork.yml"));
-};
+    .flatMap((entry) => {
+      const { sha, file } = BLOB.exec(entry)?.groups ?? {};
+
+      return sha !== undefined &&
+        file !== undefined &&
+        file !== OWN_WORKFLOW &&
+        existsSync(path.join(root, file)) &&
+        git(root, "hash-object", "--", file) === sha
+        ? [file]
+        : [];
+    });
 
 export const setup = async (root: string, upstream: string, { every, ...chosen }: Chosen) => {
   if (existsSync(configFile(root))) {
@@ -144,13 +151,17 @@ export const setup = async (root: string, upstream: string, { every, ...chosen }
   writeWorkflow(root, upstream, every);
   const { drift } = await compare(root, { ...config, patches: [] }, workingTree(root), base);
   const readme = addNote(root, upstream, base, drift);
-  const inherited = inheritedWorkflows(root, base);
+  const untouched = untouchedWorkflows(root, base);
+
+  for (const file of untouched) {
+    rmSync(path.join(root, file));
+  }
 
   tellWhatItFollows(upstream, follow, chosen.follow !== undefined);
 
-  if (inherited.length > 0) {
+  if (untouched.length > 0) {
     say(
-      `Your fork has ${inherited.length} workflow${inherited.length === 1 ? "" : "s"} copied from upstream, and they run here too. Delete the ones you don't want. autofork leaves workflows to you: it never copies upstream's new ones in, and when upstream changes one you keep, the sync's agent brings that into your copy, or opens an issue when the workflow's token can't push workflow files.`,
+      `Removed the ${untouched.length === 1 ? "workflow" : `${untouched.length} workflows`} the fork copied from upstream and never changed, since they'd run here too.`,
     );
   }
 
@@ -165,6 +176,8 @@ export const setup = async (root: string, upstream: string, { every, ...chosen }
       `Your branch already changes ${drift.length} file${drift.length === 1 ? "" : "s"}. Save them as a patch: write ${DIR}/<id>/PATCH.md, then autofork save <id>`,
     );
   }
+
+  return drift;
 };
 
 const ghApi = (root: string, ...args: string[]) => {
@@ -195,6 +208,12 @@ const ownerName = (root: string, login: string) => {
   const called = has(owner, "type", (type) => type === "User") ? name?.split(/\s+/u)[0] : name;
 
   return called === undefined || called === "" ? login : called;
+};
+
+export const parentOf = (root: string) => {
+  const repo = origin(root);
+
+  return repo === "" ? undefined : forkOn(root, repo)?.parent;
 };
 
 export const claim = (root: string, upstream: string) => {

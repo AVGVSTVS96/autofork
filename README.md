@@ -16,7 +16,7 @@ Fork something at [autofork.com](https://autofork.com), or from a terminal:
 npx autofork fork pingdotgg/t3code
 ```
 
-That forks the repo, clones it and adds the autofork workflow. Set `CLAUDE_CODE_OAUTH_TOKEN` first (`claude setup-token` prints one) and it adds that secret too; otherwise it prints how to add a Claude or ChatGPT sign-in and start the first sync. Already have a fork? Run `npx autofork init owner/repo` inside it, with upstream's name.
+That forks the repo, clones it, adds the autofork workflow and removes the workflows it copied from upstream, which would run in your fork too. Set `CLAUDE_CODE_OAUTH_TOKEN` first (`claude setup-token` prints one) and it adds that secret too; otherwise it prints how to add a Claude or ChatGPT sign-in. Already have a fork? Run `npx autofork init` inside it, with upstream's `owner/repo` if it isn't a GitHub fork.
 
 When upstream has a README.md, the fork also gets a patch, `.autofork/fork-readme`, that's only a `PATCH.md`: the first sync with an agent builds it into one line under your README's title saying it's a personal fork that updates itself with autofork, and syncs before that follow upstream without it. To drop it, delete the line and the folder.
 

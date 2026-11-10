@@ -178,21 +178,19 @@ var origin = (root) => {
 };
 
 // src/cli/messages.ts
-var firstSync = (repo) => `  gh workflow run autofork.yml${repo}`;
-var claudeSteps = (repo) => `  claude setup-token
-  gh secret set CLAUDE_CODE_OAUTH_TOKEN${repo}`;
-var codexHint = (repo) => `For ChatGPT instead, give the fork a Codex sign-in of its own, since each refresh retires the last one. Turn on device code login in ChatGPT's security settings, then:
-  sh -c 'd=$(mktemp -d) && trap "rm -rf \\"\\$d\\"" EXIT && CODEX_HOME="$d" codex login --device-auth && gh secret set CODEX_AUTH${repo} < "$d/auth.json"'
-${firstSync(repo)}
-Link it too (below): only a linked fork saves Codex's refreshed sign-ins, and without them it stops working within about a week.`;
-var LINK_HINT = "GitHub's timer can run hours late. Run it on time and track spend: npx autofork link";
+var signIn = (repo) => `An agent builds new patches and the ones upstream breaks. Give it a Claude sign-in:
+  claude setup-token
+  gh secret set CLAUDE_CODE_OAUTH_TOKEN${repo}
+or a ChatGPT one, with device code login on in ChatGPT's security settings:
+  sh -c 'd=$(mktemp -d) && trap "rm -rf \\"\\$d\\"" EXIT && CODEX_HOME="$d" codex login --device-auth && gh secret set CODEX_AUTH${repo} < "$d/auth.json"'`;
+var LINK_HINT = "To sync on time, and keep a ChatGPT sign-in working past a week: npx autofork link";
 var FORK_OPTIONS = "[--follow <releases | channel | branch>] [--setup <command>] [--generated <files>] [--verify <command>] [--every <5m | 15m | 1h | 1d>]";
 var USAGE = `autofork: Customized forks that maintain themselves.
 Personal forks of open-source apps that auto-track upstream.
 
 Usage:
   autofork fork <owner/repo>    fork it on GitHub, set it up and push
-  autofork init <owner/repo>    set up a fork you already have, from inside it
+  autofork init [owner/repo]    set up a fork you already have, from inside it
   autofork save <id>            save your changes as the patch in .autofork/<id>
   autofork status               your patches, and changes no patch holds yet
   autofork sync                 rebuild on upstream; an agent heals what breaks
@@ -215,7 +213,7 @@ to <id>.patch, the diff. https://github.com/AVGVSTVS96/autofork
 `;
 
 // src/cli/setup.ts
-import { existsSync as existsSync9, mkdirSync as mkdirSync3, readFileSync as readFileSync6, writeFileSync as writeFileSync7 } from "node:fs";
+import { existsSync as existsSync9, mkdirSync as mkdirSync3, readFileSync as readFileSync6, rmSync as rmSync5, writeFileSync as writeFileSync7 } from "node:fs";
 import path12 from "node:path";
 
 // ../contract/src/schedule.ts
@@ -1452,12 +1450,12 @@ var tellWhatItFollows = (upstream, follow, chosen) => {
     say(`autofork follows ${upstream}'s ${follow === "releases" ? "" : `${follow} `}releases.`);
   }
 };
-var inheritedWorkflows = (root, base) => {
-  const upstreamHas = new Set(git(root, "ls-tree", "-r", "--name-only", base, "--", WORKFLOWS).split(`
-`));
-  return git(root, "ls-files", WORKFLOWS).split(`
-`).filter((file) => file !== "" && upstreamHas.has(file) && !file.endsWith("/autofork.yml"));
-};
+var BLOB = /^\d+ blob (?<sha>\w+)\t(?<file>.+)$/u;
+var untouchedWorkflows = (root, base) => git(root, "ls-tree", base, `${WORKFLOWS}/`).split(`
+`).flatMap((entry) => {
+  const { sha, file } = BLOB.exec(entry)?.groups ?? {};
+  return sha !== undefined && file !== undefined && file !== OWN_WORKFLOW && existsSync9(path12.join(root, file)) && git(root, "hash-object", "--", file) === sha ? [file] : [];
+});
 var setup = async (root, upstream, { every, ...chosen }) => {
   if (existsSync9(configFile(root))) {
     throw new AutoforkError(`${DIR}/config.json already exists`);
@@ -1470,10 +1468,13 @@ var setup = async (root, upstream, { every, ...chosen }) => {
   writeWorkflow(root, upstream, every);
   const { drift } = await compare(root, { ...config, patches: [] }, workingTree(root), base);
   const readme = addNote(root, upstream, base, drift);
-  const inherited = inheritedWorkflows(root, base);
+  const untouched = untouchedWorkflows(root, base);
+  for (const file of untouched) {
+    rmSync5(path12.join(root, file));
+  }
   tellWhatItFollows(upstream, follow, chosen.follow !== undefined);
-  if (inherited.length > 0) {
-    say(`Your fork has ${inherited.length} workflow${inherited.length === 1 ? "" : "s"} copied from upstream, and they run here too. Delete the ones you don't want. autofork leaves workflows to you: it never copies upstream's new ones in, and when upstream changes one you keep, the sync's agent brings that into your copy, or opens an issue when the workflow's token can't push workflow files.`);
+  if (untouched.length > 0) {
+    say(`Removed the ${untouched.length === 1 ? "workflow" : `${untouched.length} workflows`} the fork copied from upstream and never changed, since they'd run here too.`);
   }
   if (readme !== undefined) {
     say(`The first sync with an agent adds a line to ${readme} saying this is a personal fork kept current by autofork. To skip it, delete ${DIR}/${NOTE}/.`);
@@ -1481,6 +1482,7 @@ var setup = async (root, upstream, { every, ...chosen }) => {
   if (drift.length > 0) {
     say(`Your branch already changes ${drift.length} file${drift.length === 1 ? "" : "s"}. Save them as a patch: write ${DIR}/<id>/PATCH.md, then autofork save <id>`);
   }
+  return drift;
 };
 var ghApi = (root, ...args) => {
   const result = run("gh", ["api", ...args], root);
@@ -1499,6 +1501,10 @@ var ownerName = (root, login) => {
   const name = has(owner, "name", isText) ? owner.name.trim() : undefined;
   const called = has(owner, "type", (type) => type === "User") ? name?.split(/\s+/u)[0] : name;
   return called === undefined || called === "" ? login : called;
+};
+var parentOf = (root) => {
+  const repo = origin(root);
+  return repo === "" ? undefined : forkOn(root, repo)?.parent;
 };
 var claim = (root, upstream) => {
   const repo = origin(root);
@@ -1536,34 +1542,28 @@ var fork = async (cwd, args) => {
   claim(root, upstream);
   const repo = origin(root);
   const secret = secretSet(root, repo);
-  git(root, "add", DIR, OWN_WORKFLOW);
+  git(root, "add", DIR, WORKFLOWS);
   git(root, "commit", "--quiet", "-m", `autofork: follow ${upstream}`);
   git(root, "push", "--quiet");
   say(`${repo} now keeps itself current with ${upstream}. It's cloned in ./${path13.basename(root)}.`);
   if (!secret) {
-    say(`Last step, a Claude sign-in for the fork (paste the token setup-token prints) and its first sync:
-${claudeSteps(` --repo ${repo}`)}
-${firstSync(` --repo ${repo}`)}
-${codexHint(` --repo ${repo}`)}`);
+    say(signIn(` --repo ${repo}`));
   }
   say(LINK_HINT.replace("npx", `cd ${path13.basename(root)} && npx`));
 };
 
 // src/cli/init.ts
 var init = async (root, args) => {
-  const [upstream] = args;
-  if (upstream === undefined || upstream === "") {
-    throw new AutoforkError(`usage: autofork init <owner/repo | git url> ${FORK_OPTIONS}`);
+  const [named = ""] = args;
+  const upstream = named === "" || named.startsWith("-") ? parentOf(root) : named;
+  if (upstream === undefined) {
+    throw new AutoforkError(`couldn't tell this fork's upstream from GitHub, so name it: autofork init <owner/repo | git url> ${FORK_OPTIONS}`);
   }
-  await setup(root, upstream, options(args));
+  const drift = await setup(root, upstream, options(args));
   claim(root, upstream);
   const mine = origin(root);
-  const repo = mine === "" ? "" : ` --repo ${mine}`;
-  say(`Give the fork a Claude sign-in (paste the token setup-token prints), then commit and push:
-${claudeSteps(repo)}
-If you pushed before the secret was set, start the first sync by hand:
-${firstSync(repo)}
-${codexHint(repo)}`);
+  say(`${drift.length > 0 ? "Then commit" : "Commit"} and push, and the fork follows upstream.`);
+  say(signIn(mine === "" ? "" : ` --repo ${mine}`));
   say(LINK_HINT);
 };
 
@@ -1638,11 +1638,11 @@ var link = async (root) => {
 };
 
 // src/cli/save.ts
-import { existsSync as existsSync12, rmSync as rmSync6, writeFileSync as writeFileSync9 } from "node:fs";
+import { existsSync as existsSync12, rmSync as rmSync7, writeFileSync as writeFileSync9 } from "node:fs";
 import path15 from "node:path";
 
 // src/build/refresh.ts
-import { existsSync as existsSync10, rmSync as rmSync5, writeFileSync as writeFileSync8 } from "node:fs";
+import { existsSync as existsSync10, rmSync as rmSync6, writeFileSync as writeFileSync8 } from "node:fs";
 var refresh = (target, config, build) => {
   keepPatches(target);
   const pairs = stepPairs(build.steps);
@@ -1654,7 +1654,7 @@ var refresh = (target, config, build) => {
     }
   }
   for (const [id, reason] of build.upstreamHas) {
-    rmSync5(patchFile(target, id), { force: true });
+    rmSync6(patchFile(target, id), { force: true });
     writeFileSync8(upstreamDoc(target, id), `${reason}
 
 ${config.upstream} does this on its own as of ${short(build.source)}, so autofork stopped applying this patch.
@@ -1739,7 +1739,7 @@ var save = async (root, args) => {
     throw new AutoforkError(`write ${DIR}/${id}/PATCH.md first: what the change does and why`);
   }
   requireIntent(root, id);
-  rmSync6(upstreamDoc(root, id), { force: true });
+  rmSync7(upstreamDoc(root, id), { force: true });
   const config = await readConfig(root);
   await fetchUpstream(root, config);
   const files = workingTree(root);
@@ -1755,7 +1755,7 @@ var save = async (root, args) => {
     refresh(root, config, result);
     say(`saved ${drift.length} file${drift.length === 1 ? "" : "s"} to ${DIR}/${id}. Commit and push.`);
   } finally {
-    rmSync6(fold, { force: true });
+    rmSync7(fold, { force: true });
     cleanup(root, result.dir);
   }
 };

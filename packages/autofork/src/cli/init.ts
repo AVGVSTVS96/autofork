@@ -1,23 +1,24 @@
 import { AutoforkError } from "../failure.ts";
 import { say } from "../platform/action.ts";
 import { origin } from "../platform/github.ts";
-import { claudeSteps, codexHint, firstSync, FORK_OPTIONS, LINK_HINT } from "./messages.ts";
-import { claim, options, setup } from "./setup.ts";
+import { FORK_OPTIONS, LINK_HINT, signIn } from "./messages.ts";
+import { claim, options, parentOf, setup } from "./setup.ts";
 
 export const init = async (root: string, args: string[]) => {
-  const [upstream] = args;
+  const [named = ""] = args;
+  const upstream = named === "" || named.startsWith("-") ? parentOf(root) : named;
 
-  if (upstream === undefined || upstream === "") {
-    throw new AutoforkError(`usage: autofork init <owner/repo | git url> ${FORK_OPTIONS}`);
+  if (upstream === undefined) {
+    throw new AutoforkError(
+      `couldn't tell this fork's upstream from GitHub, so name it: autofork init <owner/repo | git url> ${FORK_OPTIONS}`,
+    );
   }
 
-  await setup(root, upstream, options(args));
+  const drift = await setup(root, upstream, options(args));
   claim(root, upstream);
   const mine = origin(root);
-  const repo = mine === "" ? "" : ` --repo ${mine}`;
 
-  say(
-    `Give the fork a Claude sign-in (paste the token setup-token prints), then commit and push:\n${claudeSteps(repo)}\nIf you pushed before the secret was set, start the first sync by hand:\n${firstSync(repo)}\n${codexHint(repo)}`,
-  );
+  say(`${drift.length > 0 ? "Then commit" : "Commit"} and push, and the fork follows upstream.`);
+  say(signIn(mine === "" ? "" : ` --repo ${mine}`));
   say(LINK_HINT);
 };
