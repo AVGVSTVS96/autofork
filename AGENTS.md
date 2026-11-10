@@ -11,18 +11,6 @@ Forks are the first job. The same agent is meant to grow into automatic maintena
 - `bun --filter @autofork/web dev`, `bun --filter @autofork/spec dev`: the sites.
 - `bun run --cwd packages/autofork build`: rebuilds `dist/autofork.js`, the file the action runs. Commit it with the change.
 
-## Map
-
-| Folder                    | Job                                                                               | Imports                       |
-| ------------------------- | --------------------------------------------------------------------------------- | ----------------------------- |
-| `action.yml`, `action.sh` | the action forks run as `AVGVSTVS96/autofork@v1`                                  | `packages/autofork/dist`      |
-| `packages/contract`       | the fork workflow, schedules, limits, ledger bodies, `dist/` committed for Vercel | nothing                       |
-| `packages/autofork`       | the engine and CLI, published to npm as `autofork`                                | contract, bundled into `dist` |
-| `apps/web`                | autofork.com: Vite app, Effect server, Convex                                     | contract                      |
-| `apps/spec`               | the PATCH.md spec site, patchmd.vercel.app                                        | nothing                       |
-| `brand`                   | logo, fonts, copy, launch kit, videos                                             | nothing                       |
-| `skills/autofork`         | the skill agents install                                                          | nothing                       |
-
 ## Rules and what enforces them
 
 | Rule                                                        | Enforced by                       |
@@ -45,4 +33,4 @@ Forks are the first job. The same agent is meant to grow into automatic maintena
 - **Trust the agent.** The prompts and the skill give the agent the facts and the goal and leave the how to it. Every constraint costs it performance, so the few kept are ones models really need, each with its reason.
 - **Small.** The simplest change that fully does the job, in code and in words.
 
-Forks stay on `v1` until it moves; move it, then `npm publish` from `packages/autofork`. Effect is v4 and TypeScript is 7, both newer than most model memory. To contribute, read [CONTRIBUTING.md](CONTRIBUTING.md).
+Forks stay on `v1` until it moves; move it, then `npm publish` from `packages/autofork`. Effect is v4 and TypeScript is 7, both newer than most model memory. To contribute, read [CONTRIBUTING.md](CONTRIBUTING.md). What's planned and in progress is in the [roadmap](README.md#roadmap).
