@@ -12,15 +12,16 @@
 }
 
 :root {
-  --bg: #fbfbfc;
+  --bg: #f6f6f8;
   --panel: #ffffff;
   --panel-2: #f4f4f6;
   --ink: #0e0e12;
   --ink-2: #4d4d57;
   --ink-3: #6e6e78;
-  --hair: rgb(14 14 18 / 0.11);
-  --hair-2: rgb(14 14 18 / 0.2);
+  --hair: #e4e4e7;
+  --hair-2: #d4d4d8;
   --tint: rgb(14 14 18 / 0.05);
+  --raise: 0 1px 2px rgb(14 14 18 / 0.05), 0 1px 1px rgb(14 14 18 / 0.02);
   --trunk: #cacad2;
   --you: #3b2bff;
   --on-you: #ffffff;
@@ -75,9 +76,10 @@
     --ink: #eeeef2;
     --ink-2: #a6a6b2;
     --ink-3: #8a8a96;
-    --hair: rgb(238 238 242 / 0.1);
-    --hair-2: rgb(238 238 242 / 0.2);
+    --hair: #27272a;
+    --hair-2: #3f3f46;
     --tint: rgb(238 238 242 / 0.06);
+    --raise: inset 0 1px 0 rgb(255 255 255 / 0.04);
     --trunk: #34343d;
     --you: #8f84ff;
     --on-you: #0c0c0f;
@@ -610,9 +612,7 @@ button.me {
   background: var(--panel);
   border: 1px solid var(--hair-2);
   border-radius: var(--r);
-  box-shadow:
-    0 1px 2px rgb(14 14 18 / 0.04),
-    0 8px 24px -12px rgb(14 14 18 / 0.12);
+  box-shadow: var(--raise);
   transition:
     border-color 0.2s ease,
     box-shadow 0.2s ease;
@@ -876,10 +876,7 @@ button.me {
 }
 .ask button:disabled,
 .paste button:disabled {
-  opacity: 1;
-  background: var(--panel-2);
-  color: var(--ink-3);
-  box-shadow: inset 0 0 0 1px var(--hair);
+  opacity: 0.35;
 }
 
 .signin {
@@ -898,6 +895,7 @@ button.me {
   border: 1px solid var(--hair);
   border-radius: 12px;
   background: var(--panel);
+  box-shadow: var(--raise);
   font-size: 16px;
   font-weight: 560;
   white-space: nowrap;
@@ -910,6 +908,7 @@ button.me {
 }
 .btn.primary {
   border-color: transparent;
+  box-shadow: inset 0 1px rgb(255 255 255 / 0.16);
   background: var(--you);
   color: var(--on-you);
   font-weight: 650;
@@ -1021,6 +1020,7 @@ button:disabled {
   background: var(--panel);
   border: 1px solid var(--hair);
   border-radius: 16px;
+  box-shadow: var(--raise);
 }
 .target {
   display: grid;
@@ -1248,6 +1248,7 @@ button:disabled {
   letter-spacing: 0.1em;
   cursor: pointer;
   transition: var(--press);
+  box-shadow: var(--raise);
 }
 .code span {
   font: 600 14px/1 var(--sans);
@@ -1266,6 +1267,7 @@ button:disabled {
   border: 1px solid var(--hair);
   border-radius: 14px;
   transition: var(--press);
+  box-shadow: var(--raise);
 }
 .paste:focus-within {
   border-color: var(--you);
@@ -1712,6 +1714,7 @@ h2 {
   display: grid;
   gap: 30px;
   padding: 16px 12px 12px 16px;
+  border: 1px solid var(--t3-line);
   border-radius: 20px;
   background: var(--t3-card);
   color: var(--t3-ink);
@@ -1721,9 +1724,7 @@ h2 {
     "Segoe UI",
     system-ui,
     sans-serif;
-  box-shadow:
-    0 0 0 1px var(--t3-line),
-    0 12px 28px -18px rgb(0 0 0 / 0.4);
+  box-shadow: var(--t3-lift);
 }
 .mini-ph {
   color: var(--t3-mute);
@@ -1947,9 +1948,7 @@ h2 {
     system-ui,
     sans-serif;
   letter-spacing: 0;
-  box-shadow:
-    0 1px 0 var(--hair),
-    0 40px 90px -50px rgb(14 14 18 / 0.45);
+  box-shadow: 0 40px 90px -50px rgb(14 14 18 / 0.45);
 }
 :where(.t3 button) {
   all: unset;
@@ -2672,6 +2671,7 @@ h2 {
   text-align: left;
   cursor: pointer;
   transition: var(--press);
+  box-shadow: var(--raise);
 }
 .asks button:active {
   transform: scale(0.985);
@@ -2711,6 +2711,7 @@ h2 {
   background: var(--panel);
   border: 1px solid var(--hair);
   border-radius: 16px;
+  box-shadow: var(--raise);
 }
 .gh-name {
   display: flex;
@@ -2781,6 +2782,7 @@ h2 {
   border: 1px solid var(--hair);
   border-radius: var(--r);
   overflow: hidden;
+  box-shadow: var(--raise);
 }
 .cmd button:focus-visible {
   outline-offset: -3px;
@@ -3546,11 +3548,7 @@ nav .links > :last-child {
     background: color-mix(in oklab, var(--you-soft) 90%, white);
   }
   .mini {
-    box-shadow: 0 0 0 1px var(--hair);
-  }
-  .menu {
-    border-color: var(--hair-2);
-    box-shadow: 0 16px 40px -12px rgb(0 0 0 / 0.7);
+    border-color: var(--hair);
   }
   .t3 {
     border-color: var(--hair);
@@ -3563,9 +3561,8 @@ nav .links > :last-child {
 }
 .meter {
   display: block;
-  height: 6px;
-  margin: 2px 0 10px;
-  border-radius: 3px;
+  height: 8px;
+  border-radius: 4px;
   background: var(--tint);
   overflow: hidden;
 }
@@ -3578,17 +3575,40 @@ nav .links > :last-child {
 }
 .meter i {
   display: block;
+  min-width: 8px;
   height: 100%;
   border-radius: inherit;
-  background: var(--you);
+  background: linear-gradient(90deg, color-mix(in oklab, var(--you) 55%, var(--panel)), var(--you));
   transition: width 0.4s var(--out);
+}
+.gauges {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.gauge {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.gauge b {
+  font: 600 20px/1 var(--sans);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.gauge small {
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.spend .gauges {
+  margin: 8px 0 14px;
 }
 .spend .item {
   padding: 10px 0;
   font-size: 15px;
 }
 .spend .item + .item,
-.spend .meter + .list .item:first-child {
+.spend .gauges + .list .item:first-child {
   border-top: 1px solid var(--hair);
 }
 .spend .why {
@@ -3636,7 +3656,8 @@ nav .links > :last-child {
   padding: 0 12px;
   border: 1px solid var(--hair-2);
   border-radius: 10px;
-  background: var(--bg);
+  background: var(--panel);
+  box-shadow: var(--raise);
   font: 15px var(--mono);
   min-width: 0;
 }
@@ -3699,9 +3720,9 @@ nav .links > :last-child {
 }
 .dash-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(150px, 220px);
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
   align-items: center;
-  gap: 20px;
+  gap: 24px;
   padding: 16px 0;
 }
 .dash-row + .dash-row {
@@ -3728,8 +3749,7 @@ nav .links > :last-child {
   white-space: nowrap;
   font-size: 16px;
 }
-.dash-name small,
-.dash-spend small {
+.dash-name small {
   font-size: 13px;
   color: var(--ink-3);
 }
@@ -3737,12 +3757,44 @@ nav .links > :last-child {
   color: var(--you);
 }
 .dash-spend {
-  display: grid;
-  gap: 4px;
-  font: 15px var(--mono);
+  gap: 16px;
 }
-.dash-spend .meter {
+.dash-spend .gauge b {
+  font-size: 16px;
+}
+.gate {
+  overflow: hidden;
+}
+.gate .dash {
+  mask-image: linear-gradient(to bottom, #000 20%, transparent 95%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 20%, transparent 95%);
+}
+.gate .sk {
+  animation: none;
+}
+.gate .sk {
+  background: var(--panel-2);
+}
+.gate .sk:not(.face) {
+  height: 12px;
+}
+.gate .sk.face {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+}
+.gate-cta {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  padding: 8px 22px 32px;
+  text-align: center;
+}
+.gate-cta p {
   margin: 0;
+  font-size: 16px;
+  color: var(--ink-2);
 }
 @media (max-width: 600px) {
   .dash {
