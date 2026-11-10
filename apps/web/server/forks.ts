@@ -1071,15 +1071,8 @@ export const status = Effect.fn(function* status(owner: string, name: string) {
 
 export const yours = (viewer: User, owner: string, name: string) =>
   GitHub.get(viewer.token, `/repos/${owner}/${name}`, GitHubRepo).pipe(
-    Effect.map((seen) => ({
-      id: seen.id,
-      name: seen.full_name,
-      push: seen.permissions?.push === true,
-    })),
-    Effect.catchIf(GitHub.missing, () =>
-      Effect.succeed({ id: 0, name: `${owner}/${name}`, push: false }),
-    ),
-    Effect.option,
+    Effect.map((seen) => seen.permissions?.push === true),
+    Effect.orElseSucceed(() => false),
   );
 
 const FileText = Schema.NullOr(
@@ -1091,6 +1084,7 @@ const Node = Schema.Struct({
   databaseId: Schema.Number,
   createdAt: Schema.String,
   viewerPermission: Schema.NullOr(Schema.String),
+  isPrivate: Schema.Boolean,
   owner: Owner,
   parent: Schema.NullOr(Schema.Struct({ nameWithOwner: Schema.String })),
   config: FileText,
@@ -1099,7 +1093,7 @@ const Node = Schema.Struct({
 
 type Node = typeof Node.Type;
 
-const NODE = `name databaseId createdAt viewerPermission owner { login } parent { nameWithOwner }
+const NODE = `name databaseId createdAt viewerPermission isPrivate owner { login } parent { nameWithOwner }
     config: object(expression: "HEAD:.autofork/config.json") { ... on Blob { text } }
     workflow: object(expression: "HEAD:.github/workflows/autofork.yml") { ... on Blob { text } }`;
 
@@ -1147,7 +1141,6 @@ const everyRepo = Effect.fn(function* everyRepo<A, I>(
   const Page = pageOf(node);
   const nodes: A[] = [];
   let after: string | null = null;
-  let failed = false;
 
   for (let page = 0; page < PAGES; page += 1) {
     const { data, errors }: typeof Page.Type = yield* GitHub.post(
@@ -1163,7 +1156,7 @@ const everyRepo = Effect.fn(function* everyRepo<A, I>(
     );
 
     if (!data && page > 0) {
-      return { nodes, complete: false };
+      return nodes;
     }
 
     if (!data) {
@@ -1172,35 +1165,25 @@ const everyRepo = Effect.fn(function* everyRepo<A, I>(
       });
     }
 
-    failed ||= errors !== undefined;
     nodes.push(...data.viewer.repositories.nodes.filter((each) => each !== null));
 
     if (!data.viewer.repositories.pageInfo.hasNextPage) {
-      return { nodes, complete: !failed };
+      return nodes;
     }
 
     after = data.viewer.repositories.pageInfo.endCursor;
   }
 
-  return { nodes, complete: false };
+  return nodes;
 });
 
 const REPOS_PER_QUERY = 10;
 
-const GraphQLError = Schema.Struct({
-  type: Schema.optionalKey(Schema.String),
-  path: Schema.optionalKey(Schema.Array(Schema.Unknown)),
-});
-
 const ReposAnswer = Schema.Struct({
   data: Schema.optionalKey(Schema.NullOr(Schema.Record(Schema.String, Schema.NullOr(Node)))),
-  errors: Schema.optionalKey(Schema.Array(GraphQLError)),
 });
 
-const goneSinceListed = (error: typeof GraphQLError.Type) =>
-  error.path?.length === 1 && (error.type === "NOT_FOUND" || error.type === "FORBIDDEN");
-
-const nothingRead = () => ({ nodes: Arr.empty<Node>(), complete: false });
+const nothingRead = () => Arr.empty<Node>();
 
 const readRepos = (token: string, repos: readonly (typeof Named.Type)[]) =>
   Effect.all(
@@ -1213,29 +1196,16 @@ const readRepos = (token: string, repos: readonly (typeof Named.Type)[]) =>
         },
         ReposAnswer,
       ).pipe(
-        Effect.map(({ data, errors = [] }) => ({
-          nodes: Object.values(data ?? {}).filter((each) => each !== null),
-          complete: data !== undefined && data !== null && errors.every(goneSinceListed),
-        })),
+        Effect.map(({ data }) => Object.values(data ?? {}).filter((each) => each !== null)),
         Effect.orElseSucceed(nothingRead),
       ),
     ),
     { concurrency: 20 },
-  ).pipe(
-    Effect.map((chunks) => ({
-      nodes: chunks.flatMap((chunk) => chunk.nodes),
-      complete: chunks.every((chunk) => chunk.complete),
-    })),
-  );
+  ).pipe(Effect.map((chunks) => chunks.flat()));
 
 const ownNonForks = (token: string) =>
   everyRepo(token, OWN_NON_FORKS, Named).pipe(
-    Effect.flatMap(({ nodes, complete }) =>
-      Effect.map(readRepos(token, nodes), (read) => ({
-        nodes: read.nodes,
-        complete: complete && read.complete,
-      })),
-    ),
+    Effect.flatMap((nodes) => readRepos(token, nodes)),
     Effect.orElseSucceed(nothingRead),
   );
 
@@ -1256,6 +1226,7 @@ const asMyFork = (repo: Node): MyFork[] => {
       name: repo.name,
       upstream: upstreamFor(config, `${repo.owner.login}/${repo.name}`, repo.parent?.nameWithOwner),
       repoId: repo.databaseId,
+      private: repo.isPrivate,
       settings: readSettings(config, repo.workflow?.text ?? null),
     },
   ];
@@ -1265,19 +1236,11 @@ export const mine = (user: User) =>
   Effect.all([everyRepo(user.token, FORKS, Node), ownNonForks(user.token)], {
     concurrency: 2,
   }).pipe(
-    Effect.map(([forks, rest]) => {
-      const nodes = [...forks.nodes, ...rest.nodes].toSorted((a, b) =>
-        b.createdAt.localeCompare(a.createdAt),
-      );
-
-      return {
-        complete: forks.complete && rest.complete,
-        denied: nodes.flatMap((repo) =>
-          canPush(repo) ? [] : [{ id: repo.databaseId, name: `${repo.owner.login}/${repo.name}` }],
-        ),
-        forks: nodes.flatMap(asMyFork),
-      };
-    }),
+    Effect.map(([forks, rest]) =>
+      [...forks, ...rest]
+        .toSorted((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .flatMap(asMyFork),
+    ),
   );
 
 const contents = (token: string, owner: string, name: string, path: string, ref: string) =>

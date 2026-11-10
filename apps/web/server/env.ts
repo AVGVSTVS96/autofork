@@ -12,8 +12,6 @@ export class Env extends Context.Service<
     readonly clientSecret: Redacted.Redacted;
     readonly privateKey: Redacted.Redacted;
     readonly sessionKey: Redacted.Redacted;
-    readonly workosClientId: string;
-    readonly workosApiKey: Redacted.Redacted;
     readonly convexSite: string;
     readonly serverSecret: Redacted.Redacted;
   }
@@ -28,8 +26,6 @@ export const layer = Layer.effect(
     clientSecret: Config.Redacted("GITHUB_CLIENT_SECRET"),
     privateKey: Config.Redacted("GITHUB_PRIVATE_KEY"),
     sessionKey: Config.Redacted("SESSION_SECRET"),
-    workosClientId: Config.String("WORKOS_CLIENT_ID"),
-    workosApiKey: Config.Redacted("WORKOS_API_KEY"),
     convexSite: Config.String("CONVEX_SITE_URL"),
     serverSecret: Config.Redacted("AUTOFORK_SERVER_SECRET"),
   }),

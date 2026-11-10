@@ -149,8 +149,8 @@ export const LinkRoute = () => {
         </header>
         {view !== null && "linked" in view.shown && view.shown.linked ? (
           <p className="line">
-            Linked. autofork starts a run within a minute of upstream changing, and its
-            rebuilds&apos; costs show up under your forks.
+            Linked. autofork starts a run within a minute of upstream changing, and a public
+            fork&apos;s rebuild costs show up under your forks.
           </p>
         ) : (
           <>

@@ -92,7 +92,7 @@ Those are the defaults: at most 10 rebuilds a month (the UTC calendar month), $2
 
 Claude Code runs with `--max-budget-usd` set to `rebuild`, which it checks between steps, so a run can end a little past it. Codex has no budget flag, so its runs can cost more; its cost is its tokens at [LiteLLM's prices](https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json). A custom `agent` command, or a run that never reports, counts at its full `rebuild`.
 
-When the workflow has `id-token: write` (`init` and `fork` add it), each rebuild's cost also goes to autofork.com, which shows it to people who can push to the fork. Code that `setup`, `verify` or the agent runs can reach the run's GitHub sign-in like the job's other tokens ([#10](https://github.com/AVGVSTVS96/autofork/issues/10)). If a cloud account (AWS, Google Cloud, Azure) trusts GitHub sign-ins from your fork, remove `id-token: write` or scope that trust to other workflows.
+When the workflow has `id-token: write` (`init` and `fork` add it), a public fork's rebuild costs also go to autofork.com, where anyone can see them and your forks list shows them. A private fork's costs stay in its own tally. Code that `setup`, `verify` or the agent runs can reach the run's GitHub sign-in like the job's other tokens ([#10](https://github.com/AVGVSTVS96/autofork/issues/10)). If a cloud account (AWS, Google Cloud, Azure) trusts GitHub sign-ins from your fork, remove `id-token: write` or scope that trust to other workflows.
 
 ## On time
 

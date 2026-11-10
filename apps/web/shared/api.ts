@@ -94,6 +94,7 @@ export const MyFork = Schema.Struct({
   name: Schema.String,
   upstream: Schema.NullOr(Schema.String),
   repoId: Schema.Number,
+  private: Schema.Boolean,
   settings: Settings,
 });
 
@@ -210,11 +211,6 @@ export const AppGroup = HttpApiGroup.make("app").add(
     payload: Settings,
     success: Settings,
     error: [Problem, SignedOut],
-  }),
-  HttpApiEndpoint.get("convexToken", "/api/auth/token", {
-    query: { fresh: Schema.optional(Schema.String) },
-    success: Schema.Struct({ token: Schema.String }),
-    error: SignedOut,
   }),
   HttpApiEndpoint.post("addChange", "/api/forks/:owner/:name/changes", {
     params: fork,

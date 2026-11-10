@@ -47,6 +47,7 @@ const GitHubClaims = Schema.Struct({
   repository_id: text,
   run_id: text,
   run_attempt: text,
+  repository_visibility: text,
 });
 
 const decodeClaims = Schema.decodeUnknownOption(GitHubClaims);
@@ -56,6 +57,7 @@ export interface Claims {
   repository_id: string;
   run_id: string;
   run_attempt: string;
+  repository_visibility: string;
 }
 
 const load = async () => {
@@ -120,6 +122,7 @@ const accepted = ({
   repository_id,
   run_id,
   run_attempt,
+  repository_visibility,
 }: typeof GitHubClaims.Type): Claims => {
   if (exp * 1000 < Date.now() || (nbf !== undefined && nbf * 1000 > Date.now() + 60_000)) {
     throw refuse("expired");
@@ -133,7 +136,7 @@ const accepted = ({
     throw refuse("only the autofork workflow can ask");
   }
 
-  return { repository, repository_id, run_id, run_attempt };
+  return { repository, repository_id, run_id, run_attempt, repository_visibility };
 };
 
 export const verifyOidc = async (authorization: string | null | undefined): Promise<Claims> => {

@@ -10,11 +10,14 @@ import type { Spend } from "../../lib/spend/live.tsx";
 import { Meter } from "../../ui/meter.tsx";
 import { Nav } from "../../ui/nav.tsx";
 import { Retry } from "../../ui/retry.tsx";
-import { SignInAgain } from "../../ui/sign-in-again.tsx";
 
 const route = getRouteApi("/forks");
 
-const schedule = (spend: Spend | undefined) => {
+const schedule = (fork: MyFork, spend: Spend | undefined) => {
+  if (fork.private) {
+    return "private: autofork.com shows spend for public forks";
+  }
+
   if (spend === undefined) {
     return "";
   }
@@ -47,7 +50,7 @@ const Row = ({ fork, spend }: { fork: MyFork; spend: Spend | undefined }) => {
             {fork.owner}/{fork.name}
           </b>
           <small>
-            {schedule(spend)}
+            {schedule(fork, spend)}
             {running === true ? " · rebuilding now" : ""}
           </small>
         </span>
@@ -68,7 +71,12 @@ const Row = ({ fork, spend }: { fork: MyFork; spend: Spend | undefined }) => {
 const Forks = () => {
   const mine = useAtomValue(client.mine);
   const retry = useAtomRefresh(client.mine);
-  const spend = useSpend();
+
+  const spend = useSpend(
+    AsyncResult.isSuccess(mine)
+      ? mine.value.filter((fork) => !fork.private).map((fork) => `${fork.owner}/${fork.name}`)
+      : [],
+  );
 
   if (AsyncResult.isFailure(mine)) {
     return <Retry className="note" message={client.failure(mine.cause)} onRetry={retry} />;
@@ -86,16 +94,14 @@ const Forks = () => {
     );
   }
 
-  const spendOf = (fork: MyFork) => spend?.find((row) => row.repoId === fork.repoId);
+  const spendOf = (fork: MyFork) =>
+    spend?.find((row) => row.name === `${fork.owner}/${fork.name}`.toLowerCase());
+
   const counted = mine.value.some((fork) => spendOf(fork) !== undefined);
   const total = mine.value.reduce((sum, fork) => sum + (spendOf(fork)?.spent ?? 0), 0);
 
   return (
     <>
-      {spend === null ? <SignInAgain back="/forks" many /> : null}
-      {spend !== null && spend !== undefined && !counted ? (
-        <p className="fine">Spend isn&apos;t available yet. Reload in a minute.</p>
-      ) : null}
       <p className="facts">
         <span>
           {counted ? money(total) : "–"} this month across {mine.value.length} fork

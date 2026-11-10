@@ -19,7 +19,6 @@ const HOME_TITLE = "autofork: customized forks that maintain themselves";
 const titled = (title: string) => ({ meta: [{ title }] });
 
 const Text = Schema.NonEmptyString;
-const LocalPath = Text.check(Schema.isPattern(/^\/(?![/\\])[^\\\s\p{Cc}]*$/u));
 
 const ignoredIfInvalid = <S extends Schema.Top>(schema: S) =>
   Schema.optional(schema.pipe(Schema.catchDecoding(() => Effect.succeedNone)));
@@ -93,23 +92,6 @@ const link = createRoute({
   ),
 });
 
-const verify = createRoute({
-  getParentRoute: () => root,
-  path: "/verify",
-  validateSearch: Schema.toStandardSchemaV1(
-    Schema.Struct({
-      email: ignoredIfInvalid(Text),
-      error: ignoredIfInvalid(Text),
-      back: ignoredIfInvalid(LocalPath),
-    }),
-  ),
-  head: () => titled("Check your email · autofork"),
-  component: lazyRouteComponent(
-    async () => await import("./features/verify/verify.tsx"),
-    "VerifyRoute",
-  ),
-});
-
 const asking = (location: ParsedLocation) => "q" in location.search;
 
 const forkIt = ({
@@ -128,7 +110,7 @@ const forkIt = ({
 
 export const appRouter = (history: RouterHistory) =>
   createRouter({
-    routeTree: root.addChildren([home, forks, link, verify, fork]),
+    routeTree: root.addChildren([home, forks, link, fork]),
     defaultViewTransition: { types: forkIt },
     defaultNotFoundComponent: NotFound,
     history,

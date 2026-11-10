@@ -231,6 +231,47 @@ echo '{"type":"result","subtype":"success","is_error":false,"result":"built it",
   );
 });
 
+test("a private fork's rebuild stays in its own tally when autofork.com records public forks only", () => {
+  const mine = spendFork("private");
+  const bin = path.join(home, "private-bin");
+  const ledger = path.join(home, "private-ledger.json");
+  const siteLog = path.join(home, "private-site.log");
+  stub(
+    bin,
+    "claude",
+    `cat > /dev/null
+echo '// built' >> app.js
+echo '{"type":"result","subtype":"success","is_error":false,"result":"built it","total_cost_usd":0.5}'`,
+  );
+  wish(mine, "hidden");
+
+  const { ok, log } = autoforkWith(
+    {
+      PATH: `${bin}:${process.env.PATH}`,
+      CLAUDE_CODE_OAUTH_TOKEN: "token",
+      ACTIONS_ID_TOKEN_REQUEST_URL: "https://token.test/?run=1",
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: "request",
+      AUTOFORK_URL: "https://site.test",
+      AUTOFORK_LEDGER: ledger,
+      SITE_LOG: siteLog,
+      SITE_TOTALS: '{"rebuilds":0,"spent":0}',
+      SITE_PRIVATE: "1",
+    },
+    mine,
+    "sync",
+  );
+
+  expect(ok).toBe(true);
+  expect(log).toContain(
+    "autofork.com didn't record this rebuild: autofork.com tracks spend on public forks only",
+  );
+  expect(log).not.toContain("couldn't report");
+  expect(file(home, "private-site.log")).not.toContain("/api/ledger/close");
+  expect(readJson(home, "private-ledger.json")).toMatchObject({
+    rebuilds: [{ patch: "hidden", cost: 0.5, status: "done" }],
+  });
+});
+
 test("on GitHub's runners, a rebuild with no agent signed in fails before it takes one of the month's rebuilds, and says what to add", () => {
   const mine = spendFork("signed-out");
   const bin = path.join(home, "signed-out-bin");

@@ -24,6 +24,7 @@ const caller = async (request: Request) => {
     name: claims.repository.toLowerCase(),
     runId: Number(claims.run_id),
     attempt: Number(claims.run_attempt) || 1,
+    public: claims.repository_visibility === "public",
   };
 };
 
@@ -81,7 +82,12 @@ http.route({
   path: "/ledger",
   method: "POST",
   handler: guarded(async (ctx, request) => {
-    const who = await caller(request);
+    const { public: open, ...who } = await caller(request);
+
+    if (!open) {
+      return json({ error: "autofork.com tracks spend on public forks only" }, 403);
+    }
+
     const asked = await readLedgerOpen(request);
 
     if (!asked) {
@@ -280,42 +286,6 @@ http.route({
     }
 
     await ctx.scheduler.runAfter(0, internal.forks.refresh, { name: asked.value.name });
-
-    return noContent();
-  }),
-});
-
-const decodeAccess = Schema.decodeUnknownOption(
-  Schema.fromJsonString(
-    Schema.Struct({
-      user: Schema.String,
-      mode: Schema.Literals(["replace", "add", "drop"]),
-      repos: Schema.Array(Schema.Struct({ id: Schema.Int, name: Schema.String })),
-    }),
-  ),
-);
-
-http.route({
-  path: "/access",
-  method: "POST",
-  handler: httpAction(async (ctx, request) => {
-    if (!(await fromSite(request))) {
-      return json({ error: "not allowed" }, 403);
-    }
-
-    const asked = decodeAccess(await request.text());
-
-    if (Option.isNone(asked)) {
-      return json({ error: "need user, mode and repos" }, 400);
-    }
-
-    const { user, mode, repos } = asked.value;
-
-    await ctx.runMutation(internal.dashboard.allow, {
-      user,
-      mode,
-      repos: repos.map(({ id, name }) => ({ id, name: name.toLowerCase() })),
-    });
 
     return noContent();
   }),

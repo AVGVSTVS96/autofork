@@ -46,6 +46,7 @@ globalThis.fetch = async (url, init = {}) => {
     }
     appendFileSync(log, JSON.stringify({ method: init.method ?? "GET", path, auth: init.headers?.authorization, body }) + "\\n");
     if (path === "/api/ledger" && !body) return process.env.SITE_TOTALS ? new Response(process.env.SITE_TOTALS) : new Response("{}", { status: 404 });
+    if (path === "/api/ledger" && process.env.SITE_PRIVATE) return Response.json({ error: "autofork.com tracks spend on public forks only" }, { status: 403 });
     if (path === "/api/ledger") return Response.json({ id: "row-1" }, { status: 201 });
     if (path === "/api/ledger/close") return new Response(null, { status: 204 });
     if (path === "/api/link") return Response.json({ linked: calls >= Number(process.env.LINK_AFTER ?? 0), cron: null });
