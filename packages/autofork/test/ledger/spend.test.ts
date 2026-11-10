@@ -273,51 +273,62 @@ echo '{"type":"result","subtype":"success","is_error":false,"result":"built it",
   });
 });
 
-test("on GitHub's runners, a rebuild with no agent signed in fails before it takes one of the month's rebuilds, and says what to add", () => {
+test("on GitHub's runners with no agent signed in, a sync follows upstream without a patch that was never built, and stops at one upstream broke, saying what to add", () => {
   const mine = spendFork("signed-out");
+  const origin = path.join(home, "signed-out");
   const bin = path.join(home, "signed-out-bin");
   stub(
     bin,
     "claude",
     `[ "$1 $2" = "auth status" ] && { printf '{\\n  "loggedIn": false,\\n  "authMethod": "none"\\n}\\n'; exit 1; }
-echo run >> ${home}/signed-out-runs`,
+cat > /dev/null
+echo run >> ${home}/signed-out-runs
+echo 'export const app = "ten";' > app.js`,
   );
   const ledger = path.join(home, "signed-out-ledger.json");
+
+  const runner = (environment: string) =>
+    autoforkWith(
+      {
+        PATH: `${bin}:${process.env.PATH}`,
+        CLAUDE_CODE_OAUTH_TOKEN: "",
+        CODEX_HOME: path.join(home, "signed-out-codex"),
+        RUNNER_ENVIRONMENT: environment,
+        AUTOFORK_LEDGER: ledger,
+      },
+      mine,
+      "sync",
+    );
+
   wish(mine, "ten");
+  sh(origin, "echo 'export const other = 2;' > other.js && git add -A && git commit -qm other");
 
-  const { ok, output } = autoforkWith(
-    {
-      PATH: `${bin}:${process.env.PATH}`,
-      CLAUDE_CODE_OAUTH_TOKEN: "",
-      CODEX_HOME: path.join(home, "signed-out-codex"),
-      RUNNER_ENVIRONMENT: "github-hosted",
-      AUTOFORK_LEDGER: ledger,
-    },
-    mine,
-    "sync",
+  const unbuilt = runner("github-hosted");
+
+  expect(unbuilt.ok).toBe(true);
+  expect(unbuilt.log).toContain(
+    "autofork: the fork follows upstream without ten until a sync with an agent builds it",
   );
+  expect(unbuilt.output.result).toBe("synced");
+  expect(file(mine, "other.js")).toBe("export const other = 2;\n");
+  expect(existsSync(path.join(home, "signed-out-runs"))).toBe(false);
+  expect(runner("github-hosted").output.result).toBe("current");
 
-  expect(ok).toBe(false);
-  expect(output.error).toBe(
+  const local = runner("self-hosted");
+
+  expect(local.log).toContain("built ten");
+  expect(file(mine, "app.js")).toBe('export const app = "ten";\n');
+  expect(file(home, "signed-out-runs")).toBe("run\n");
+
+  sh(origin, "echo 'export const app = 3;' > app.js && git commit -qam three");
+  const broken = runner("github-hosted");
+
+  expect(broken.ok).toBe(false);
+  expect(broken.output.error).toBe(
     "Claude Code isn't signed in, so no agent can run: give the autofork step CLAUDE_CODE_OAUTH_TOKEN (claude setup-token prints one), or CODEX_AUTH for ChatGPT, from the fork's secrets",
   );
-  expect(existsSync(path.join(home, "signed-out-runs"))).toBe(false);
-  expect(readJson(home, "signed-out-ledger.json").rebuilds).toEqual([]);
-
-  const local = autoforkWith(
-    {
-      PATH: `${bin}:${process.env.PATH}`,
-      CLAUDE_CODE_OAUTH_TOKEN: "",
-      CODEX_HOME: path.join(home, "signed-out-codex"),
-      RUNNER_ENVIRONMENT: "self-hosted",
-      AUTOFORK_LEDGER: ledger,
-    },
-    mine,
-    "sync",
-  );
-
-  expect(local.output.error).toBe("the agent changed nothing while building ten");
   expect(file(home, "signed-out-runs")).toBe("run\n");
+  expect(readJson(home, "signed-out-ledger.json").rebuilds).toHaveLength(1);
 });
 
 test("Codex's tokens are priced from LiteLLM's table for the model its session used", () => {

@@ -5,6 +5,7 @@ import path from "node:path";
 import type { Config } from "../config/types.ts";
 import { AutoforkError } from "../failure.ts";
 import {
+  anthropicKey,
   claudeEntrypoint,
   claudeToken,
   codexHome,
@@ -27,17 +28,25 @@ const NO_CODEX_CONNECTORS = "--ignore-user-config --disable apps";
 const CLAUDE_SIGNED_OUT =
   "Claude Code isn't signed in, so no agent can run: give the autofork step CLAUDE_CODE_OAUTH_TOKEN (claude setup-token prints one), or CODEX_AUTH for ChatGPT, from the fork's secrets";
 
-const signedOut = (claude: string, dir: string) =>
-  /"loggedIn":\s*false/u.test(
-    run("sh", ["-c", `${claude} auth status --json`], dir).out.toString(),
-  );
+const claudeSignedIn = (dir: string) =>
+  claudeToken !== undefined ||
+  anthropicKey !== undefined ||
+  !onGithubRunner ||
+  (installed("claude") &&
+    !/"loggedIn":\s*false/u.test(run("claude", ["auth", "status", "--json"], dir).out.toString()));
+
+const codexSignedIn = () =>
+  claudeToken === undefined && existsSync(path.join(codexDir, "auth.json"));
+
+export const signedIn = (config: Config, dir: string) =>
+  config.agent !== undefined || codexSignedIn() || claudeSignedIn(dir);
 
 export const agentCommand = (config: Config, cap: number, dir: string) => {
   if (config.agent !== undefined) {
     return { agent: "custom", command: config.agent } as const;
   }
 
-  if (claudeToken === undefined && existsSync(path.join(codexDir, "auth.json"))) {
+  if (codexSignedIn()) {
     const codex = installed("codex") ? "codex" : "npx -y @openai/codex";
 
     return {
@@ -46,11 +55,11 @@ export const agentCommand = (config: Config, cap: number, dir: string) => {
     } as const;
   }
 
-  const claude = installed("claude") ? "claude" : "npx -y @anthropic-ai/claude-code";
-
-  if (onGithubRunner && claudeToken === undefined && signedOut(claude, dir)) {
+  if (!claudeSignedIn(dir)) {
     throw new AutoforkError(CLAUDE_SIGNED_OUT);
   }
+
+  const claude = installed("claude") ? "claude" : "npx -y @anthropic-ai/claude-code";
 
   return {
     agent: "claude",

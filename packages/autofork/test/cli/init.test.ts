@@ -18,7 +18,7 @@ test("init leaves the README's note to the first sync's agent, and later syncs a
   sh(home, `git clone -q ${origin} demo-fork`);
   const { ok, log } = autofork(mine, "init", origin);
   expect(ok).toBe(true);
-  expect(log).toContain("The first sync adds a line to README.md");
+  expect(log).toContain("The first sync with an agent adds a line to README.md");
   expect(file(mine, "README.md")).toBe(readme);
   expect(sh(mine, "ls .autofork/fork-readme")).toBe("PATCH.md");
   expect(file(mine, ".autofork/fork-readme/PATCH.md")).toContain("personal fork of demo");

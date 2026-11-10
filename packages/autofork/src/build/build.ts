@@ -13,13 +13,16 @@ import { changed, commit, worktree } from "./worktree.ts";
 
 export interface BuildOptions {
   healFrom?: string | undefined;
-  wait?: boolean;
+  buildNew?: boolean;
   fold?: { id: string; patch: string };
 }
 
-const fitsUpFront = async (config: Fork, build: Build) => {
+const fitsUpFront = async (config: Fork, build: Build, buildNew: boolean) => {
   const broken = config.patches.filter((id) => {
-    const fits = !unbuilt(build.dir, id) && apply(build.dir, patchFile(build.dir, id), config);
+    if (unbuilt(build.dir, id)) {
+      return buildNew;
+    }
+    const fits = apply(build.dir, patchFile(build.dir, id), config);
 
     if (fits) {
       commit(build.dir, id);
@@ -49,10 +52,7 @@ const place = async (
   const file = patchFile(dir, id);
   const { healFrom } = options;
 
-  if (options.wait === true && healFrom === undefined && unbuilt(dir, id)) {
-    throw new WaitError(`${id} isn't built yet`);
-  }
-  if (unbuilt(dir, id) ? healFrom !== undefined : !apply(dir, file, config)) {
+  if (unbuilt(dir, id) ? options.buildNew === true : !apply(dir, file, config)) {
     if (healFrom === undefined && folded === undefined) {
       throw new WaitError(`${id} doesn't apply to ${short(build.source)}`);
     }
@@ -99,7 +99,7 @@ export const build = async (root: string, config: Fork, base: string, options: B
   };
 
   if (options.healFrom !== undefined) {
-    await fitsUpFront(config, built);
+    await fitsUpFront(config, built, options.buildNew === true);
   }
   let folded: string | undefined;
 

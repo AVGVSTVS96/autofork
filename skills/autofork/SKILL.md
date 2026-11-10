@@ -21,7 +21,7 @@ npx autofork fork owner/repo
 
 It follows upstream's releases, or its default branch if it has none. `--follow <branch>` picks a branch; `--follow 'v*-nightly.*'` picks a channel of releases by tag; stable is `releases`, the default. To see the channels upstream publishes, list its releases (`gh release list -R owner/repo --exclude-drafts -L 100`) and its tags (`git ls-remote --tags --refs --sort=-v:refname <url> | head -100`), since a channel can be published as tags alone. A channel's pattern keeps the part of the tag that names it and puts `*` for the numbers, like `v*-nightly.*`: `*` matches anything, so a pattern without that part also matches other channels, and a `follow` without `*` is read as a branch. It needs `gh` logged in. In a fork that's already cloned, use `npx autofork init owner/repo` instead, with upstream's name, and save the fork's own changes as patches before pushing.
 
-If `CLAUDE_CODE_OAUTH_TOKEN` is set, `fork` also adds that secret. Otherwise give the user the sign-in steps it prints, for Claude or ChatGPT, then run `gh workflow run autofork.yml --repo <fork>`: the run `fork`'s push started fails without the secret, and this one builds the README line if `fork` wrote one.
+If `CLAUDE_CODE_OAUTH_TOKEN` is set, `fork` also adds that secret. Otherwise give the user the sign-in steps it prints, for Claude or ChatGPT, then run `gh workflow run autofork.yml --repo <fork>`, which builds the README line if `fork` wrote one.
 
 GitHub runs the workflow on the `cron` line in `.github/workflows/autofork.yml`, often hours late. `npx autofork link`, run in the clone once the config is pushed to the fork's default branch, has autofork.com start syncs within a minute of upstream changing. The user finishes it in a browser at `https://autofork.com/link/<owner>/<name>`, signing in with GitHub and adding autofork's app to the fork, and `link` waits up to 10 minutes for that, so give the user the link and run `link` in the background or again once they're done. Like `workflow-token-url`, the app lets code the sync runs push workflow files, so say so when offering it.
 
@@ -38,7 +38,7 @@ Start from a fork whose first sync has run: once it has the sign-in, wait for th
 
 Every source change must belong to a patch: once upstream moves, a sync refuses to rebuild while the fork has changes no patch holds, and `npx autofork status` lists them. To change an existing patch, edit the code, update its `PATCH.md` if the intent changed, and `save` the same id. `save` puts every change no patch holds yet into `<id>`, so save each change before starting the next. To drop a patch, delete its folder and undo its change in the same commit. When a change reaches code `verify` doesn't check, widen `verify` in `.autofork/config.json`.
 
-A patch can also be just a `PATCH.md`. Push it and the next sync has an agent build it.
+A patch can also be just a `PATCH.md`. Push it and the next sync with an agent sign-in builds it.
 
 A sync that fails opens an `autofork sync failed` issue saying why, with a link to the run. Fix what it names, push, and start a sync with `gh workflow run autofork.yml --repo <fork>`.
 
